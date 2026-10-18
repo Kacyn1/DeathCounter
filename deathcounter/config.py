@@ -13,6 +13,13 @@ from .storage import StorageError, atomic_write_text
 APP_DIR_NAME = "DeathCounter"
 LEGACY_APP_DIR_NAME = "DS2DeathCounter"
 
+# Wzorce: napis śmierci, ramka paska zdrowia bossa, komunikat zwycięstwa – (pole w AppConfig, pole w AppPaths).
+TEMPLATE_FIELDS = {
+    "death": ("template", "template"),
+    "boss_bar": ("boss_bar_template", "boss_bar_template"),
+    "victory": ("victory_template", "victory_template"),
+}
+
 
 @dataclass
 class DetectorSettings:
@@ -79,6 +86,12 @@ class RtssSettings:
 @dataclass
 class BossSettings:
     track: bool = False              # „Śledź walkę z bossem”
+    bar_confirm_samples: int = 10    # tyle kolejnych próbek z paskiem bossa = początek walki (ok. 1 s)
+    bar_lost_seconds: float = 3.0    # tyle sekund bez paska = pasek zniknął (pauza, nie zwycięstwo)
+
+    def sanitize(self) -> None:
+        self.bar_confirm_samples = int(_clamp(self.bar_confirm_samples, 1, 100))
+        self.bar_lost_seconds = _clamp(self.bar_lost_seconds, 0.5, 60.0)
 
 
 @dataclass
@@ -105,11 +118,19 @@ class AppConfig:
     overlay: OverlaySettings = field(default_factory=OverlaySettings)
     rtss: RtssSettings = field(default_factory=RtssSettings)
     bosses: BossSettings = field(default_factory=BossSettings)
-    template: TemplateInfo | None = None
+    template: TemplateInfo | None = None           # napis śmierci
+    boss_bar_template: TemplateInfo | None = None  # ramka paska zdrowia bossa
+    victory_template: TemplateInfo | None = None   # komunikat zwycięstwa
     auto_start: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    def template_info(self, kind: str) -> TemplateInfo | None:
+        return getattr(self, TEMPLATE_FIELDS[kind][0])
+
+    def set_template_info(self, kind: str, info: TemplateInfo) -> None:
+        setattr(self, TEMPLATE_FIELDS[kind][0], info)
 
 
 @dataclass
@@ -119,11 +140,24 @@ class AppPaths:
     config: Path
     template: Path
     bosses: Path
+    boss_bar_template: Path
+    victory_template: Path
 
     @classmethod
     def in_dir(cls, base: Path) -> "AppPaths":
         base = Path(base)
-        return cls(base, base / "deaths.json", base / "config.json", base / "template.png", base / "bosses.json")
+        return cls(
+            base,
+            base / "deaths.json",
+            base / "config.json",
+            base / "template.png",
+            base / "bosses.json",
+            base / "boss_bar.png",
+            base / "victory.png",
+        )
+
+    def template_path(self, kind: str) -> Path:
+        return getattr(self, TEMPLATE_FIELDS[kind][1])
 
     @classmethod
     def default(cls) -> "AppPaths":
@@ -147,10 +181,11 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
     _fill(config.overlay, data.get("overlay"))
     _fill(config.rtss, data.get("rtss"))
     _fill(config.bosses, data.get("bosses"))
-    config.template = TemplateInfo.from_dict(data.get("template"))
+    for kind in TEMPLATE_FIELDS:
+        config.set_template_info(kind, TemplateInfo.from_dict(data.get(TEMPLATE_FIELDS[kind][0])))
     if isinstance(data.get("auto_start"), bool):
         config.auto_start = data["auto_start"]
-    for part in (config.detector, config.capture, config.overlay):
+    for part in (config.detector, config.capture, config.overlay, config.bosses):
         part.sanitize()
     return config, None
 

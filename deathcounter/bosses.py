@@ -217,8 +217,9 @@ class BossTracker:
             self._checkpoint()
             self._save()
 
-    def shutdown(self) -> None:
-        """Zamknięcie programu: czas walki zostaje zapisany, timer nie biegnie przy wyłączonej aplikacji."""
+    def pause(self) -> None:
+        """Zatrzymanie wykrywania lub zamknięcie programu: czas walki zostaje zapisany, a timer staje,
+        bo bez analizy obrazu nikt nie zgłosi śmierci ani zniknięcia paska."""
         if self.state is BossState.FIGHT:
             self._pause(BossState.WAITING)
             self._save()

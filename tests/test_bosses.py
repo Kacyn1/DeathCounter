@@ -178,7 +178,7 @@ def test_restart_keeps_time_and_does_not_run_timer(tracker, clock, path):
     fight(tracker, clock, 42)
     tracker.death()
     fight(tracker, clock, 18)
-    tracker.shutdown()
+    tracker.pause()
     clock.advance(3600)  # aplikacja wyłączona
 
     store = BossStore(path)

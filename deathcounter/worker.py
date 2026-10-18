@@ -1,4 +1,4 @@
-"""Wątek wykrywania: pobiera klatki, sprawdza stan obrazu i zgłasza śmierci."""
+"""Wątek wykrywania: pobiera klatki, sprawdza stan obrazu i zgłasza śmierci oraz zdarzenia walki z bossem."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from PySide6.QtCore import QThread, Signal
 
 from . import rtss_setup
 from .capture import DxcamSource
-from .config import CaptureSettings, DetectorSettings
-from .detector import CaptureHealth, DetectionSession
+from .config import BossSettings, CaptureSettings, DetectorSettings
+from .detector import BarEvent, CaptureHealth, DetectionSession
 from .template import DeathTemplate
 
 RETRY_SECONDS = 3.0
@@ -67,8 +67,13 @@ class RtssSetupWorker(QThread):
         return "RTSS uruchomiony."
 
 
+# Zdarzenia walki z bossem przekazywane sygnałem boss_event.
+BOSS_BAR_VISIBLE, BOSS_BAR_LOST, BOSS_VICTORY, FRAMES_LOST = "bar_visible", "bar_lost", "victory", "frames_lost"
+
+
 class DetectionWorker(QThread):
     death_detected = Signal()
+    boss_event = Signal(str)               # BOSS_BAR_VISIBLE / BOSS_BAR_LOST / BOSS_VICTORY / FRAMES_LOST
     status_changed = Signal(object, str)   # DetectorStatus, opis
     sample = Signal(object)                # SampleResult
     snapshot_ready = Signal(object)        # np.ndarray | None
@@ -76,22 +81,24 @@ class DetectionWorker(QThread):
 
     def __init__(
         self,
-        template: DeathTemplate,
+        templates: dict[str, DeathTemplate | None],
         detector: DetectorSettings,
         capture: CaptureSettings,
+        bosses: BossSettings,
         source_factory: Callable[[CaptureSettings], object] = DxcamSource,
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self._template = template
+        self._templates = dict(templates)
         self._detector = copy.deepcopy(detector)
         self._capture = copy.deepcopy(capture)
+        self._bosses = copy.deepcopy(bosses)
         self._source_factory = source_factory
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._pending_detector: DetectorSettings | None = None
         self._pending_capture: CaptureSettings | None = None
-        self._pending_template: DeathTemplate | None = None
+        self._pending_templates: dict[str, DeathTemplate] = {}
         self._snapshot_requested_at: float | None = None
         self._last_status: tuple | None = None
 
@@ -111,9 +118,9 @@ class DetectionWorker(QThread):
             if capture != self._capture:
                 self._pending_capture = copy.deepcopy(capture)
 
-    def update_template(self, template: DeathTemplate) -> None:
+    def update_template(self, kind: str, template: DeathTemplate) -> None:
         with self._lock:
-            self._pending_template = template
+            self._pending_templates[kind] = template
 
     # --- wątek roboczy ---
 
@@ -125,7 +132,13 @@ class DetectionWorker(QThread):
             self._deliver_snapshot(None)
 
     def _loop(self) -> None:
-        session = DetectionSession(self._template, self._detector)
+        session = DetectionSession(
+            self._templates["death"],
+            self._detector,
+            bar_template=self._templates.get("boss_bar"),
+            victory_template=self._templates.get("victory"),
+            bosses=self._bosses,
+        )
         source = None
         retry_at = 0.0
         last_frame = None
@@ -164,7 +177,8 @@ class DetectionWorker(QThread):
                     source.close()
                     source = None
                     retry_at = started + RETRY_SECONDS
-                    session.detector.interrupt()
+                    if session.capture_failed():
+                        self.boss_event.emit(FRAMES_LOST)
                     self._set_status(DetectorStatus.ERROR, f"Błąd przechwytywania obrazu: {exc}")
                     continue
 
@@ -188,9 +202,17 @@ class DetectionWorker(QThread):
                 else:
                     self._set_status(DetectorStatus.ACTIVE, "Wykrywanie działa.")
 
+                if result.frames_lost:
+                    self.boss_event.emit(FRAMES_LOST)
                 if result.death:
                     self.death_detected.emit()
-                if result.death or started - last_sample_signal >= SAMPLE_SIGNAL_INTERVAL:
+                if result.victory:
+                    self.boss_event.emit(BOSS_VICTORY)
+                if result.bar_event is BarEvent.APPEARED:
+                    self.boss_event.emit(BOSS_BAR_VISIBLE)
+                elif result.bar_event is BarEvent.LOST:
+                    self.boss_event.emit(BOSS_BAR_LOST)
+                if result.death or result.victory or result.bar_event or started - last_sample_signal >= SAMPLE_SIGNAL_INTERVAL:
                     last_sample_signal = started
                     self.sample.emit(result)
 
@@ -205,13 +227,12 @@ class DetectionWorker(QThread):
         with self._lock:
             detector, self._pending_detector = self._pending_detector, None
             capture, self._pending_capture = self._pending_capture, None
-            template, self._pending_template = self._pending_template, None
+            templates, self._pending_templates = self._pending_templates, {}
         if detector is not None:
             self._detector = detector
             session.apply_settings(detector)
-        if template is not None:
-            session.template = template
-            session.detector.interrupt()
+        for kind, template in templates.items():
+            session.set_template(kind, template)
         if capture is not None:
             self._capture = capture
             return True

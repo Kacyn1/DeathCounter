@@ -1,4 +1,4 @@
-"""Wzorzec napisu „NIE ŻYJESZ” i dopasowywanie go do klatek obrazu."""
+"""Wzorzec fragmentu ekranu (napis śmierci, ramka paska bossa, komunikat zwycięstwa) i dopasowanie do klatek."""
 
 from __future__ import annotations
 
@@ -62,12 +62,12 @@ class DeathTemplate:
         if x1 - x0 < MIN_WIDTH or y1 - y0 < MIN_HEIGHT:
             raise TemplateError(
                 f"Zaznaczony obszar jest za mały (minimum {MIN_WIDTH}×{MIN_HEIGHT} px). "
-                "Zaznacz cały napis „NIE ŻYJESZ”."
+                "Zaznacz cały napis lub cały fragment ramki paska."
             )
         crop = to_gray(frame[y0:y1, x0:x1]).copy()
         if float(crop.std()) < MIN_CONTRAST:
             raise TemplateError(
-                "Zaznaczony obszar jest prawie jednolity. Zaznacz napis „NIE ŻYJESZ”, a nie samo tło."
+                "Zaznaczony obszar jest prawie jednolity. Zaznacz napis lub ramkę paska, a nie samo tło."
             )
         return cls(crop, (x0, y0, x1 - x0, y1 - y0), (width, height))
 

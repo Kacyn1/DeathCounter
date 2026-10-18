@@ -1,12 +1,13 @@
 """Scenariusze od klatki do licznika (bez Qt i bez przechwytywania ekranu)."""
 
+import cv2
 import numpy as np
 import pytest
 
-from deathcounter.detector import CaptureHealth, DetectionSession
+from deathcounter.detector import BarEvent, CaptureHealth, DetectionSession
 from deathcounter.template import DeathTemplate
 
-from .conftest import TEXT_ROI, death_frame, gameplay_frame
+from .conftest import BAR_ROI, TEXT_ROI, VICTORY_ROI, boss_frame, death_frame, gameplay_frame, victory_frame
 
 STEP = 0.1
 
@@ -69,7 +70,13 @@ def test_frozen_image_is_reported(session, clock):
 
 def test_frozen_death_screen_counts_only_once(session, clock):
     frozen = death_frame(8)
-    deaths, _ = run(session, clock, [frozen] * 200 + gameplay(10))
+    deaths, _ = run(session, clock, gameplay(4) + [frozen] * 200 + gameplay(10))
+    assert deaths == 1
+
+
+def test_death_screen_visible_at_start_is_not_counted_again(session, clock):
+    # wznowienie analizy (Start po Stop) na ekranie śmierci, która mogła już zostać policzona
+    deaths, _ = run(session, clock, death_screen(4) + gameplay(10) + death_screen(4) + gameplay(5))
     assert deaths == 1
 
 
@@ -79,3 +86,70 @@ def test_resolution_change_is_detected_and_still_works(session, clock):
     deaths, results = run(session, clock, gameplay(3) + big_gameplay + big_death + big_gameplay)
     assert any(r.check.resolution_changed for r in results)
     assert deaths == 1
+
+
+@pytest.fixture
+def boss_session(clock, settings):
+    return DetectionSession(
+        DeathTemplate.from_frame(death_frame(1), TEXT_ROI),
+        settings,
+        clock,
+        bar_template=DeathTemplate.from_frame(boss_frame(2), BAR_ROI),
+        victory_template=DeathTemplate.from_frame(victory_frame(3), VICTORY_ROI),
+    )
+
+
+def fight(seconds, start=7000, health=1.0):
+    return [boss_frame(start + i, health) for i in range(int(seconds / STEP))]
+
+
+def victory_screen(seconds, start=8000):
+    return [victory_frame(start + i) for i in range(int(seconds / STEP))]
+
+
+def events(results):
+    return [r.bar_event for r in results if r.bar_event]
+
+
+def test_boss_bar_appears_after_confirmation_and_disappears_after_delay(boss_session, clock):
+    _, results = run(boss_session, clock, gameplay(2) + fight(20) + gameplay(10))
+    assert events(results) == [BarEvent.APPEARED, BarEvent.LOST]
+    appeared = next(i for i, r in enumerate(results) if r.bar_event is BarEvent.APPEARED)
+    lost = next(i for i, r in enumerate(results) if r.bar_event is BarEvent.LOST)
+    assert appeared == 20 + 9            # 10 kolejnych próbek z paskiem
+    assert 200 + 20 + 25 <= lost <= 200 + 20 + 35  # ok. 3 s bez paska
+
+
+def test_boss_bar_still_detected_when_boss_loses_health(boss_session, clock):
+    frames = fight(5) + fight(5, health=0.5) + fight(5, health=0.1)
+    _, results = run(boss_session, clock, gameplay(2) + frames)
+    assert events(results) == [BarEvent.APPEARED]
+    assert results[-1].bar_visible
+
+
+def test_short_glimpse_of_bar_does_not_start_fight(boss_session, clock):
+    _, results = run(boss_session, clock, gameplay(2) + fight(0.5) + gameplay(5))
+    assert events(results) == []
+
+
+def test_victory_detected_once(boss_session, clock):
+    _, results = run(boss_session, clock, gameplay(2) + fight(10) + victory_screen(4) + gameplay(10))
+    assert sum(r.victory for r in results) == 1
+    assert sum(r.death for r in results) == 0
+
+
+def test_death_in_fight_is_not_victory(boss_session, clock):
+    _, results = run(boss_session, clock, gameplay(4) + fight(10) + death_screen(4) + gameplay(5))
+    assert sum(r.death for r in results) == 1
+    assert sum(r.victory for r in results) == 0
+
+
+def test_lost_frames_reported_once(boss_session, clock):
+    _, results = run(boss_session, clock, gameplay(2) + fight(5) + [None] * 80 + fight(5))
+    assert sum(r.frames_lost for r in results) == 1
+
+
+def test_boss_detection_survives_resolution_change(boss_session, clock):
+    big = [cv2.resize(f, (1920, 1080)) for f in fight(5, start=9000)]
+    _, results = run(boss_session, clock, gameplay(2) + big)
+    assert events(results) == [BarEvent.APPEARED]

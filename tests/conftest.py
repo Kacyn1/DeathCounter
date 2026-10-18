@@ -45,3 +45,27 @@ def death_frame(seed: int, width: int = WIDTH, height: int = HEIGHT) -> np.ndarr
         2.2 * min(sx, sy), (40, 40, 190), max(1, int(4 * min(sx, sy))), cv2.LINE_AA,
     )
     return frame
+
+
+BAR_ROI = (300, 640, 180, 40)        # lewy koniec paska bossa (ramka + początek wypełnienia)
+VICTORY_ROI = (390, 300, 500, 90)    # komunikat zwycięstwa
+
+
+def boss_frame(seed: int, health: float = 1.0) -> np.ndarray:
+    """Rozgrywka z paskiem zdrowia bossa u dołu ekranu; `health` – ułamek wypełnienia."""
+    frame = gameplay_frame(seed)
+    cv2.rectangle(frame, (300, 650), (980, 670), (20, 20, 20), -1)
+    cv2.rectangle(frame, (300, 650), (980, 670), (150, 190, 210), 3)
+    cv2.circle(frame, (300, 660), 14, (150, 190, 210), 3)
+    fill = 304 + int(672 * health)
+    if fill > 304:
+        cv2.rectangle(frame, (304, 654), (fill, 666), (30, 30, 170), -1)
+    return frame
+
+
+def victory_frame(seed: int) -> np.ndarray:
+    """Komunikat zwycięstwa na tle rozgrywki."""
+    frame = gameplay_frame(seed)
+    cv2.rectangle(frame, (0, 300), (WIDTH, 390), (10, 10, 10), -1)
+    cv2.putText(frame, "VICTORY", (450, 370), cv2.FONT_HERSHEY_DUPLEX, 2.4, (60, 170, 210), 4, cv2.LINE_AA)
+    return frame

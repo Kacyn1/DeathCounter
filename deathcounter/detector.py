@@ -1,4 +1,4 @@
-"""Logika wykrywania śmierci, niezależna od Qt i od źródła obrazu (łatwa do testowania)."""
+"""Logika wykrywania (śmierć, pasek bossa, zwycięstwo), niezależna od Qt i od źródła obrazu (łatwa do testowania)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Callable
 import cv2
 import numpy as np
 
-from .config import DetectorSettings
+from .config import BossSettings, DetectorSettings
 from .template import DeathTemplate, to_gray
 
 Clock = Callable[[], float]
@@ -24,10 +24,10 @@ class DeathDetector:
     - Ponowne uzbrojenie: napis nieobecny przez `rearm_seconds` i minął `cooldown_seconds`.
     """
 
-    def __init__(self, settings: DetectorSettings, clock: Clock = time.monotonic) -> None:
+    def __init__(self, settings: DetectorSettings, clock: Clock = time.monotonic, armed: bool = True) -> None:
         self._clock = clock
         self.apply_settings(settings)
-        self.armed = True
+        self.armed = armed
         self._hits = 0
         self._absent_since: float | None = None
         self._last_death: float | None = None
@@ -65,6 +65,57 @@ class DeathDetector:
 
     def interrupt(self) -> None:
         """Przerwa w obrazie: zaczynamy liczyć potwierdzenia i nieobecność napisu od nowa."""
+        self._hits = 0
+        self._absent_since = None
+
+
+class BarEvent(Enum):
+    APPEARED = "appeared"
+    LOST = "lost"
+
+
+class PresenceDetector:
+    """Obecność elementu widocznego przez dłuższy czas (pasek zdrowia bossa).
+
+    - Pojawienie: element widoczny na `bar_confirm_samples` kolejnych próbkach.
+    - Zniknięcie: element nieobecny (poniżej progu minus histereza) przez `bar_lost_seconds`.
+    """
+
+    def __init__(self, settings: DetectorSettings, bosses: BossSettings, clock: Clock = time.monotonic) -> None:
+        self._clock = clock
+        self.apply_settings(settings, bosses)
+        self.visible = False
+        self._hits = 0
+        self._absent_since: float | None = None
+
+    def apply_settings(self, settings: DetectorSettings, bosses: BossSettings) -> None:
+        self.threshold = settings.threshold
+        self.hysteresis = settings.hysteresis
+        self.confirm_samples = bosses.bar_confirm_samples
+        self.lost_seconds = bosses.bar_lost_seconds
+
+    def update(self, score: float) -> BarEvent | None:
+        now = self._clock()
+        if not self.visible:
+            self._hits = self._hits + 1 if score >= self.threshold else 0
+            if self._hits >= self.confirm_samples:
+                self.visible = True
+                self._hits = 0
+                self._absent_since = None
+                return BarEvent.APPEARED
+            return None
+        if score < self.threshold - self.hysteresis:
+            if self._absent_since is None:
+                self._absent_since = now
+            if now - self._absent_since >= self.lost_seconds:
+                self.visible = False
+                self._absent_since = None
+                return BarEvent.LOST
+        else:
+            self._absent_since = None
+        return None
+
+    def interrupt(self) -> None:
         self._hits = 0
         self._absent_since = None
 
@@ -133,33 +184,93 @@ class SampleResult:
     score: float | None
     death: bool
     armed: bool
+    bar_score: float | None = None
+    bar_event: BarEvent | None = None
+    bar_visible: bool = False
+    victory_score: float | None = None
+    victory: bool = False
+    frames_lost: bool = False  # obraz właśnie przestał docierać (zgłaszane raz, przy przejściu z OK)
 
 
 class DetectionSession:
-    """Łączy kontrolę obrazu, dopasowanie wzorca i detektor dla kolejnych próbek."""
+    """Łączy kontrolę obrazu, dopasowanie wzorców i detektory dla kolejnych próbek.
 
-    def __init__(self, template: DeathTemplate, settings: DetectorSettings, clock: Clock = time.monotonic) -> None:
+    Detektory śmierci i zwycięstwa startują rozbrojone: napis widoczny w chwili startu
+    (lub wznowienia) analizy mógł już zostać policzony, więc najpierw musi zniknąć.
+    """
+
+    def __init__(
+        self,
+        template: DeathTemplate,
+        settings: DetectorSettings,
+        clock: Clock = time.monotonic,
+        bar_template: DeathTemplate | None = None,
+        victory_template: DeathTemplate | None = None,
+        bosses: BossSettings | None = None,
+    ) -> None:
         self.template = template
+        self.bar_template = bar_template
+        self.victory_template = victory_template
         self.settings = settings
+        self.bosses = bosses or BossSettings()
         self.monitor = FrameMonitor(settings.freeze_timeout_seconds, clock)
-        self.detector = DeathDetector(settings, clock)
+        self.detector = DeathDetector(settings, clock, armed=False)
+        self.victory_detector = DeathDetector(settings, clock, armed=False)
+        self.bar_detector = PresenceDetector(settings, self.bosses, clock)
+        self._healthy = True
 
-    def apply_settings(self, settings: DetectorSettings) -> None:
+    def apply_settings(self, settings: DetectorSettings, bosses: BossSettings | None = None) -> None:
         self.settings = settings
+        self.bosses = bosses or self.bosses
         self.monitor.timeout = settings.freeze_timeout_seconds
         self.detector.apply_settings(settings)
+        self.victory_detector.apply_settings(settings)
+        self.bar_detector.apply_settings(settings, self.bosses)
+
+    def set_template(self, kind: str, template: DeathTemplate) -> None:
+        if kind == "boss_bar":
+            self.bar_template = template
+            self.bar_detector.interrupt()
+        elif kind == "victory":
+            self.victory_template = template
+            self.victory_detector.interrupt()
+        else:
+            self.template = template
+            self.detector.interrupt()
+
+    def interrupt(self) -> None:
+        self.detector.interrupt()
+        self.victory_detector.interrupt()
+        self.bar_detector.interrupt()
 
     def capture_restarted(self) -> None:
         self.monitor.reset()
-        self.detector.interrupt()
+        self.interrupt()
+
+    def capture_failed(self) -> bool:
+        """Błąd przechwytywania. Zwraca True, gdy wcześniej obraz docierał (utratę zgłaszamy raz)."""
+        self.interrupt()
+        lost, self._healthy = self._healthy, False
+        return lost
 
     def process(self, frame: np.ndarray | None) -> SampleResult:
         check = self.monitor.check(frame)
-        if check.resolution_changed or check.health is not CaptureHealth.OK:
-            self.detector.interrupt()
-        score = None
-        death = False
-        if check.health is CaptureHealth.OK and frame is not None:
-            score = self.template.match(frame, self.settings.search_margin)
-            death = self.detector.update(score)
-        return SampleResult(check, score, death, self.detector.armed)
+        healthy = check.health is CaptureHealth.OK
+        frames_lost = self._healthy and not healthy
+        self._healthy = healthy
+        if check.resolution_changed or not healthy:
+            self.interrupt()
+        result = SampleResult(check, None, False, self.detector.armed, frames_lost=frames_lost)
+        if healthy and frame is not None:
+            margin = self.settings.search_margin
+            result.score = self.template.match(frame, margin)
+            result.death = self.detector.update(result.score)
+            result.armed = self.detector.armed
+            if self.bar_template is not None:
+                result.bar_score = self.bar_template.match(frame, margin)
+                result.bar_event = self.bar_detector.update(result.bar_score)
+            if self.victory_template is not None:
+                result.victory_score = self.victory_template.match(frame, margin)
+                result.victory = self.victory_detector.update(result.victory_score)
+        result.bar_visible = self.bar_detector.visible
+        return result

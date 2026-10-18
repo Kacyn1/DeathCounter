@@ -1,7 +1,8 @@
-"""Okno kalibracji: pobranie obrazu z napisem „NIE ŻYJESZ”, zaznaczenie go i sprawdzenie wzorca."""
+"""Okno kalibracji: wzorce napisu śmierci oraz (w zakładce „Walka z bossem”) paska bossa i komunikatu zwycięstwa."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSpinBox,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -23,6 +25,8 @@ from PySide6.QtWidgets import (
 from .template import DeathTemplate, TemplateError, read_image
 
 FrameProvider = Callable[[Callable[[np.ndarray | None, str | None], None]], None]
+# Zapisuje wzorzec danego rodzaju; zwraca komunikat błędu albo None.
+TemplateSaver = Callable[[str, DeathTemplate], "str | None"]
 
 
 def frame_to_qimage(frame: np.ndarray) -> QImage:
@@ -118,38 +122,71 @@ class SelectableImage(QWidget):
             painter.drawRect(self._to_widget(self._selection))
 
 
-class CalibrationDialog(QDialog):
+@dataclass(frozen=True)
+class TemplateKind:
+    key: str
+    subject: str       # co jest na obrazie, np. „napis śmierci”
+    moment: str        # kiedy nacisnąć skrót / przechwycić ekran
+    what_to_select: str
+    check_hint: str
+
+
+KINDS = {
+    "death": TemplateKind(
+        "death",
+        "napis śmierci",
+        "gdy widać ekran śmierci (np. „NIE ŻYJESZ”)",
+        "Zaznacz myszą prostokąt obejmujący <b>sam napis</b>, z niewielkim marginesem.",
+        "Na ekranie śmierci wynik powinien przekroczyć próg, a na zwykłym zrzucie z gry być wyraźnie niższy.",
+    ),
+    "boss_bar": TemplateKind(
+        "boss_bar",
+        "pasek zdrowia bossa",
+        "w trakcie walki, gdy widać pasek zdrowia bossa",
+        "Zaznacz <b>lewy koniec paska</b>: ozdobną ramkę i początek paska. Nie zaznaczaj nazwy bossa "
+        "(każdy boss ma inną) ani całego paska – jego wypełnienie maleje, gdy boss traci zdrowie.",
+        "Na obrazie z walki wynik powinien przekroczyć próg, a na zrzucie bez bossa być wyraźnie niższy.",
+    ),
+    "victory": TemplateKind(
+        "victory",
+        "komunikat zwycięstwa",
+        "gdy po pokonaniu bossa widać komunikat zwycięstwa",
+        "Zaznacz myszą prostokąt obejmujący <b>sam napis</b> komunikatu, z niewielkim marginesem.",
+        "Na obrazie z komunikatem wynik powinien przekroczyć próg, a na zwykłym zrzucie z gry być wyraźnie niższy.",
+    ),
+}
+
+
+class CalibrationPage(QWidget):
+    """Pobranie obrazu, zaznaczenie fragmentu, sprawdzenie i zapis wzorca jednego rodzaju."""
+
     def __init__(
         self,
-        parent: QWidget | None,
+        kind: TemplateKind,
         frame_provider: FrameProvider,
+        saver: TemplateSaver,
         current_template: DeathTemplate | None,
         threshold: float,
         margin: float,
         hotkey_text: str | None,
-        initial_frame: np.ndarray | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Kalibracja – wzorzec napisu „NIE ŻYJESZ”")
-        self.resize(1000, 720)
+        self.kind = kind
         self._frame_provider = frame_provider
+        self._saver = saver
         self._current = current_template
         self._threshold = threshold
         self._margin = margin
-        self.result_template: DeathTemplate | None = None
 
-        hotkey = (
-            f"naciśnij <b>{hotkey_text}</b> w grze, gdy widać ekran śmierci"
-            if hotkey_text
-            else "użyj przechwytywania z opóźnieniem"
-        )
+        hotkey = f"naciśnij <b>{hotkey_text}</b> w grze {kind.moment}" if hotkey_text else "użyj przechwytywania z opóźnieniem"
         intro = QLabel(
             "<ol style='margin:0'>"
-            f"<li>Pobierz obraz z napisem „NIE ŻYJESZ”: {hotkey}, przechwyć ekran z opóźnieniem "
+            f"<li>Pobierz obraz, na którym widać {kind.subject}: {hotkey}, przechwyć ekran z opóźnieniem "
             "albo wczytaj zrzut ekranu z gry (np. F12 w Steam).</li>"
-            "<li>Zaznacz myszą prostokąt obejmujący <b>sam napis</b>, z niewielkim marginesem.</li>"
-            "<li>Kliknij „Sprawdź wzorzec”. Na ekranie śmierci wynik powinien przekroczyć próg, "
-            "a na zwykłym zrzucie z gry być wyraźnie niższy.</li>"
+            f"<li>{kind.what_to_select}</li>"
+            f"<li>Kliknij „Sprawdź wzorzec”. {kind.check_hint}</li>"
+            "<li>Kliknij „Zapisz wzorzec”.</li>"
             "</ol>"
         )
         intro.setWordWrap(True)
@@ -173,7 +210,6 @@ class CalibrationDialog(QDialog):
         source_row.addWidget(load_button)
         source_row.addStretch(1)
 
-        self.selection_label = QLabel()
         self.check_button = QPushButton("Sprawdź wzorzec")
         self.check_button.clicked.connect(self._check)
         self.check_label = QLabel()
@@ -182,30 +218,27 @@ class CalibrationDialog(QDialog):
         check_row.addWidget(self.check_button)
         check_row.addWidget(self.check_label, 1)
 
+        self.selection_label = QLabel()
+        self.state_label = QLabel()
         self.save_button = QPushButton("Zapisz wzorzec")
-        self.save_button.setDefault(True)
         self.save_button.clicked.connect(self._save)
-        cancel_button = QPushButton("Zamknij")
-        cancel_button.clicked.connect(self.reject)
-        buttons = QHBoxLayout()
-        buttons.addWidget(self.selection_label, 1)
-        buttons.addWidget(self.save_button)
-        buttons.addWidget(cancel_button)
+        save_row = QHBoxLayout()
+        save_row.addWidget(self.selection_label, 1)
+        save_row.addWidget(self.state_label)
+        save_row.addWidget(self.save_button)
 
         layout = QVBoxLayout(self)
         layout.addWidget(intro)
         layout.addLayout(source_row)
         layout.addWidget(self.image, 1)
         layout.addLayout(check_row)
-        layout.addLayout(buttons)
+        layout.addLayout(save_row)
 
         self._countdown = QTimer(self)
         self._countdown.setInterval(1000)
         self._countdown.timeout.connect(self._tick)
         self._remaining = 0
-
-        if initial_frame is not None:
-            self.set_frame(initial_frame)
+        self._refresh_state()
         self._on_selection_changed()
 
     # --- pozyskiwanie obrazu ---
@@ -246,8 +279,9 @@ class CalibrationDialog(QDialog):
             QMessageBox.warning(self, "Kalibracja", error or "Nie udało się pobrać obrazu.")
             return
         self.set_frame(frame)
-        self.raise_()
-        self.activateWindow()
+        window = self.window()
+        window.raise_()
+        window.activateWindow()
 
     def _load_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -261,6 +295,13 @@ class CalibrationDialog(QDialog):
             QMessageBox.warning(self, "Kalibracja", str(exc))
 
     # --- wzorzec ---
+
+    def _refresh_state(self) -> None:
+        if self._current is None:
+            self.state_label.setText("<span style='color:#e0a050'>wzorzec: brak</span>")
+        else:
+            w, h = self._current.reference_size
+            self.state_label.setText(f"<span style='color:#5fd38d'>wzorzec: zapisany (z obrazu {w}×{h})</span>")
 
     def _on_selection_changed(self) -> None:
         selection = self.image.selection()
@@ -278,7 +319,7 @@ class CalibrationDialog(QDialog):
             return DeathTemplate.from_frame(self.image.frame, selection)
         if self._current is not None:
             return self._current
-        raise TemplateError("Zaznacz napis „NIE ŻYJESZ” na obrazie.")
+        raise TemplateError(f"Zaznacz {self.kind.subject} na obrazie.")
 
     def _check(self) -> None:
         try:
@@ -289,9 +330,9 @@ class CalibrationDialog(QDialog):
         score = candidate.match(self.image.frame, self._margin)
         found = score >= self._threshold
         verdict = (
-            "<b style='color:#5fd38d'>napis WYKRYTY</b>"
+            "<b style='color:#5fd38d'>WYKRYTO</b>"
             if found
-            else "<b style='color:#e0a050'>napis NIEWYKRYTY</b>"
+            else "<b style='color:#e0a050'>NIE WYKRYTO</b>"
         )
         source = "zaznaczenia" if self.image.selection() is not None else "zapisanego wzorca"
         self.check_label.setText(
@@ -307,5 +348,84 @@ class CalibrationDialog(QDialog):
         except TemplateError as exc:
             QMessageBox.warning(self, "Kalibracja", str(exc))
             return
-        self.result_template = template
-        self.accept()
+        error = self._saver(self.kind.key, template)
+        if error:
+            QMessageBox.critical(self, "Błąd zapisu wzorca", error)
+            return
+        self._current = template
+        self._refresh_state()
+        self.check_label.setText("<span style='color:#5fd38d'>Wzorzec zapisany i używany przez wykrywanie.</span>")
+
+
+class CalibrationDialog(QDialog):
+    """Zakładki „Napis śmierci” i „Walka z bossem” (pasek bossa, komunikat zwycięstwa).
+    Każdy wzorzec zapisuje się od razu przyciskiem „Zapisz wzorzec”; okno zostaje otwarte."""
+
+    def __init__(
+        self,
+        parent: QWidget | None,
+        frame_provider: FrameProvider,
+        saver: TemplateSaver,
+        templates: dict[str, DeathTemplate | None],
+        threshold: float,
+        margin: float,
+        hotkey_text: str | None,
+        initial_frame: np.ndarray | None = None,
+        initial_kind: str = "death",
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Kalibracja wzorców")
+        self.resize(1000, 760)
+
+        self.pages = {
+            key: CalibrationPage(kind, frame_provider, saver, templates.get(key), threshold, margin, hotkey_text)
+            for key, kind in KINDS.items()
+        }
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self.pages["death"], "Napis śmierci")
+        self.boss_tabs = QTabWidget()
+        self.boss_tabs.addTab(self.pages["boss_bar"], "Pasek bossa")
+        self.boss_tabs.addTab(self.pages["victory"], "Komunikat zwycięstwa")
+        boss_page = QWidget()
+        boss_layout = QVBoxLayout(boss_page)
+        boss_hint = QLabel(
+            "Pasek bossa rozpoczyna walkę i wznawia timer, a komunikat zwycięstwa kończy ją na stałe. "
+            "Skalibruj oba, aby „Śledź walkę z bossem” działało samo."
+        )
+        boss_hint.setWordWrap(True)
+        boss_hint.setStyleSheet("color:#9aa0a6;")
+        boss_layout.addWidget(boss_hint)
+        boss_layout.addWidget(self.boss_tabs, 1)
+        self.tabs.addTab(boss_page, "Walka z bossem")
+        self.show_kind(initial_kind)
+
+        close_button = QPushButton("Zamknij")
+        close_button.clicked.connect(self.accept)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(close_button)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.tabs, 1)
+        layout.addLayout(buttons)
+
+        if initial_frame is not None:
+            # Zrzut ze skrótu mógł dotyczyć dowolnego wzorca – jest dostępny w każdej zakładce.
+            for page in self.pages.values():
+                page.set_frame(initial_frame)
+
+    def show_kind(self, key: str) -> None:
+        if key == "death":
+            self.tabs.setCurrentIndex(0)
+        else:
+            self.tabs.setCurrentIndex(1)
+            self.boss_tabs.setCurrentWidget(self.pages[key])
+
+    def current_page(self) -> CalibrationPage:
+        if self.tabs.currentIndex() == 0:
+            return self.pages["death"]
+        return self.boss_tabs.currentWidget()
+
+    def set_frame(self, frame: np.ndarray) -> None:
+        """Zrzut ze skrótu w trakcie kalibracji trafia do zakładki, która jest właśnie otwarta."""
+        self.current_page().set_frame(frame)

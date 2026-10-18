@@ -86,14 +86,17 @@ def main() -> int:
     bosses = BossTracker(boss_store)
     bosses.enabled = config.bosses.track
 
-    template = None
-    if config.template is not None:
-        try:
-            template = DeathTemplate.load(paths.template, config.template)
-        except TemplateError as exc:
-            warnings.append(f"Nie można wczytać wzorca: {exc} Wykonaj kalibrację ponownie.")
+    templates = {}
+    for kind, label in (("death", "napisu śmierci"), ("boss_bar", "paska bossa"), ("victory", "komunikatu zwycięstwa")):
+        info = config.template_info(kind)
+        templates[kind] = None
+        if info is not None:
+            try:
+                templates[kind] = DeathTemplate.load(paths.template_path(kind), info)
+            except TemplateError as exc:
+                warnings.append(f"Nie można wczytać wzorca {label}: {exc} Wykonaj kalibrację ponownie.")
 
-    window = MainWindow(paths, store, bosses, config, template)
+    window = MainWindow(paths, store, bosses, config, templates)
     window.show()
     for warning in warnings:
         QMessageBox.warning(window, "Death Counter", warning)

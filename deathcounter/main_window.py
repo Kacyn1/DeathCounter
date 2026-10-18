@@ -29,14 +29,22 @@ from .boss_panel import BossPanel
 from .bosses import BossTracker, overlay_text
 from .calibration import CalibrationDialog
 from .capture import CaptureError, grab_single_frame, list_outputs
-from .config import AppConfig, AppPaths, save_config
+from .config import TEMPLATE_FIELDS, AppConfig, AppPaths, save_config
 from .detector import CaptureHealth, SampleResult
 from .overlay import OverlayWindow
 from .rtss import RtssOsd, RtssState
 from .storage import DeathStore, StorageError
 from .template import DeathTemplate
 from . import rtss_setup
-from .worker import DetectionWorker, DetectorStatus, RtssSetupWorker
+from .worker import (
+    BOSS_BAR_LOST,
+    BOSS_BAR_VISIBLE,
+    BOSS_VICTORY,
+    FRAMES_LOST,
+    DetectionWorker,
+    DetectorStatus,
+    RtssSetupWorker,
+)
 
 # Skróty globalne – działają także, gdy gra jest w pełnym ekranie.
 HOTKEY_SNAPSHOT, HOTKEY_PLUS, HOTKEY_MINUS = 0xD52, 0xD53, 0xD54
@@ -70,7 +78,7 @@ class MainWindow(QMainWindow):
         store: DeathStore,
         bosses: BossTracker,
         config: AppConfig,
-        template: DeathTemplate | None,
+        templates: dict[str, DeathTemplate | None],
     ):
         super().__init__()
         self.setWindowTitle("Death Counter")
@@ -78,7 +86,7 @@ class MainWindow(QMainWindow):
         self.store = store
         self.bosses = bosses
         self.config = config
-        self.template = template
+        self.templates = {kind: templates.get(kind) for kind in TEMPLATE_FIELDS}
         self.worker: DetectionWorker | None = None
         self._status = DetectorStatus.STOPPED
         self._frame_callbacks: list = []
@@ -105,10 +113,11 @@ class MainWindow(QMainWindow):
         self._apply_overlay()
         self._refresh_count()
         self._refresh_template_label()
-        self._set_status(DetectorStatus.STOPPED if template else DetectorStatus.NO_TEMPLATE, self._idle_message())
+        self._refresh_boss_hint()
+        self._set_status(self._idle_status(), self._idle_message())
         self._boss_timer.start()
 
-        if config.auto_start and template is not None:
+        if config.auto_start and self.templates["death"] is not None:
             QTimer.singleShot(0, self.start_detection)
         QTimer.singleShot(300, self._auto_start_rtss)
 
@@ -143,6 +152,7 @@ class MainWindow(QMainWindow):
         self.status_message.setWordWrap(True)
         self.image_label = QLabel("–")
         self.score_label = QLabel("–")
+        self.boss_score_label = QLabel("–")
         self.template_label = QLabel()
         self.notice_label = QLabel()
         self.notice_label.setWordWrap(True)
@@ -153,7 +163,8 @@ class MainWindow(QMainWindow):
         status_form.addRow("Wykrywanie:", status_row)
         status_form.addRow("Obraz:", self.image_label)
         status_form.addRow("Dopasowanie:", self.score_label)
-        status_form.addRow("Wzorzec:", self.template_label)
+        status_form.addRow("Boss:", self.boss_score_label)
+        status_form.addRow("Wzorce:", self.template_label)
         status_form.addRow("", self.notice_label)
         root.addWidget(status_box)
 
@@ -169,7 +180,7 @@ class MainWindow(QMainWindow):
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.confirm_reset)
         self.calibrate_button = QPushButton("Kalibracja…")
-        self.calibrate_button.clicked.connect(self.open_calibration)
+        self.calibrate_button.clicked.connect(lambda: self.open_calibration())
         for button in (self.start_button, self.overlay_button):
             button.setMinimumHeight(36)
         controls.addWidget(self.start_button, 0, 0, 1, 2)
@@ -184,6 +195,7 @@ class MainWindow(QMainWindow):
         self.boss_panel.track_toggled.connect(self._on_track_bosses)
         self.boss_panel.changed.connect(self._refresh_overlay)
         self.boss_panel.save_failed.connect(self._show_error)
+        self.boss_panel.calibrate_requested.connect(lambda: self.open_calibration("boss_bar"))
         root.addWidget(self.boss_panel)
 
         settings_row = QHBoxLayout()
@@ -337,6 +349,28 @@ class MainWindow(QMainWindow):
         self.config.bosses.track = checked
         self._save_timer.start()
         self._refresh_overlay()
+        self._refresh_boss_hint()
+
+    def _on_boss_signal(self, event: str) -> None:
+        handlers = {
+            BOSS_BAR_VISIBLE: self.bosses.boss_bar_visible,
+            BOSS_BAR_LOST: self.bosses.boss_bar_lost,
+            BOSS_VICTORY: self.bosses.victory,
+            FRAMES_LOST: self.bosses.frames_lost,
+        }
+        self._boss_event(handlers[event])
+        self._refresh_overlay()
+
+    def _refresh_boss_hint(self) -> None:
+        missing = [label for kind, label in (("boss_bar", "pasek bossa"), ("victory", "komunikat zwycięstwa"))
+                   if self.templates[kind] is None]
+        if missing:
+            hint = f"Brak wzorca: {', '.join(missing)}. Kliknij „Kalibracja walki…”, aby walka startowała sama."
+        elif self.worker is None:
+            hint = "Wykrywanie jest wyłączone – kliknij Start, aby walka była rozpoznawana."
+        else:
+            hint = "Walka zacznie się sama, gdy na ekranie pojawi się pasek zdrowia bossa."
+        self.boss_panel.set_hint(hint)
 
     def _refresh_overlay(self) -> None:
         """Ten sam tekst trafia do nakładki-okna i do RTSS, więc obie pokazują to samo."""
@@ -369,11 +403,12 @@ class MainWindow(QMainWindow):
     def start_detection(self) -> None:
         if self.worker is not None:
             return
-        if self.template is None:
+        if self.templates["death"] is None:
             self._set_status(DetectorStatus.NO_TEMPLATE, "Najpierw wykonaj kalibrację (przycisk „Kalibracja…”).")
             return
-        worker = DetectionWorker(self.template, self.config.detector, self.config.capture)
+        worker = DetectionWorker(self.templates, self.config.detector, self.config.capture, self.config.bosses)
         worker.death_detected.connect(self._on_death_detected)
+        worker.boss_event.connect(self._on_boss_signal)
         worker.status_changed.connect(self._set_status)
         worker.sample.connect(self._on_sample)
         worker.snapshot_ready.connect(self._on_snapshot)
@@ -384,6 +419,7 @@ class MainWindow(QMainWindow):
         self.start_button.setText("Stop")
         self._set_status(DetectorStatus.ACTIVE, "Uruchamianie przechwytywania…")
         worker.start()
+        self._refresh_boss_hint()
 
     def stop_detection(self) -> None:
         if self.worker is not None:
@@ -400,9 +436,14 @@ class MainWindow(QMainWindow):
         self.start_button.setEnabled(True)
         self.start_button.setText("Start")
         self.score_label.setText("–")
+        self.boss_score_label.setText("–")
+        # Bez wykrywania nikt nie zgłosi śmierci ani zniknięcia paska – timer walki staje.
+        self._boss_event(self.bosses.pause)
+        self._refresh_overlay()
+        self._refresh_boss_hint()
         # Błąd, który sam zakończył wątek, zostaje widoczny; zwykłe zatrzymanie pokazuje stan spoczynku.
         if self._stop_requested or self._status is not DetectorStatus.ERROR:
-            self._set_status(DetectorStatus.STOPPED if self.template else DetectorStatus.NO_TEMPLATE, self._idle_message())
+            self._set_status(self._idle_status(), self._idle_message())
         if self._closing:
             self.close()
 
@@ -425,6 +466,13 @@ class MainWindow(QMainWindow):
             self.score_label.setText(
                 f"{result.score:.2f} (próg {self.config.detector.threshold:.2f}) – detektor {armed}"
             )
+        parts = []
+        if result.bar_score is not None:
+            bar = "widoczny" if result.bar_visible else "niewidoczny"
+            parts.append(f"pasek {result.bar_score:.2f} ({bar})")
+        if result.victory_score is not None:
+            parts.append(f"zwycięstwo {result.victory_score:.2f}")
+        self.boss_score_label.setText(", ".join(parts) or "–")
 
     def _set_status(self, status: DetectorStatus, message: str) -> None:
         self._status = status
@@ -434,8 +482,11 @@ class MainWindow(QMainWindow):
         )
         self.status_message.setText(message)
 
+    def _idle_status(self) -> DetectorStatus:
+        return DetectorStatus.STOPPED if self.templates["death"] is not None else DetectorStatus.NO_TEMPLATE
+
     def _idle_message(self) -> str:
-        if self.template is None:
+        if self.templates["death"] is None:
             return "Brak wzorca – wykonaj kalibrację, aby włączyć wykrywanie."
         return "Wykrywanie wyłączone. Kliknij Start."
 
@@ -519,43 +570,44 @@ class MainWindow(QMainWindow):
         for callback in callbacks:
             callback(frame, error)
 
-    def open_calibration(self) -> None:
+    def open_calibration(self, kind: str = "death") -> None:
         dialog = CalibrationDialog(
             self,
             frame_provider=self.request_frame,
-            current_template=self.template,
+            saver=self._save_template,
+            templates=self.templates,
             threshold=self.config.detector.threshold,
             margin=self.config.detector.search_margin,
             hotkey_text=HOTKEY_TEXT if HOTKEY_SNAPSHOT in self._hotkeys else None,
             initial_frame=self._hotkey_frame,
+            initial_kind=kind,
         )
         self._calibration = dialog
         try:
-            accepted = dialog.exec()
+            dialog.exec()
         finally:
             self._calibration = None
-        if not accepted or dialog.result_template is None:
-            return
-        template = dialog.result_template
+
+    def _save_template(self, kind: str, template: DeathTemplate) -> str | None:
+        """Zapis wzorca z okna kalibracji: plik PNG + config.json, od razu używany przez wykrywanie."""
         try:
-            self.config.template = template.save(self.paths.template)
+            self.config.set_template_info(kind, template.save(self.paths.template_path(kind)))
             save_config(self.paths.config, self.config)
         except StorageError as exc:
-            QMessageBox.critical(self, "Błąd zapisu wzorca", str(exc))
-            return
-        self.template = template
+            return str(exc)
+        self.templates[kind] = template
         self._refresh_template_label()
+        self._refresh_boss_hint()
         if self.worker is not None:
-            self.worker.update_template(template)
+            self.worker.update_template(kind, template)
         elif self._status in (DetectorStatus.NO_TEMPLATE, DetectorStatus.STOPPED):
-            self._set_status(DetectorStatus.STOPPED, self._idle_message())
+            self._set_status(self._idle_status(), self._idle_message())
+        return None
 
     def _refresh_template_label(self) -> None:
-        if self.template is None:
-            self.template_label.setText("brak – wykonaj kalibrację")
-        else:
-            w, h = self.template.reference_size
-            self.template_label.setText(f"zapisany (z obrazu {w}×{h})")
+        names = (("death", "śmierć"), ("boss_bar", "pasek bossa"), ("victory", "zwycięstwo"))
+        parts = [f"{label}: {'✓' if self.templates[kind] is not None else 'brak'}" for kind, label in names]
+        self.template_label.setText(", ".join(parts))
 
     def _on_hotkey(self, hotkey_id: int) -> None:
         if hotkey_id == HOTKEY_SNAPSHOT:
@@ -686,7 +738,7 @@ class MainWindow(QMainWindow):
         self._save_timer.stop()
         self._save_config()
         self._boss_timer.stop()
-        self._boss_event(self.bosses.shutdown)
+        self._boss_event(self.bosses.pause)
         self._rtss_timer.stop()
         self.rtss.clear()
         self.overlay.close()

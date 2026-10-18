@@ -44,3 +44,16 @@ def test_broken_json_gives_warning(tmp_path):
     config, warning = load_config(path)
     assert warning
     assert config == AppConfig()
+
+
+def test_boss_templates_and_settings_roundtrip(tmp_path):
+    config = AppConfig()
+    config.set_template_info("boss_bar", TemplateInfo([10, 600, 180, 40], [1280, 720]))
+    config.set_template_info("victory", TemplateInfo([300, 300, 500, 90], [1280, 720]))
+    config.bosses.track = True
+    config.bosses.bar_lost_seconds = 5.0
+    save_config(tmp_path / "config.json", config)
+    loaded, warning = load_config(tmp_path / "config.json")
+    assert warning is None
+    assert loaded == config
+    assert loaded.template is None  # wzorzec śmierci osobno, bez zmian w starym formacie

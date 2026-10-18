@@ -7,7 +7,7 @@ Lokalna aplikacja Windows, która automatycznie liczy śmierci w grach wyświetl
 ### Sposób 1: gotowy program (zalecany)
 
 1. Wejdź w [Releases](https://github.com/Kacyn1/DeathCounter/releases) i pobierz `DeathCounter.exe`.
-2. Umieść go w osobnym folderze, np. `C:\Gry\DeathCounter`. Obok programu będą zapisywane `deaths.json`, `config.json` i `template.png`.
+2. Umieść go w osobnym folderze, np. `C:\Gry\DeathCounter`. Obok programu będą zapisywane `deaths.json`, `bosses.json`, `config.json` i wzorce (`template.png`, `boss_bar.png`, `victory.png`).
 3. Uruchom dwuklikiem. Python nie jest potrzebny.
 
 Program nie ma podpisu cyfrowego, więc Windows może pokazać „System Windows ochronił ten komputer”. Kliknij wtedy **Więcej informacji → Uruchom mimo to**.
@@ -67,7 +67,16 @@ Po zaznaczeniu **„Śledź walkę z bossem”** program sam prowadzi walkę:
 
 Nazwę bossa można wpisać w dowolnym momencie (do tego czasu to „Boss 1”, „Boss 2”…). **Zapisz wynik** zapisuje ostateczny wynik ze statusem POKONANO i czyści panel; dopiero potem kolejny pasek oznacza nowego bossa. **Odrzuć** usuwa pomyłkowy wpis. Gdy śmierć i zwycięstwo wypadną prawie jednocześnie albo w trakcie walki zniknie obraz, panel pokazuje ostrzeżenie i czeka na decyzję („Zapisz wynik” albo „Kontynuuj walkę”). Śmierć poza walką liczy się tylko w ogólnym liczniku, a ręczne +1/−1 w trakcie walki poprawia też licznik bossa. Czas walki jest zapisywany co kilka sekund i przy zamknięciu programu; gdy program jest wyłączony, timer nie biegnie.
 
-Automatyczne wykrywanie paska bossa i komunikatu zwycięstwa (z kalibracją jak dla napisu śmierci) jest w przygotowaniu.
+### Kalibracja walki z bossem
+
+**Kalibracja… → zakładka „Walka z bossem”** (albo przycisk „Kalibracja walki…” w panelu) ma dwie podzakładki. Obraz pobiera się tak samo jak dla napisu śmierci: **Ctrl+Alt+F9** w grze, przechwycenie z opóźnieniem albo zrzut z pliku (np. F12 w Steam).
+
+- **Pasek bossa** – obraz z walki. Zaznacz **lewy koniec paska** (ozdobną ramkę i początek paska), bez nazwy bossa i bez całego paska, bo wypełnienie maleje, gdy boss traci zdrowie. Walka zaczyna się, gdy pasek jest widoczny przez ok. 1 s, a pasek uznaje się za zniknięty po 3 s nieobecności (`config.json`, sekcja `bosses`).
+- **Komunikat zwycięstwa** – obraz z komunikatem po pokonaniu bossa. Zaznacz sam napis.
+
+Komunikat zwycięstwa widać tylko kilka sekund, dlatego najwygodniej zrobić zrzut F12 w trakcie walki i w chwili zwycięstwa, a skalibrować oba wzorce później z plików. Wzorce zapisują się jako `boss_bar.png` i `victory.png`.
+
+Po ponownym uruchomieniu wykrywania (Start) napis widoczny na ekranie nie jest liczony od razu – musi najpierw zniknąć, żeby ta sama śmierć nie została policzona dwa razy.
 
 ## Gra w pełnym ekranie
 

@@ -29,6 +29,7 @@ class BossPanel(QGroupBox):
     track_toggled = Signal(bool)
     changed = Signal()             # dane bossa zmieniły się po akcji w panelu
     save_failed = Signal(str)
+    calibrate_requested = Signal()
 
     def __init__(self, tracker: BossTracker, parent=None) -> None:
         super().__init__("Walka z bossem", parent)
@@ -76,13 +77,20 @@ class BossPanel(QGroupBox):
             buttons.addWidget(button)
         form.addRow(buttons)
 
-        self.hint_label = QLabel(
-            "Automatyczne wykrywanie paska bossa i komunikatu zwycięstwa zostanie dodane w kolejnym etapie."
-        )
+        self.hint_label = QLabel()
         self.hint_label.setWordWrap(True)
         self.hint_label.setStyleSheet("color:#9aa0a6;")
-        form.addRow(self.hint_label)
+        calibrate_button = QPushButton("Kalibracja walki…")
+        calibrate_button.setToolTip("Wzorce paska zdrowia bossa i komunikatu zwycięstwa.")
+        calibrate_button.clicked.connect(self.calibrate_requested)
+        hint_row = QHBoxLayout()
+        hint_row.addWidget(self.hint_label, 1)
+        hint_row.addWidget(calibrate_button)
+        form.addRow(hint_row)
         self.refresh()
+
+    def set_hint(self, text: str) -> None:
+        self.hint_label.setText(text)
 
     def refresh(self) -> None:
         view = self.tracker.view()
