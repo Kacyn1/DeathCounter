@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .audit import AuditLog, open_audit
 from .bosses import BossStore
 from .config import TEMPLATE_FIELDS, AppPaths, Calibration, load_calibration
 from .storage import DeathStore, StorageError
+from .signing import load_key
 from .template import DeathTemplate, TemplateError
 
 TEMPLATE_LABELS = {"death": "napisu śmierci", "boss_bar": "paska bossa", "victory": "komunikatu zwycięstwa"}
@@ -20,6 +22,7 @@ class GameData:
     boss_store: BossStore
     calibration: Calibration
     templates: dict[str, DeathTemplate | None]
+    audit: AuditLog | None = None
     warnings: list[str] = field(default_factory=list)
 
 
@@ -30,6 +33,7 @@ def counter_files(paths: AppPaths) -> list[Path]:
         paths.deaths.with_name(paths.deaths.name + ".uszkodzony"),
         paths.bosses,
         paths.bosses.with_name(paths.bosses.name + ".uszkodzony"),
+        paths.audit,  # nowy licznik zaczyna też nowy rejestr zmian
     ]
 
 
@@ -45,6 +49,9 @@ def open_game(base: Path, game: str) -> GameData:
     boss_store = BossStore(paths.bosses)
     boss_store.load()
     warnings = [w for w in (store.warning, boss_store.warning) if w]
+    audit, warning = open_audit(paths.audit, load_key(), store.deaths, boss_store.records)
+    if warning:
+        warnings.append(warning)
 
     calibration, warning = load_calibration(paths.calibration)
     if warning:
@@ -58,4 +65,4 @@ def open_game(base: Path, game: str) -> GameData:
                 templates[kind] = DeathTemplate.load(paths.template_path(kind), info)
             except TemplateError as exc:
                 warnings.append(f"Nie można wczytać wzorca {TEMPLATE_LABELS[kind]}: {exc} Wykonaj kalibrację ponownie.")
-    return GameData(paths, store, boss_store, calibration, templates, warnings)
+    return GameData(paths, store, boss_store, calibration, templates, audit, warnings)

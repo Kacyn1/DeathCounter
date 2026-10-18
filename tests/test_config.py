@@ -195,4 +195,4 @@ def test_remove_custom_game():
 def test_counter_files_keep_calibration(tmp_path):
     paths = AppPaths.for_game(tmp_path, "ds1")
     names = {p.name for p in counter_files(paths)}
-    assert names == {"deaths.json", "deaths.json.uszkodzony", "bosses.json", "bosses.json.uszkodzony"}
+    assert names == {"deaths.json", "deaths.json.uszkodzony", "bosses.json", "bosses.json.uszkodzony", "audit.json"}

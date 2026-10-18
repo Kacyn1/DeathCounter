@@ -224,6 +224,7 @@ class AppPaths:
     game_dir: Path
     deaths: Path
     bosses: Path
+    audit: Path
     calibration: Path
     template: Path
     boss_bar_template: Path
@@ -240,6 +241,7 @@ class AppPaths:
             game_dir,
             game_dir / "deaths.json",
             game_dir / "bosses.json",
+            game_dir / "audit.json",
             game_dir / "calibration.json",
             game_dir / "template.png",
             game_dir / "boss_bar.png",

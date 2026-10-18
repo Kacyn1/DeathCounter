@@ -107,8 +107,9 @@ class BossTracker:
     a kolejna zmiana ponowi zapis.
     """
 
-    def __init__(self, store: BossStore, clock: Clock = time.monotonic) -> None:
+    def __init__(self, store: BossStore, clock: Clock = time.monotonic, audit=None) -> None:
         self.store = store
+        self.audit = audit  # rejestr zmian (audit.AuditLog) – ręczne korekty i zmiany nazw
         self._clock = clock
         self.enabled = False
         self.state = BossState.WAITING
@@ -271,6 +272,8 @@ class BossTracker:
             if existing is not None:
                 name = _numbered(name, records)
             self.store.records = {(name if key == self.current else key): value for key, value in records.items()}
+        if self.audit is not None:
+            self.audit.boss_renamed(self.current, name)
         self.current = name
         self._save()
         return name
@@ -281,7 +284,7 @@ class BossTracker:
         if self.record is not None and self.state in (BossState.FIGHT, BossState.DEATH):
             self.record.deaths += 1
             self._last_death_counted = True
-            self._save()
+            self._save(manual=True)
 
     def manual_undo(self) -> None:
         """Ręczne −1 cofa także śmierć bossa, jeśli ostatnia doliczona śmierć była przy bossie."""
@@ -289,7 +292,7 @@ class BossTracker:
         if self._last_death_counted and record is not None and record.deaths > 0:
             record.deaths -= 1
             self._last_death_counted = False
-            self._save()
+            self._save(manual=True)
 
     # ------------------------------------------------------------ wewnętrzne
 
@@ -321,8 +324,11 @@ class BossTracker:
             number += 1
         return f"Boss {number}"
 
-    def _save(self) -> None:
+    def _save(self, manual: bool = False) -> None:
         self.store.save()
+        if self.audit is not None:
+            self.audit.bosses_saved(self.store.records, self.current if manual else None)
+            self.audit.save()
 
 
 def format_duration(seconds: float) -> str:

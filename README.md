@@ -99,6 +99,8 @@ Zabezpieczenia przed podrobieniem:
 - podpisane dane ukryte w metadanych pliku (XMP),
 - **niewidoczny znak wodny** – mikrotekst z kodem, grą, nickiem i liczbą śmierci, w kolorze prawie identycznym z tłem (widać go dopiero po powiększeniu i podbiciu kontrastu).
 
+**Ręczne zmiany wyniku.** Każda gra ma podpisany rejestr zmian (`audit.json`). Program zapisuje w nim ręczne korekty (przyciski i skróty +1/−1, reset, +1/−1 przy bossie) oraz wykrywa zmiany plików z wynikami poza programem (np. edycję `deaths.json` lub czasu bossa w `bosses.json`). Jeśli wynik był zmieniany, certyfikat ma czerwoną adnotację, a załącznik „Korekty” pokazuje, ile dodano lub odjęto ręcznie i co zmieniono poza programem. Edycja rejestru zostaje wykryta, a jego usunięcie oznacza istniejące wyniki jako „bez historii zmian”. Bez zmian certyfikat wygląda zwyczajnie.
+
 Przycisk **Sprawdź certyfikat…** wczytuje PDF i mówi, czy jest prawdziwy, a także pokazuje podpisane dane – jeśli ktoś zmienił liczby na certyfikacie, widać różnicę. Klucz (`deathcounter\_signing_key.py`) nie trafia do repozytorium: `build.ps1` tworzy go przy pierwszym budowaniu i dołącza do exe. Certyfikaty z wersji uruchomionej ze źródeł (bez klucza) są oznaczone jako niepodpisane. Kod jest publiczny, a klucz da się wydobyć z exe, więc podpis bardzo utrudnia podrabianie, ale go nie wyklucza.
 
 ## Status na Discordzie
@@ -152,6 +154,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/bosses.py` | walka z bossem: maszyna stanów, timer, `bosses.json` (bez Qt, testowalne) |
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
 | `deathcounter/report.py` | certyfikat PDF (QPdfWriter), weryfikacja |
+| `deathcounter/audit.py` | rejestr ręcznych korekt i zmian poza programem (`audit.json`) |
 | `deathcounter/signing.py` | kod weryfikacyjny certyfikatu (HMAC), klucz spoza repozytorium |
 | `deathcounter/discord_presence.py` | status na Discordzie (Rich Presence przez lokalny kanał Discorda) |
 | `deathcounter/config.py` | `config.json`, lista gier, ścieżki, `calibration.json`, przeniesienie starych danych |

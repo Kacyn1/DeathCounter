@@ -39,7 +39,7 @@ from .game_data import GameData, counter_files, open_game
 from .detector import CaptureHealth, SampleResult
 from .discord_presence import DiscordPresence, build_activity
 from .overlay import OverlayWindow
-from .report import CertificateData, Verdict, rows_from_records, verify_pdf, write_certificate
+from .report import Adjustments, CertificateData, Verdict, rows_from_records, verify_pdf, write_certificate
 from .signing import load_key
 from .rtss import RtssOsd, RtssState
 from .storage import StorageError
@@ -355,8 +355,9 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ licznik
 
-    def _change_deaths(self, operation, manual: bool, boss_event=None) -> None:
-        """Zmienia ogólny licznik (deaths.json), a potem – jeśli trzeba – licznik bossa (bosses.json)."""
+    def _change_deaths(self, operation, manual: bool, boss_event=None, correction: bool = False) -> None:
+        """Zmienia ogólny licznik (deaths.json), a potem – jeśli trzeba – licznik bossa (bosses.json).
+        `correction` – ręczna korekta (przycisk, skrót, reset), zapisywana w rejestrze zmian."""
         try:
             operation()
         except StorageError as exc:
@@ -365,16 +366,22 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Błąd zapisu", str(exc))
         else:
             self._clear_error()
+            if self.audit is not None:
+                self.audit.deaths_changed(self.store.deaths, manual=correction)
+                try:
+                    self.audit.save()
+                except StorageError as exc:
+                    self._show_error(f"Nie zapisano rejestru zmian: {exc}")
         if boss_event is not None:
             self._boss_event(boss_event)
         self._refresh_count()
 
     def _manual_plus(self, manual: bool = True) -> None:
-        self._change_deaths(self.store.increment, manual, self.bosses.manual_add)
+        self._change_deaths(self.store.increment, manual, self.bosses.manual_add, correction=True)
 
     def _manual_minus(self, manual: bool = True) -> None:
         if self.store.deaths > 0:
-            self._change_deaths(self.store.decrement, manual, self.bosses.manual_undo)
+            self._change_deaths(self.store.decrement, manual, self.bosses.manual_undo, correction=True)
 
     def _refresh_count(self) -> None:
         deaths = self.store.deaths
@@ -419,7 +426,8 @@ class MainWindow(QMainWindow):
         self.store = game.store
         self.calibration = game.calibration
         self.templates = dict(game.templates)
-        self.bosses = BossTracker(game.boss_store)
+        self.audit = game.audit
+        self.bosses = BossTracker(game.boss_store, audit=game.audit)
         self.bosses.enabled = self.config.bosses.track
 
     def _fill_games(self) -> None:
@@ -564,8 +572,9 @@ class MainWindow(QMainWindow):
         if not path.lower().endswith(".pdf"):
             path += ".pdf"
         rows = rows_from_records(self.bosses.store.records, self.bosses.current, self.bosses.elapsed())
+        adjustments = Adjustments.from_audit(self.audit) if self.audit is not None else None
         data = CertificateData(self.config.game_name(self.paths.game), self.config.player_name,
-                               self.store.deaths, rows, now.replace(second=0, microsecond=0))
+                               self.store.deaths, rows, now.replace(second=0, microsecond=0), adjustments)
         try:
             code = write_certificate(path, data, load_key())
         except (StorageError, OSError) as exc:
@@ -606,8 +615,13 @@ class MainWindow(QMainWindow):
             d = result.data
             bosses = "\n".join(f"   • {b.name}: {b.deaths} śmierci, {format_duration(b.seconds)}"
                                + ("" if b.defeated else " (w trakcie)") for b in d.bosses) or "   brak"
+            if d.adjustments is None:
+                changes = "brak danych (certyfikat sprzed rejestru zmian)"
+            else:
+                changes = "; ".join(d.adjustments.summary()) or "bez ręcznych zmian"
             text += (f"\n\nGra: {d.game}\nGracz: {d.player or '–'}\nŚmierci: {d.deaths}\n"
-                     f"Wystawiono: {d.issued:%d.%m.%Y, %H:%M}\nKod: {result.code or '–'}\nBossowie:\n{bosses}")
+                     f"Wystawiono: {d.issued:%d.%m.%Y, %H:%M}\nKod: {result.code or '–'}\n"
+                     f"Korekty: {changes}\nBossowie:\n{bosses}")
         box.setInformativeText(text)
         box.exec()
 
@@ -676,7 +690,7 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.No,
         )
         if answer == QMessageBox.StandardButton.Yes:
-            self._change_deaths(self.store.reset, manual=True)
+            self._change_deaths(self.store.reset, manual=True, correction=True)
 
     def _on_death_detected(self) -> None:
         self._change_deaths(self.store.increment, manual=False, boss_event=self.bosses.death)
