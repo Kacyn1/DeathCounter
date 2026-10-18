@@ -1,6 +1,19 @@
 import json
 
-from deathcounter.config import AppConfig, TemplateInfo, load_config, save_config
+from deathcounter.config import (
+    GAMES,
+    AppConfig,
+    AppPaths,
+    Calibration,
+    TemplateInfo,
+    legacy_data_present,
+    load_calibration,
+    load_config,
+    migrate_legacy,
+    save_calibration,
+    save_config,
+)
+from deathcounter.game_data import open_game
 
 
 def test_defaults_when_missing(tmp_path):
@@ -14,7 +27,9 @@ def test_roundtrip(tmp_path):
     config.detector.threshold = 0.8
     config.overlay.enabled = True
     config.capture.output_index = 1
-    config.template = TemplateInfo([1, 2, 300, 60], [1920, 1080])
+    config.bosses.track = True
+    config.bosses.bar_lost_seconds = 5.0
+    config.game = "eldenring"
     save_config(tmp_path / "config.json", config)
     loaded, warning = load_config(tmp_path / "config.json")
     assert warning is None
@@ -26,7 +41,7 @@ def test_invalid_values_fall_back(tmp_path):
     path.write_text(json.dumps({
         "detector": {"threshold": "wysoki", "confirm_samples": 0, "rearm_seconds": 999},
         "overlay": {"enabled": 1, "font_size": 5},
-        "template": {"roi": [1, 2], "reference_size": [1, 1]},
+        "game": "minecraft",
     }), encoding="utf-8")
     config, warning = load_config(path)
     assert warning is None
@@ -35,7 +50,7 @@ def test_invalid_values_fall_back(tmp_path):
     assert config.detector.rearm_seconds == 60.0
     assert config.overlay.enabled is False
     assert config.overlay.font_size == 10
-    assert config.template is None
+    assert config.game == "ds1"
 
 
 def test_broken_json_gives_warning(tmp_path):
@@ -46,14 +61,78 @@ def test_broken_json_gives_warning(tmp_path):
     assert config == AppConfig()
 
 
-def test_boss_templates_and_settings_roundtrip(tmp_path):
-    config = AppConfig()
-    config.set_template_info("boss_bar", TemplateInfo([10, 600, 180, 40], [1280, 720]))
-    config.set_template_info("victory", TemplateInfo([300, 300, 500, 90], [1280, 720]))
-    config.bosses.track = True
-    config.bosses.bar_lost_seconds = 5.0
-    save_config(tmp_path / "config.json", config)
-    loaded, warning = load_config(tmp_path / "config.json")
+def test_games_list():
+    assert list(GAMES.values()) == [
+        "Dark Souls I", "Dark Souls II", "Dark Souls III", "Sekiro: Shadows Die Twice", "Elden Ring",
+    ]
+
+
+def test_each_game_has_own_folder(tmp_path):
+    ds1, er = AppPaths.for_game(tmp_path, "ds1"), AppPaths.for_game(tmp_path, "eldenring")
+    assert ds1.config == er.config == tmp_path / "config.json"
+    assert ds1.deaths == tmp_path / "games" / "ds1" / "deaths.json"
+    assert er.source_path("boss_bar") == tmp_path / "games" / "eldenring" / "boss_bar_source.jpg"
+
+
+def test_calibration_roundtrip(tmp_path):
+    path = tmp_path / "games" / "ds3" / "calibration.json"
+    calibration = Calibration()
+    calibration.set_info("death", TemplateInfo([1, 2, 300, 60], [1920, 1080]))
+    calibration.set_info("victory", TemplateInfo([300, 300, 500, 90], [1280, 720]))
+    save_calibration(path, calibration)
+    loaded, warning = load_calibration(path)
     assert warning is None
-    assert loaded == config
-    assert loaded.template is None  # wzorzec śmierci osobno, bez zmian w starym formacie
+    assert loaded == calibration
+    assert loaded.info("boss_bar") is None
+
+
+def test_invalid_calibration_entries_are_dropped(tmp_path):
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps({"template": {"roi": [1, 2], "reference_size": [1, 1]}}), encoding="utf-8")
+    loaded, warning = load_calibration(path)
+    assert warning is None
+    assert loaded.info("death") is None
+
+
+def test_games_keep_separate_counters(tmp_path):
+    ds1 = open_game(tmp_path, "ds1")
+    ds1.store.set(7)
+    sekiro = open_game(tmp_path, "sekiro")
+    assert sekiro.store.deaths == 0
+    assert open_game(tmp_path, "ds1").store.deaths == 7
+
+
+def test_legacy_data_is_moved_to_chosen_game(tmp_path):
+    (tmp_path / "deaths.json").write_text('{ "deaths": 3 }\n', encoding="utf-8")
+    (tmp_path / "bosses.json").write_text(
+        json.dumps({"Demon azylu": {"deaths": 1, "total_time_seconds": 89, "status": "POKONANO"}}), encoding="utf-8"
+    )
+    (tmp_path / "template.png").write_bytes(b"png")
+    (tmp_path / "boss_bar_source.jpg").write_bytes(b"jpg")
+    (tmp_path / "config.json").write_text(json.dumps({
+        "detector": {"threshold": 0.75},
+        "template": {"roi": [773, 629, 1017, 260], "reference_size": [2560, 1440]},
+        "boss_bar_template": {"roi": [790, 1171, 476, 30], "reference_size": [2560, 1440]},
+    }), encoding="utf-8")
+    assert legacy_data_present(tmp_path)
+
+    migrate_legacy(tmp_path, "ds1")
+
+    game = tmp_path / "games" / "ds1"
+    assert not (tmp_path / "deaths.json").exists()
+    assert (game / "deaths.json").read_text(encoding="utf-8") == '{ "deaths": 3 }\n'
+    assert (game / "template.png").read_bytes() == b"png"
+    assert (game / "boss_bar_source.jpg").exists()
+    calibration, _ = load_calibration(game / "calibration.json")
+    assert calibration.info("death") == TemplateInfo([773, 629, 1017, 260], [2560, 1440])
+    assert calibration.info("boss_bar") == TemplateInfo([790, 1171, 476, 30], [2560, 1440])
+    assert calibration.info("victory") is None
+    assert not legacy_data_present(tmp_path)  # pytanie o grę pojawia się tylko raz
+    config, _ = load_config(tmp_path / "config.json")
+    assert config.detector.threshold == 0.75  # wspólne ustawienia zostają
+
+
+def test_no_legacy_data_on_fresh_install(tmp_path):
+    assert not legacy_data_present(tmp_path)
+    (tmp_path / "config.json").write_text("{}", encoding="utf-8")
+    assert not legacy_data_present(tmp_path)

@@ -21,7 +21,7 @@ class BossRow:
     defeated: bool
 
 
-def build_report_html(deaths: int, bosses: list[BossRow], generated_at: datetime) -> str:
+def build_report_html(game: str, deaths: int, bosses: list[BossRow], generated_at: datetime) -> str:
     defeated = [b for b in bosses if b.defeated]
     pending = [b for b in bosses if not b.defeated]
     boss_deaths = sum(b.deaths for b in bosses)
@@ -29,8 +29,9 @@ def build_report_html(deaths: int, bosses: list[BossRow], generated_at: datetime
 
     parts = [
         "<html><body style='font-family:\"Segoe UI\"; color:#1d1d1f;'>",
-        f"<h1 style='color:{ACCENT}; margin-bottom:0;'>Death Counter – raport</h1>",
-        f"<p style='color:#6b6f76; margin-top:2px;'>Wygenerowano {generated_at:%d.%m.%Y, %H:%M}</p>",
+        f"<h1 style='color:{ACCENT}; margin-bottom:0;'>{escape(game)}</h1>",
+        f"<p style='color:#6b6f76; margin-top:2px;'>Death Counter – raport · "
+        f"wygenerowano {generated_at:%d.%m.%Y, %H:%M}</p>",
         "<table width='100%' cellspacing='0' cellpadding='10' style='margin-top:12px;'><tr>",
         _stat("Śmierci łącznie", str(deaths)),
         _stat("Pokonani bossowie", str(len(defeated))),

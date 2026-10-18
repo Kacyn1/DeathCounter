@@ -7,7 +7,7 @@ Lokalna aplikacja Windows, która automatycznie liczy śmierci w grach wyświetl
 ### Sposób 1: gotowy program (zalecany)
 
 1. Wejdź w [Releases](https://github.com/Kacyn1/DeathCounter/releases) i pobierz `DeathCounter.exe`.
-2. Umieść go w osobnym folderze, np. `C:\Gry\DeathCounter`. Obok programu będą zapisywane `deaths.json`, `bosses.json`, `config.json` i wzorce (`template.png`, `boss_bar.png`, `victory.png`).
+2. Umieść go w osobnym folderze, np. `C:\Gry\DeathCounter`. Obok programu będą zapisywane `config.json` i folder `games` z danymi każdej gry (licznik, bossowie, wzorce kalibracji).
 3. Uruchom dwuklikiem. Python nie jest potrzebny.
 
 Program nie ma podpisu cyfrowego, więc Windows może pokazać „System Windows ochronił ten komputer”. Kliknij wtedy **Więcej informacji → Uruchom mimo to**.
@@ -22,6 +22,12 @@ Z tego samego folderu możesz zbudować własny `.exe`: `powershell -ExecutionPo
 
 Jeśli folderu programu nie da się zapisywać, dane trafiają do `%APPDATA%\DeathCounter`.
 
+## Wybór gry
+
+Lista **Gra** nad licznikiem: Dark Souls I, Dark Souls II, Dark Souls III, Sekiro: Shadows Die Twice, Elden Ring. Każda gra ma **osobny** licznik śmierci, bossów i kalibrację (wzorce zapisują się automatycznie dla wybranej gry), a raport PDF ma nazwę gry w tytule. Zmiana gry przy włączonym wykrywaniu zatrzymuje je, wczytuje dane i wzorce tej gry i uruchamia wykrywanie ponownie. Ustawienia programu (nakładka, RTSS, próg, monitor) są wspólne.
+
+Dane gry leżą w `games\<gra>\` obok programu (`ds1`, `ds2`, `ds3`, `sekiro`, `eldenring`): `deaths.json`, `bosses.json`, `calibration.json` i pliki wzorców. Po aktualizacji z wersji bez wyboru gry program jednorazowo pyta, do której gry przypisać dotychczasowy licznik, bossów i kalibrację, i przenosi je do jej folderu.
+
 ## Pierwsze użycie: kalibracja
 
 1. Uruchom grę (pełny ekran lub okno).
@@ -34,7 +40,7 @@ Jeśli folderu programu nie da się zapisywać, dane trafiają do `%APPDATA%\Dea
 
 Wzorzec warto też sprawdzić na zwykłym zrzucie z rozgrywki. Wynik powinien być tam wyraźnie niższy od progu.
 
-Po zapisaniu wzorca okno kalibracji przy kolejnym otwarciu pokazuje w każdej zakładce zrzut, z którego go wycięto, wraz z zaznaczonym obszarem (przycisk **Pokaż zapisany wzorzec** wraca do niego po wczytaniu innego obrazu). Zrzuty leżą obok wzorców jako `template_source.jpg`, `boss_bar_source.jpg` i `victory_source.jpg`. Wzorce zapisane w wersji 1.2.0 i starszych nie mają zrzutu – widać wtedy sam wzorzec na czarnym tle, a po ponownym zapisaniu pojawi się cały obraz. Przycisk **Zrzut ze skrótu** wstawia ostatni zrzut zrobiony skrótem Ctrl+Alt+F9.
+Po zapisaniu wzorca okno kalibracji przy kolejnym otwarciu pokazuje w każdej zakładce zrzut, z którego go wycięto, wraz z zaznaczonym obszarem (przycisk **Pokaż zapisany wzorzec** wraca do niego po wczytaniu innego obrazu). Zrzuty leżą w folderze gry obok wzorców jako `template_source.jpg`, `boss_bar_source.jpg` i `victory_source.jpg`. Wzorce zapisane w wersji 1.2.0 i starszych nie mają zrzutu – widać wtedy sam wzorzec na czarnym tle, a po ponownym zapisaniu pojawi się cały obraz. Przycisk **Zrzut ze skrótu** wstawia ostatni zrzut zrobiony skrótem Ctrl+Alt+F9.
 
 ## Jak działa wykrywanie
 
@@ -82,7 +88,7 @@ Po ponownym uruchomieniu wykrywania (Start) napis widoczny na ekranie nie jest l
 
 ## Raport PDF
 
-Przycisk **Raport PDF…** (na dole okna) zapisuje raport A4 i od razu go otwiera. Raport zawiera łączną liczbę śmierci, liczbę pokonanych bossów, śmierci przy bossach i łączny czas walk, a w tabelach: **pokonanych bossów** (śmierci i czas pokonania) oraz bossów **niepokonanych** (walka w trakcie). Domyślnie plik trafia obok programu jako `DeathCounter_raport_RRRR-MM-DD.pdf`.
+Przycisk **Raport PDF…** (na dole okna) zapisuje raport A4 i od razu go otwiera. Raport zawiera łączną liczbę śmierci, liczbę pokonanych bossów, śmierci przy bossach i łączny czas walk, a w tabelach: **pokonanych bossów** (śmierci i czas pokonania) oraz bossów **niepokonanych** (walka w trakcie). Raport dotyczy wybranej gry; domyślnie plik trafia obok programu jako `DeathCounter_raport_<gra>_RRRR-MM-DD.pdf`.
 
 ## Gra w pełnym ekranie
 
@@ -129,7 +135,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/bosses.py` | walka z bossem: maszyna stanów, timer, `bosses.json` (bez Qt, testowalne) |
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
 | `deathcounter/report.py` | raport PDF (QPdfWriter) |
-| `deathcounter/config.py` | `config.json`, ścieżki |
+| `deathcounter/config.py` | `config.json`, lista gier, ścieżki, `calibration.json`, przeniesienie starych danych |
+| `deathcounter/game_data.py` | wczytanie danych jednej gry (licznik, bossowie, wzorce) |
 | `deathcounter/template.py` | wzorzec napisu i dopasowanie |
 | `deathcounter/detector.py` | maszyna stanów detektora, kontrola obrazu (bez Qt, testowalne) |
 | `deathcounter/capture.py` | przechwytywanie DXCam |

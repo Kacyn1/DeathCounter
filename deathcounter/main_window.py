@@ -31,12 +31,13 @@ from .boss_panel import BossPanel
 from .bosses import BossTracker, overlay_text
 from .calibration import CalibrationDialog, SavedCalibration
 from .capture import CaptureError, grab_single_frame, list_outputs
-from .config import TEMPLATE_FIELDS, AppConfig, AppPaths, save_config
+from .config import GAMES, AppConfig, game_name, save_calibration, save_config
+from .game_data import GameData, open_game
 from .detector import CaptureHealth, SampleResult
 from .overlay import OverlayWindow
 from .report import build_report_html, rows_from_records, write_pdf
 from .rtss import RtssOsd, RtssState
-from .storage import DeathStore, StorageError
+from .storage import StorageError
 from .template import DeathTemplate, load_source_image, save_source_image
 from . import rtss_setup
 from .worker import (
@@ -75,21 +76,12 @@ STATUS_COLORS = {
 
 
 class MainWindow(QMainWindow):
-    def __init__(
-        self,
-        paths: AppPaths,
-        store: DeathStore,
-        bosses: BossTracker,
-        config: AppConfig,
-        templates: dict[str, DeathTemplate | None],
-    ):
+    def __init__(self, config: AppConfig, game: GameData):
         super().__init__()
         self.setWindowTitle("Death Counter")
-        self.paths = paths
-        self.store = store
-        self.bosses = bosses
         self.config = config
-        self.templates = {kind: templates.get(kind) for kind in TEMPLATE_FIELDS}
+        self._use_game(game)
+        self._pending_game: str | None = None   # zmiana gry czeka na zatrzymanie wykrywania
         self.worker: DetectionWorker | None = None
         self._status = DetectorStatus.STOPPED
         self._frame_callbacks: list = []
@@ -129,6 +121,20 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = QWidget()
         root = QVBoxLayout(central)
+
+        self.game_combo = QComboBox()
+        for game_id, name in GAMES.items():
+            self.game_combo.addItem(name, game_id)
+        self.game_combo.setCurrentIndex(max(0, self.game_combo.findData(self.paths.game)))
+        self.game_combo.setToolTip("Każda gra ma własny licznik śmierci, bossów i kalibrację.")
+        self.game_combo.setMinimumWidth(260)
+        self.game_combo.currentIndexChanged.connect(self._on_game_selected)
+        game_row = QHBoxLayout()
+        game_row.addStretch(1)
+        game_row.addWidget(QLabel("Gra:"))
+        game_row.addWidget(self.game_combo)
+        game_row.addStretch(1)
+        root.addLayout(game_row)
 
         title = QLabel("ŚMIERCI")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -206,10 +212,11 @@ class MainWindow(QMainWindow):
         settings_row.addWidget(self._build_detector_box())
         root.addLayout(settings_row)
 
-        footer = QLabel(f"Pliki wyników: {self.paths.deaths}, {self.paths.bosses.name}")
+        footer = self.footer_label = QLabel()
         footer.setStyleSheet("color:#7d828a;")
         footer.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         footer.setWordWrap(True)
+        self._refresh_footer()
         self.report_button = QPushButton("Raport PDF…")
         self.report_button.setToolTip("Raport: śmierci łącznie oraz bossowie pokonani i niepokonani (śmierci, czas walki).")
         self.report_button.clicked.connect(self.generate_report)
@@ -370,9 +377,61 @@ class MainWindow(QMainWindow):
         self._boss_event(handlers[event])
         self._refresh_overlay()
 
+    # ------------------------------------------------------------------ gra
+
+    def _use_game(self, game: GameData) -> None:
+        self.paths = game.paths
+        self.store = game.store
+        self.calibration = game.calibration
+        self.templates = dict(game.templates)
+        self.bosses = BossTracker(game.boss_store)
+        self.bosses.enabled = self.config.bosses.track
+
+    def _on_game_selected(self) -> None:
+        game_id = self.game_combo.currentData()
+        if game_id == self.paths.game and self._pending_game is None:
+            return
+        if self.worker is not None:
+            # Wątek wykrywania używa wzorców bieżącej gry – zmiana nastąpi, gdy się zatrzyma.
+            self._pending_game = game_id
+            self.stop_detection()
+            return
+        self._switch_game(game_id, restart=False)
+
+    def _switch_game(self, game_id: str, restart: bool) -> None:
+        if game_id != self.paths.game:
+            self._boss_event(self.bosses.pause)  # czas trwającej walki zostaje zapisany
+            try:
+                game = open_game(self.paths.base, game_id)
+            except StorageError as exc:
+                QMessageBox.critical(self, "Zmiana gry", f"Nie można wczytać danych gry.\n\n{exc}")
+                self.game_combo.blockSignals(True)
+                self.game_combo.setCurrentIndex(max(0, self.game_combo.findData(self.paths.game)))
+                self.game_combo.blockSignals(False)
+                game = None
+            if game is not None:
+                self._use_game(game)
+                self.config.game = game_id
+                self._save_timer.start()
+                self.boss_panel.set_tracker(self.bosses)
+                self._refresh_count()
+                self._refresh_template_label()
+                self._refresh_footer()
+                self._set_status(self._idle_status(), self._idle_message())
+                self.notice_label.setText(f"Wybrano grę: {game_name(game_id)}.")
+                for warning in game.warnings:
+                    QMessageBox.warning(self, "Death Counter", warning)
+        self._refresh_boss_hint()
+        # Wykrywanie wraca, jeśli działało przed zmianą gry albo ma się włączać samo (np. po grze bez wzorców).
+        if (restart or self.config.auto_start) and self.templates["death"] is not None:
+            self.start_detection()
+
+    def _refresh_footer(self) -> None:
+        self.footer_label.setText(f"Dane gry: {self.paths.game_dir}")
+
     def generate_report(self) -> None:
         now = datetime.now()
-        default = self.paths.base / f"DeathCounter_raport_{now:%Y-%m-%d}.pdf"
+        default = self.paths.base / f"DeathCounter_raport_{self.paths.game}_{now:%Y-%m-%d}.pdf"
         path, _ = QFileDialog.getSaveFileName(self, "Zapisz raport PDF", str(default), "Dokument PDF (*.pdf)")
         if not path:
             return
@@ -380,7 +439,7 @@ class MainWindow(QMainWindow):
             path += ".pdf"
         rows = rows_from_records(self.bosses.store.records, self.bosses.current, self.bosses.elapsed())
         try:
-            write_pdf(path, build_report_html(self.store.deaths, rows, now))
+            write_pdf(path, build_report_html(game_name(self.paths.game), self.store.deaths, rows, now))
         except (StorageError, OSError) as exc:
             QMessageBox.critical(self, "Raport PDF", f"Nie udało się zapisać raportu.\n\n{exc}")
             return
@@ -472,6 +531,10 @@ class MainWindow(QMainWindow):
             self._set_status(self._idle_status(), self._idle_message())
         if self._closing:
             self.close()
+            return
+        if self._pending_game is not None:
+            game_id, self._pending_game = self._pending_game, None
+            self._switch_game(game_id, restart=True)
 
     def _on_sample(self, result: SampleResult) -> None:
         check = result.check
@@ -604,7 +667,7 @@ class MainWindow(QMainWindow):
             frame_provider=self.request_frame,
             saver=self._save_template,
             templates=self.templates,
-            saved={k: self._saved_calibration(k) for k in TEMPLATE_FIELDS},
+            saved={k: self._saved_calibration(k) for k in self.templates},
             threshold=self.config.detector.threshold,
             margin=self.config.detector.search_margin,
             hotkey_text=HOTKEY_TEXT if HOTKEY_SNAPSHOT in self._hotkeys else None,
@@ -630,8 +693,8 @@ class MainWindow(QMainWindow):
         """Zapis wzorca z okna kalibracji: wzorzec PNG, pełny zrzut (do podglądu) i config.json.
         Wzorzec jest od razu używany przez wykrywanie."""
         try:
-            self.config.set_template_info(kind, template.save(self.paths.template_path(kind)))
-            save_config(self.paths.config, self.config)
+            self.calibration.set_info(kind, template.save(self.paths.template_path(kind)))
+            save_calibration(self.paths.calibration, self.calibration)
         except StorageError as exc:
             return str(exc)
         try:

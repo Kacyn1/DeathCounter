@@ -8,14 +8,13 @@ import traceback
 
 from PySide6.QtCore import QDir, QLockFile
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QInputDialog, QMessageBox
 
-from .bosses import BossStore, BossTracker
-from .config import AppPaths, load_config
+from .config import GAMES, data_dir, legacy_data_present, load_config, migrate_legacy, save_config
+from .game_data import open_game
 from .icon import app_icon
 from .main_window import MainWindow
-from .storage import DeathStore, StorageError
-from .template import DeathTemplate, TemplateError
+from .storage import StorageError
 
 
 def _dark_palette() -> QPalette:
@@ -55,6 +54,21 @@ def _set_app_user_model_id() -> None:
         pass
 
 
+def _ask_legacy_game(default: str) -> str:
+    """Jednorazowo po aktualizacji: do której gry należą dotychczasowy licznik, bossowie i kalibracja."""
+    ids = list(GAMES)
+    name, ok = QInputDialog.getItem(
+        None,
+        "Death Counter – wybór gry",
+        "Program zapisuje teraz licznik śmierci, bossów i kalibrację osobno dla każdej gry.\n"
+        "Do której gry należą dotychczasowe dane?",
+        [GAMES[g] for g in ids],
+        ids.index(default) if default in ids else 0,
+        False,
+    )
+    return ids[[GAMES[g] for g in ids].index(name)] if ok else default
+
+
 def main() -> int:
     _set_app_user_model_id()
     app = QApplication(sys.argv)
@@ -70,33 +84,19 @@ def main() -> int:
         return 1
 
     try:
-        paths = AppPaths.default()
-        store = DeathStore(paths.deaths)
-        store.load()
-        boss_store = BossStore(paths.bosses)
-        boss_store.load()
+        base = data_dir()
+        config, config_warning = load_config(base / "config.json")
+        if legacy_data_present(base):
+            config.game = _ask_legacy_game(config.game)
+            migrate_legacy(base, config.game)
+            save_config(base / "config.json", config)
+        game = open_game(base, config.game)
     except StorageError as exc:
         QMessageBox.critical(None, "Death Counter", f"Nie można przygotować pliku wyniku.\n\n{exc}")
         return 1
 
-    warnings = [w for w in (store.warning, boss_store.warning) if w]
-    config, config_warning = load_config(paths.config)
-    if config_warning:
-        warnings.append(config_warning)
-    bosses = BossTracker(boss_store)
-    bosses.enabled = config.bosses.track
-
-    templates = {}
-    for kind, label in (("death", "napisu śmierci"), ("boss_bar", "paska bossa"), ("victory", "komunikatu zwycięstwa")):
-        info = config.template_info(kind)
-        templates[kind] = None
-        if info is not None:
-            try:
-                templates[kind] = DeathTemplate.load(paths.template_path(kind), info)
-            except TemplateError as exc:
-                warnings.append(f"Nie można wczytać wzorca {label}: {exc} Wykonaj kalibrację ponownie.")
-
-    window = MainWindow(paths, store, bosses, config, templates)
+    warnings = ([config_warning] if config_warning else []) + game.warnings
+    window = MainWindow(config, game)
     window.show()
     for warning in warnings:
         QMessageBox.warning(window, "Death Counter", warning)

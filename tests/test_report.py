@@ -14,7 +14,8 @@ def test_report_lists_defeated_and_pending_bosses():
         BossRow("Taurus <Demon>", 5, 758, True),
         BossRow("Boss 3", 1, 42, False),
     ]
-    html = build_report_html(42, rows, WHEN)
+    html = build_report_html("Dark Souls I", 42, rows, WHEN)
+    assert "Dark Souls I" in html
     assert "18.10.2026, 14:45" in html
     assert ">42<" in html                       # śmierci łącznie
     assert "Pokonani bossowie" in html and ">2<" in html
@@ -25,7 +26,7 @@ def test_report_lists_defeated_and_pending_bosses():
 
 
 def test_report_without_bosses():
-    html = build_report_html(3, [], WHEN)
+    html = build_report_html("Elden Ring", 3, [], WHEN)
     assert "Jeszcze żaden boss nie został pokonany." in html
     assert "Niepokonani" not in html
 
@@ -51,5 +52,5 @@ def qt_app():
 
 def test_write_pdf_creates_pdf_file(qt_app, tmp_path):
     path = tmp_path / "raport ąę.pdf"
-    write_pdf(path, build_report_html(1, [BossRow("Demon z Azylu", 1, 60, True)], WHEN))
+    write_pdf(path, build_report_html("Sekiro: Shadows Die Twice", 1, [BossRow("Demon z Azylu", 1, 60, True)], WHEN))
     assert path.read_bytes().startswith(b"%PDF")

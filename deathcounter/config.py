@@ -13,7 +13,18 @@ from .storage import StorageError, atomic_write_text
 APP_DIR_NAME = "DeathCounter"
 LEGACY_APP_DIR_NAME = "DS2DeathCounter"
 
-# Wzorce: napis śmierci, ramka paska zdrowia bossa, komunikat zwycięstwa – (pole w AppConfig, pole w AppPaths).
+# Gry na liście wyboru; każda ma własny folder games/<id>/ z licznikiem, bossami i kalibracją.
+GAMES = {
+    "ds1": "Dark Souls I",
+    "ds2": "Dark Souls II",
+    "ds3": "Dark Souls III",
+    "sekiro": "Sekiro: Shadows Die Twice",
+    "eldenring": "Elden Ring",
+}
+DEFAULT_GAME = "ds1"
+GAMES_DIR = "games"
+
+# Wzorce: napis śmierci, ramka paska zdrowia bossa, komunikat zwycięstwa – (pole w Calibration, pole w AppPaths).
 TEMPLATE_FIELDS = {
     "death": ("template", "template"),
     "boss_bar": ("boss_bar_template", "boss_bar_template"),
@@ -113,47 +124,73 @@ class TemplateInfo:
 
 @dataclass
 class AppConfig:
+    """Ustawienia programu wspólne dla wszystkich gier (config.json w folderze programu)."""
+
     detector: DetectorSettings = field(default_factory=DetectorSettings)
     capture: CaptureSettings = field(default_factory=CaptureSettings)
     overlay: OverlaySettings = field(default_factory=OverlaySettings)
     rtss: RtssSettings = field(default_factory=RtssSettings)
     bosses: BossSettings = field(default_factory=BossSettings)
-    template: TemplateInfo | None = None           # napis śmierci
-    boss_bar_template: TemplateInfo | None = None  # ramka paska zdrowia bossa
-    victory_template: TemplateInfo | None = None   # komunikat zwycięstwa
+    game: str = DEFAULT_GAME
     auto_start: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
 
-    def template_info(self, kind: str) -> TemplateInfo | None:
+
+@dataclass
+class Calibration:
+    """Wzorce jednej gry (games/<gra>/calibration.json): obszar i rozdzielczość, z których je wycięto."""
+
+    template: TemplateInfo | None = None           # napis śmierci
+    boss_bar_template: TemplateInfo | None = None  # ramka paska zdrowia bossa
+    victory_template: TemplateInfo | None = None   # komunikat zwycięstwa
+
+    def info(self, kind: str) -> TemplateInfo | None:
         return getattr(self, TEMPLATE_FIELDS[kind][0])
 
-    def set_template_info(self, kind: str, info: TemplateInfo) -> None:
+    def set_info(self, kind: str, info: TemplateInfo | None) -> None:
         setattr(self, TEMPLATE_FIELDS[kind][0], info)
+
+    @classmethod
+    def from_dict(cls, data: object) -> "Calibration":
+        calibration = cls()
+        if isinstance(data, dict):
+            for kind, (name, _) in TEMPLATE_FIELDS.items():
+                calibration.set_info(kind, TemplateInfo.from_dict(data.get(name)))
+        return calibration
 
 
 @dataclass
 class AppPaths:
+    """Pliki wybranej gry (games/<gra>/) oraz wspólny config.json."""
+
     base: Path
-    deaths: Path
+    game: str
     config: Path
-    template: Path
+    game_dir: Path
+    deaths: Path
     bosses: Path
+    calibration: Path
+    template: Path
     boss_bar_template: Path
     victory_template: Path
 
     @classmethod
-    def in_dir(cls, base: Path) -> "AppPaths":
+    def for_game(cls, base: Path, game: str) -> "AppPaths":
         base = Path(base)
+        game_dir = base / GAMES_DIR / game
         return cls(
             base,
-            base / "deaths.json",
+            game,
             base / "config.json",
-            base / "template.png",
-            base / "bosses.json",
-            base / "boss_bar.png",
-            base / "victory.png",
+            game_dir,
+            game_dir / "deaths.json",
+            game_dir / "bosses.json",
+            game_dir / "calibration.json",
+            game_dir / "template.png",
+            game_dir / "boss_bar.png",
+            game_dir / "victory.png",
         )
 
     def template_path(self, kind: str) -> Path:
@@ -164,9 +201,9 @@ class AppPaths:
         path = self.template_path(kind)
         return path.with_name(f"{path.stem}_source.jpg")
 
-    @classmethod
-    def default(cls) -> "AppPaths":
-        return cls.in_dir(_data_dir())
+
+def game_name(game: str) -> str:
+    return GAMES.get(game, game)
 
 
 def load_config(path: Path) -> tuple[AppConfig, str | None]:
@@ -186,8 +223,8 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
     _fill(config.overlay, data.get("overlay"))
     _fill(config.rtss, data.get("rtss"))
     _fill(config.bosses, data.get("bosses"))
-    for kind in TEMPLATE_FIELDS:
-        config.set_template_info(kind, TemplateInfo.from_dict(data.get(TEMPLATE_FIELDS[kind][0])))
+    if data.get("game") in GAMES:
+        config.game = data["game"]
     if isinstance(data.get("auto_start"), bool):
         config.auto_start = data["auto_start"]
     for part in (config.detector, config.capture, config.overlay, config.bosses):
@@ -197,6 +234,60 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
 
 def save_config(path: Path, config: AppConfig) -> None:
     atomic_write_text(path, json.dumps(config.to_dict(), indent=2, ensure_ascii=False) + "\n")
+
+
+def load_calibration(path: Path) -> tuple[Calibration, str | None]:
+    if not path.exists():
+        return Calibration(), None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        return Calibration(), f"Nie można odczytać {path.name} ({exc}). Wykonaj kalibrację ponownie."
+    return Calibration.from_dict(data), None
+
+
+def save_calibration(path: Path, calibration: Calibration) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(path, json.dumps(asdict(calibration), indent=2, ensure_ascii=False) + "\n")
+
+
+# --- dane sprzed wyboru gry (wersja 1.2 i starsze trzymały wszystko w folderze programu) ---
+
+LEGACY_FILES = (
+    "deaths.json", "deaths.json.uszkodzony", "bosses.json", "bosses.json.uszkodzony",
+    "template.png", "boss_bar.png", "victory.png",
+    "template_source.jpg", "boss_bar_source.jpg", "victory_source.jpg",
+)
+
+
+def legacy_data_present(base: Path) -> bool:
+    """Dane z wersji bez wyboru gry, których jeszcze nie przypisano do żadnej gry."""
+    base = Path(base)
+    return not (base / GAMES_DIR).exists() and any((base / name).exists() for name in LEGACY_FILES)
+
+
+def migrate_legacy(base: Path, game: str) -> None:
+    """Przenosi licznik, bossów i wzorce z folderu programu do games/<gra>/, a obszary wzorców
+    z config.json do games/<gra>/calibration.json."""
+    base = Path(base)
+    paths = AppPaths.for_game(base, game)
+    try:
+        paths.game_dir.mkdir(parents=True, exist_ok=True)
+        calibration = Calibration()
+        config_path = base / "config.json"
+        if config_path.exists():
+            try:
+                calibration = Calibration.from_dict(json.loads(config_path.read_text(encoding="utf-8-sig")))
+            except (OSError, ValueError):
+                pass
+        if not paths.calibration.exists():
+            save_calibration(paths.calibration, calibration)
+        for name in LEGACY_FILES:
+            source = base / name
+            if source.exists() and not (paths.game_dir / name).exists():
+                os.replace(source, paths.game_dir / name)
+    except OSError as exc:
+        raise StorageError(f"Nie można przenieść danych do folderu gry {paths.game_dir}: {exc}") from exc
 
 
 def _fill(target: object, data: object) -> None:
@@ -253,7 +344,7 @@ def _writable(directory: Path) -> bool:
         return False
 
 
-def _data_dir() -> Path:
+def data_dir() -> Path:
     """Pliki leżą obok programu; gdy folder jest tylko do odczytu, trafiają do %APPDATA%."""
     directory = _app_dir()
     if _writable(directory):

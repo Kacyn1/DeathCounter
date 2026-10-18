@@ -89,6 +89,12 @@ class BossPanel(QGroupBox):
         form.addRow(hint_row)
         self.refresh()
 
+    def set_tracker(self, tracker: BossTracker) -> None:
+        """Po zmianie gry panel pokazuje bossów tej gry."""
+        self.tracker = tracker
+        self.name_edit.clear()
+        self.refresh()
+
     def set_hint(self, text: str) -> None:
         self.hint_label.setText(text)
 
