@@ -77,6 +77,11 @@ class RtssSettings:
 
 
 @dataclass
+class BossSettings:
+    track: bool = False              # „Śledź walkę z bossem”
+
+
+@dataclass
 class TemplateInfo:
     roi: list[int]             # x, y, szerokość, wysokość w pikselach obrazu referencyjnego
     reference_size: list[int]  # szerokość, wysokość obrazu, z którego wycięto wzorzec
@@ -99,6 +104,7 @@ class AppConfig:
     capture: CaptureSettings = field(default_factory=CaptureSettings)
     overlay: OverlaySettings = field(default_factory=OverlaySettings)
     rtss: RtssSettings = field(default_factory=RtssSettings)
+    bosses: BossSettings = field(default_factory=BossSettings)
     template: TemplateInfo | None = None
     auto_start: bool = False
 
@@ -112,11 +118,12 @@ class AppPaths:
     deaths: Path
     config: Path
     template: Path
+    bosses: Path
 
     @classmethod
     def in_dir(cls, base: Path) -> "AppPaths":
         base = Path(base)
-        return cls(base, base / "deaths.json", base / "config.json", base / "template.png")
+        return cls(base, base / "deaths.json", base / "config.json", base / "template.png", base / "bosses.json")
 
     @classmethod
     def default(cls) -> "AppPaths":
@@ -139,6 +146,7 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
     _fill(config.capture, data.get("capture"))
     _fill(config.overlay, data.get("overlay"))
     _fill(config.rtss, data.get("rtss"))
+    _fill(config.bosses, data.get("bosses"))
     config.template = TemplateInfo.from_dict(data.get("template"))
     if isinstance(data.get("auto_start"), bool):
         config.auto_start = data["auto_start"]

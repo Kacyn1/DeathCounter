@@ -25,7 +25,7 @@ OSD_EX_OFFSET, OSD_EX_SIZE = 512, 4096
 
 FILE_MAP_ALL_ACCESS = 0xF001F
 
-_ASCII_FALLBACK = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+_ASCII_FALLBACK = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ—", "acelnoszzACELNOSZZ-")
 
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 kernel32.OpenFileMappingW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]

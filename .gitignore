@@ -9,5 +9,7 @@ dist/
 # dane użytkownika tworzone przez program
 deaths.json
 deaths.json.uszkodzony
+bosses.json
+bosses.json.uszkodzony
 config.json
 template.png

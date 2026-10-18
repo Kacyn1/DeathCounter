@@ -1,4 +1,4 @@
-"""Przezroczysta nakładka „DEATHS: N”, która nie przechwytuje kliknięć."""
+"""Przezroczysta nakładka („DEATHS: N” i dane walki z bossem), która nie przechwytuje kliknięć."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class OverlayWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setWindowTitle("Death Counter – nakładka")
-        self._deaths = 0
+        self._text = "DEATHS: 0"
         self._settings = settings
         self._font = QFont("Segoe UI")
         self._font.setBold(True)
@@ -40,11 +40,11 @@ class OverlayWindow(QWidget):
 
     @property
     def text(self) -> str:
-        return f"DEATHS: {self._deaths}"
+        return self._text
 
-    def set_deaths(self, deaths: int) -> None:
-        if deaths != self._deaths:
-            self._deaths = deaths
+    def set_text(self, text: str) -> None:
+        if text != self._text:
+            self._text = text
             self._update_geometry()
             self.update()
 
@@ -72,7 +72,8 @@ class OverlayWindow(QWidget):
         outline = self._outline_width()
         metrics = QFontMetrics(self._font)
         path = QPainterPath()
-        path.addText(outline + 2, outline + 2 + metrics.ascent(), self._font, self.text)
+        for row, line in enumerate(self._text.splitlines()):
+            path.addText(outline + 2, outline + 2 + metrics.ascent() + row * metrics.lineSpacing(), self._font, line)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         pen = QPen(OUTLINE_COLOR, outline * 2)
@@ -87,7 +88,10 @@ class OverlayWindow(QWidget):
     def _update_geometry(self) -> None:
         metrics = QFontMetrics(self._font)
         pad = self._outline_width() + 2
-        self.setFixedSize(metrics.horizontalAdvance(self.text) + 2 * pad, metrics.height() + 2 * pad)
+        lines = self._text.splitlines() or [""]
+        width = max(metrics.horizontalAdvance(line) for line in lines)
+        height = metrics.height() + (len(lines) - 1) * metrics.lineSpacing()
+        self.setFixedSize(width + 2 * pad, height + 2 * pad)
         self.move(QPoint(self._settings.x, self._settings.y))
 
     def _raise_topmost(self) -> None:

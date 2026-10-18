@@ -1,4 +1,4 @@
-"""Główne okno: licznik, status, sterowanie wykrywaniem i nakładką."""
+"""Główne okno: licznik, walka z bossem, status, sterowanie wykrywaniem i nakładką."""
 
 from __future__ import annotations
 
@@ -25,6 +25,8 @@ from PySide6.QtWidgets import (
 )
 
 from . import winapi
+from .boss_panel import BossPanel
+from .bosses import BossTracker, overlay_text
 from .calibration import CalibrationDialog
 from .capture import CaptureError, grab_single_frame, list_outputs
 from .config import AppConfig, AppPaths, save_config
@@ -45,6 +47,7 @@ HOTKEYS = {
 }
 HOTKEY_TEXT = HOTKEYS[HOTKEY_SNAPSHOT][1]
 RTSS_REFRESH_MS = 2000
+BOSS_REFRESH_MS = 1000
 OVERLAY_MODE_LABELS = {
     "both": "Okno + RTSS",
     "window": "Okno na wierzchu",
@@ -61,11 +64,19 @@ STATUS_COLORS = {
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, paths: AppPaths, store: DeathStore, config: AppConfig, template: DeathTemplate | None):
+    def __init__(
+        self,
+        paths: AppPaths,
+        store: DeathStore,
+        bosses: BossTracker,
+        config: AppConfig,
+        template: DeathTemplate | None,
+    ):
         super().__init__()
         self.setWindowTitle("Death Counter")
         self.paths = paths
         self.store = store
+        self.bosses = bosses
         self.config = config
         self.template = template
         self.worker: DetectionWorker | None = None
@@ -79,7 +90,6 @@ class MainWindow(QMainWindow):
         self._rtss_setup: RtssSetupWorker | None = None
 
         self.overlay = OverlayWindow(config.overlay)
-        self.overlay.set_deaths(store.deaths)
         self.rtss = RtssOsd()
         # RTSS może zostać uruchomiony (lub zrestartowany) po naszym programie – ponawiamy wpis.
         self._rtss_timer = QTimer(self, interval=RTSS_REFRESH_MS)
@@ -87,12 +97,16 @@ class MainWindow(QMainWindow):
 
         self._save_timer = QTimer(self, singleShot=True, interval=500)
         self._save_timer.timeout.connect(self._save_config)
+        # Timer walki: odświeża czas w panelu i nakładce oraz co kilka sekund zapisuje go do pliku.
+        self._boss_timer = QTimer(self, interval=BOSS_REFRESH_MS)
+        self._boss_timer.timeout.connect(self._on_boss_tick)
 
         self._build_ui()
         self._apply_overlay()
         self._refresh_count()
         self._refresh_template_label()
         self._set_status(DetectorStatus.STOPPED if template else DetectorStatus.NO_TEMPLATE, self._idle_message())
+        self._boss_timer.start()
 
         if config.auto_start and template is not None:
             QTimer.singleShot(0, self.start_detection)
@@ -149,9 +163,9 @@ class MainWindow(QMainWindow):
         self.overlay_button = QPushButton()
         self.overlay_button.clicked.connect(self.toggle_overlay)
         self.plus_button = QPushButton("Dodaj +1")
-        self.plus_button.clicked.connect(lambda: self._change_deaths(self.store.increment, manual=True))
+        self.plus_button.clicked.connect(self._manual_plus)
         self.minus_button = QPushButton("Cofnij -1")
-        self.minus_button.clicked.connect(lambda: self._change_deaths(self.store.decrement, manual=True))
+        self.minus_button.clicked.connect(self._manual_minus)
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.confirm_reset)
         self.calibrate_button = QPushButton("Kalibracja…")
@@ -166,19 +180,25 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.calibrate_button, 1, 3)
         root.addLayout(controls)
 
+        self.boss_panel = BossPanel(self.bosses)
+        self.boss_panel.track_toggled.connect(self._on_track_bosses)
+        self.boss_panel.changed.connect(self._refresh_overlay)
+        self.boss_panel.save_failed.connect(self._show_error)
+        root.addWidget(self.boss_panel)
+
         settings_row = QHBoxLayout()
         settings_row.addWidget(self._build_overlay_box())
         settings_row.addWidget(self._build_detector_box())
         root.addLayout(settings_row)
 
-        footer = QLabel(f"Plik wyniku: {self.paths.deaths}")
+        footer = QLabel(f"Pliki wyników: {self.paths.deaths}, {self.paths.bosses.name}")
         footer.setStyleSheet("color:#7d828a;")
         footer.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         footer.setWordWrap(True)
         root.addWidget(footer)
 
         self.setCentralWidget(central)
-        self.resize(640, 680)
+        self.resize(640, 860)
 
     def _build_overlay_box(self) -> QGroupBox:
         box = QGroupBox("Nakładka")
@@ -273,7 +293,8 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ licznik
 
-    def _change_deaths(self, operation, manual: bool) -> None:
+    def _change_deaths(self, operation, manual: bool, boss_event=None) -> None:
+        """Zmienia ogólny licznik (deaths.json), a potem – jeśli trzeba – licznik bossa (bosses.json)."""
         try:
             operation()
         except StorageError as exc:
@@ -282,14 +303,46 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Błąd zapisu", str(exc))
         else:
             self._clear_error()
+        if boss_event is not None:
+            self._boss_event(boss_event)
         self._refresh_count()
+
+    def _manual_plus(self, manual: bool = True) -> None:
+        self._change_deaths(self.store.increment, manual, self.bosses.manual_add)
+
+    def _manual_minus(self, manual: bool = True) -> None:
+        if self.store.deaths > 0:
+            self._change_deaths(self.store.decrement, manual, self.bosses.manual_undo)
 
     def _refresh_count(self) -> None:
         deaths = self.store.deaths
         self.count_label.setText(str(deaths))
-        self.overlay.set_deaths(deaths)
-        self._update_rtss()
         self.minus_button.setEnabled(deaths > 0)
+        self._refresh_overlay()
+
+    # ------------------------------------------------------- walka z bossem
+
+    def _boss_event(self, event) -> None:
+        try:
+            event()
+        except StorageError as exc:
+            self._show_error(f"Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.")
+        self.boss_panel.refresh()
+
+    def _on_boss_tick(self) -> None:
+        self._boss_event(self.bosses.tick)
+        self._refresh_overlay()
+
+    def _on_track_bosses(self, checked: bool) -> None:
+        self.config.bosses.track = checked
+        self._save_timer.start()
+        self._refresh_overlay()
+
+    def _refresh_overlay(self) -> None:
+        """Ten sam tekst trafia do nakładki-okna i do RTSS, więc obie pokazują to samo."""
+        boss = self.bosses.view() if self.bosses.enabled else None
+        self.overlay.set_text(overlay_text(self.store.deaths, boss))
+        self._update_rtss()
 
     def confirm_reset(self) -> None:
         answer = QMessageBox.question(
@@ -303,7 +356,7 @@ class MainWindow(QMainWindow):
             self._change_deaths(self.store.reset, manual=True)
 
     def _on_death_detected(self) -> None:
-        self._change_deaths(self.store.increment, manual=False)
+        self._change_deaths(self.store.increment, manual=False, boss_event=self.bosses.death)
 
     # ---------------------------------------------------------- wykrywanie
 
@@ -509,8 +562,10 @@ class MainWindow(QMainWindow):
             self.request_frame(self._on_hotkey_frame)
             return
         # Korekta z gry: bez okienek, które zabrałyby fokus grze – tylko sygnał dźwiękowy.
-        operation = self.store.increment if hotkey_id == HOTKEY_PLUS else self.store.decrement
-        self._change_deaths(operation, manual=False)
+        if hotkey_id == HOTKEY_PLUS:
+            self._manual_plus(manual=False)
+        else:
+            self._manual_minus(manual=False)
         winsound.MessageBeep(winsound.MB_OK if hotkey_id == HOTKEY_PLUS else winsound.MB_ICONASTERISK)
 
     def _on_hotkey_frame(self, frame, error) -> None:
@@ -630,6 +685,8 @@ class MainWindow(QMainWindow):
         self._hotkeys.clear()
         self._save_timer.stop()
         self._save_config()
+        self._boss_timer.stop()
+        self._boss_event(self.bosses.shutdown)
         self._rtss_timer.stop()
         self.rtss.clear()
         self.overlay.close()

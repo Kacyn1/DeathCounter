@@ -47,6 +47,28 @@ Próg, liczbę próbek potwierdzenia, czas ponownego uzbrojenia i monitor ustawi
 
 `deaths.json` zawiera wyłącznie `{ "deaths": N }` i jest zapisywany atomowo przy każdej zmianie. Uszkodzony plik zostaje odłożony jako `deaths.json.uszkodzony`.
 
+`bosses.json` przechowuje wyniki walk z bossami (również zapisywany atomowo, uszkodzony plik trafia do `bosses.json.uszkodzony`):
+
+```json
+{
+  "Smelter Demon": { "deaths": 7, "total_time_seconds": 758, "status": "POKONANO" },
+  "Boss 2": { "deaths": 3, "total_time_seconds": 141, "status": "W TRAKCIE" }
+}
+```
+
+## Walka z bossem
+
+Po zaznaczeniu **„Śledź walkę z bossem”** program sam prowadzi walkę:
+
+- pasek zdrowia bossa na ekranie → **Walka**: timer biegnie, nakładka pokazuje bossa, jego śmierci i łączny czas;
+- napis śmierci → **Śmierć**: +1 w ogólnym liczniku i u bossa, timer staje (powrót na arenę nie wlicza się do czasu);
+- pasek znów widoczny → walka z tym samym bossem trwa dalej;
+- komunikat zwycięstwa → **Boss pokonany**: timer staje na stałe, a nakładka wraca do samego `DEATHS: N`.
+
+Nazwę bossa można wpisać w dowolnym momencie (do tego czasu to „Boss 1”, „Boss 2”…). **Zapisz wynik** zapisuje ostateczny wynik ze statusem POKONANO i czyści panel; dopiero potem kolejny pasek oznacza nowego bossa. **Odrzuć** usuwa pomyłkowy wpis. Gdy śmierć i zwycięstwo wypadną prawie jednocześnie albo w trakcie walki zniknie obraz, panel pokazuje ostrzeżenie i czeka na decyzję („Zapisz wynik” albo „Kontynuuj walkę”). Śmierć poza walką liczy się tylko w ogólnym liczniku, a ręczne +1/−1 w trakcie walki poprawia też licznik bossa. Czas walki jest zapisywany co kilka sekund i przy zamknięciu programu; gdy program jest wyłączony, timer nie biegnie.
+
+Automatyczne wykrywanie paska bossa i komunikatu zwycięstwa (z kalibracją jak dla napisu śmierci) jest w przygotowaniu.
+
 ## Gra w pełnym ekranie
 
 Wiele gier (np. Dark Souls II) nie ma trybu okna bez ramek, dlatego program jest przygotowany na pełny ekran:
@@ -89,6 +111,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | Moduł | Rola |
 |---|---|
 | `deathcounter/storage.py` | `deaths.json`, zapis atomowy |
+| `deathcounter/bosses.py` | walka z bossem: maszyna stanów, timer, `bosses.json` (bez Qt, testowalne) |
+| `deathcounter/boss_panel.py` | panel „Walka z bossem” |
 | `deathcounter/config.py` | `config.json`, ścieżki |
 | `deathcounter/template.py` | wzorzec napisu i dopasowanie |
 | `deathcounter/detector.py` | maszyna stanów detektora, kontrola obrazu (bez Qt, testowalne) |

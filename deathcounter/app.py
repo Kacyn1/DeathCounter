@@ -10,6 +10,7 @@ from PySide6.QtCore import QDir, QLockFile
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+from .bosses import BossStore, BossTracker
 from .config import AppPaths, load_config
 from .icon import app_icon
 from .main_window import MainWindow
@@ -72,14 +73,18 @@ def main() -> int:
         paths = AppPaths.default()
         store = DeathStore(paths.deaths)
         store.load()
+        boss_store = BossStore(paths.bosses)
+        boss_store.load()
     except StorageError as exc:
         QMessageBox.critical(None, "Death Counter", f"Nie można przygotować pliku wyniku.\n\n{exc}")
         return 1
 
-    warnings = [w for w in (store.warning,) if w]
+    warnings = [w for w in (store.warning, boss_store.warning) if w]
     config, config_warning = load_config(paths.config)
     if config_warning:
         warnings.append(config_warning)
+    bosses = BossTracker(boss_store)
+    bosses.enabled = config.bosses.track
 
     template = None
     if config.template is not None:
@@ -88,7 +93,7 @@ def main() -> int:
         except TemplateError as exc:
             warnings.append(f"Nie można wczytać wzorca: {exc} Wykonaj kalibrację ponownie.")
 
-    window = MainWindow(paths, store, config, template)
+    window = MainWindow(paths, store, bosses, config, template)
     window.show()
     for warning in warnings:
         QMessageBox.warning(window, "Death Counter", warning)
