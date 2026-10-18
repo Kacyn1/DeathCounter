@@ -1,4 +1,4 @@
-# Death Counter
+# Death Counter by MK
 
 Lokalna aplikacja Windows, która automatycznie liczy śmierci w grach wyświetlających po śmierci charakterystyczny napis, np. „NIE ŻYJESZ” / „YOU DIED” w serii Dark Souls, Elden Ring czy Sekiro. Program rozpoznaje ten napis na obrazie gry na podstawie wzorca z kalibracji. Działa offline i nie ingeruje w pliki ani pamięć gry.
 

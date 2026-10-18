@@ -30,7 +30,7 @@ def build_report_html(game: str, deaths: int, bosses: list[BossRow], generated_a
     parts = [
         "<html><body style='font-family:\"Segoe UI\"; color:#1d1d1f;'>",
         f"<h1 style='color:{ACCENT}; margin-bottom:0;'>{escape(game)}</h1>",
-        f"<p style='color:#6b6f76; margin-top:2px;'>Death Counter – raport · "
+        f"<p style='color:#6b6f76; margin-top:2px;'>Death Counter by MK – raport · "
         f"wygenerowano {generated_at:%d.%m.%Y, %H:%M}</p>",
         "<table width='100%' cellspacing='0' cellpadding='10' style='margin-top:12px;'><tr>",
         _stat("Śmierci łącznie", str(deaths)),
@@ -64,8 +64,8 @@ def write_pdf(path: Path, html: str) -> None:
     writer = QPdfWriter(str(path))
     writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
     writer.setPageMargins(QMarginsF(18, 18, 18, 18), QPageLayout.Unit.Millimeter)
-    writer.setTitle("Death Counter – raport")
-    writer.setCreator("Death Counter")
+    writer.setTitle("Death Counter by MK – raport")
+    writer.setCreator("Death Counter by MK")
     document = QTextDocument()
     document.setDocumentMargin(0)  # marginesy strony ustawia już QPdfWriter
     document.setHtml(html)

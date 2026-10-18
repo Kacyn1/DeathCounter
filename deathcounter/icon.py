@@ -1,6 +1,6 @@
-"""Ikona aplikacji: czerwone „DC” na ciemnym, zaokrąglonym kwadracie, rysowane w Qt.
+"""Ikona aplikacji: logo „DC by MK” (assets/logo.png, przezroczyste rogi poza czerwoną ramką).
 
-Okno korzysta z ikony narysowanej w locie, a build.ps1 zapisuje z niej plik .ico dla PyInstallera:
+Okno korzysta z logo bezpośrednio, a build.ps1 zapisuje z niego plik .ico dla PyInstallera:
     python -m deathcounter.icon build\\DeathCounter.ico
 """
 
@@ -10,43 +10,24 @@ import struct
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QIODevice, QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtCore import QBuffer, QIODevice, Qt
+from PySide6.QtGui import QIcon, QImage, QPixmap
 
+LOGO_PATH = Path(__file__).resolve().parent / "assets" / "logo.png"
 ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
-BACKGROUND = QColor(24, 25, 28)
-BORDER = QColor(110, 22, 22)
-TEXT = QColor(220, 38, 38)
 
 
 def render(size: int) -> QImage:
-    image = QImage(size, size, QImage.Format.Format_ARGB32_Premultiplied)
-    image.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(image)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-    border = max(1.0, size / 32)
-    box = QRectF(0, 0, size, size).adjusted(border / 2, border / 2, -border / 2, -border / 2)
-    radius = size * 0.18
-    painter.setPen(QPen(BORDER, border) if size >= 24 else Qt.PenStyle.NoPen)
-    painter.setBrush(BACKGROUND)
-    painter.drawRoundedRect(box, radius, radius)
-
-    font = QFont("Segoe UI")
-    font.setWeight(QFont.Weight.Black)
-    font.setPixelSize(100)
-    path = QPainterPath()
-    path.addText(QPointF(0, 0), font, "DC")
-    bounds = path.boundingRect()
-    # Mniejsze rozmiary dostają większe litery, żeby napis był czytelny na pasku zadań.
-    fill = 0.88 if size <= 24 else 0.76
-    scale = min(size * fill / bounds.width(), size * 0.62 / bounds.height())
-    painter.translate(size / 2, size / 2)
-    painter.scale(scale, scale)
-    painter.translate(-bounds.center())
-    painter.fillPath(path, TEXT)
-    painter.end()
-    return image
+    """Logo w danym rozmiarze. Zmniejszanie po połowie daje wyraźniejsze małe ikony niż jeden duży krok."""
+    image = QImage(str(LOGO_PATH))
+    if image.isNull():
+        raise FileNotFoundError(f"Brak pliku logo: {LOGO_PATH}")
+    while image.width() >= size * 2:
+        image = image.scaled(
+            image.width() // 2, image.height() // 2,
+            Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation,
+        )
+    return image.scaled(size, size, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
 
 def app_icon() -> QIcon:

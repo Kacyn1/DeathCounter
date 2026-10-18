@@ -80,7 +80,7 @@ STATUS_COLORS = {
 class MainWindow(QMainWindow):
     def __init__(self, config: AppConfig, game: GameData):
         super().__init__()
-        self.setWindowTitle("Death Counter")
+        self.setWindowTitle("Death Counter by MK")
         self.config = config
         self._use_game(game)
         self._pending_game: str | None = None   # zmiana gry czeka na zatrzymanie wykrywania
@@ -465,7 +465,7 @@ class MainWindow(QMainWindow):
                 self._set_status(self._idle_status(), self._idle_message())
                 self.notice_label.setText(f"Wybrano grę: {self.config.game_name(game_id)}.")
                 for warning in game.warnings:
-                    QMessageBox.warning(self, "Death Counter", warning)
+                    QMessageBox.warning(self, "Death Counter by MK", warning)
         self._refresh_boss_hint()
         # Wykrywanie wraca, jeśli działało przed zmianą gry albo ma się włączać samo (np. po grze bez wzorców).
         if (restart or self.config.auto_start) and self.templates["death"] is not None:

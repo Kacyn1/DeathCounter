@@ -27,7 +27,7 @@ class OverlayWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.setWindowTitle("Death Counter – nakładka")
+        self.setWindowTitle("Death Counter by MK – nakładka")
         self._text = "DEATHS: 0"
         self._settings = settings
         self._font = QFont("Segoe UI")

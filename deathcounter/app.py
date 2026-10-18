@@ -39,7 +39,7 @@ def _dark_palette() -> QPalette:
 def _install_excepthook() -> None:
     def hook(exc_type, exc, tb):
         details = "".join(traceback.format_exception(exc_type, exc, tb))
-        box = QMessageBox(QMessageBox.Icon.Critical, "Death Counter – błąd", f"Wystąpił nieoczekiwany błąd:\n{exc}")
+        box = QMessageBox(QMessageBox.Icon.Critical, "Death Counter by MK – błąd", f"Wystąpił nieoczekiwany błąd:\n{exc}")
         box.setDetailedText(details)
         box.exec()
 
@@ -59,7 +59,7 @@ def _ask_legacy_game(default: str) -> str:
     ids = list(GAMES)
     name, ok = QInputDialog.getItem(
         None,
-        "Death Counter – wybór gry",
+        "Death Counter by MK – wybór gry",
         "Program zapisuje teraz licznik śmierci, bossów i kalibrację osobno dla każdej gry.\n"
         "Do której gry należą dotychczasowe dane?",
         [GAMES[g] for g in ids],
@@ -72,7 +72,7 @@ def _ask_legacy_game(default: str) -> str:
 def main() -> int:
     _set_app_user_model_id()
     app = QApplication(sys.argv)
-    app.setApplicationName("Death Counter")
+    app.setApplicationName("Death Counter by MK")
     app.setWindowIcon(app_icon())
     app.setStyle("Fusion")
     app.setPalette(_dark_palette())
@@ -80,7 +80,7 @@ def main() -> int:
 
     lock = QLockFile(QDir.temp().filePath("death-counter.lock"))
     if not lock.tryLock(100):
-        QMessageBox.warning(None, "Death Counter", "Program jest już uruchomiony.")
+        QMessageBox.warning(None, "Death Counter by MK", "Program jest już uruchomiony.")
         return 1
 
     try:
@@ -92,12 +92,12 @@ def main() -> int:
             save_config(base / "config.json", config)
         game = open_game(base, config.game)
     except StorageError as exc:
-        QMessageBox.critical(None, "Death Counter", f"Nie można przygotować pliku wyniku.\n\n{exc}")
+        QMessageBox.critical(None, "Death Counter by MK", f"Nie można przygotować pliku wyniku.\n\n{exc}")
         return 1
 
     warnings = ([config_warning] if config_warning else []) + game.warnings
     window = MainWindow(config, game)
     window.show()
     for warning in warnings:
-        QMessageBox.warning(window, "Death Counter", warning)
+        QMessageBox.warning(window, "Death Counter by MK", warning)
     return app.exec()
