@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
+import unicodedata
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
@@ -13,7 +15,8 @@ from .storage import StorageError, atomic_write_text
 APP_DIR_NAME = "DeathCounter"
 LEGACY_APP_DIR_NAME = "DS2DeathCounter"
 
-# Gry na liście wyboru; każda ma własny folder games/<id>/ z licznikiem, bossami i kalibracją.
+# Gry wbudowane na liście wyboru; każda gra (także dodana przez użytkownika) ma własny folder
+# games/<id>/ z licznikiem, bossami i kalibracją.
 GAMES = {
     "ds1": "Dark Souls I",
     "ds2": "Dark Souls II",
@@ -23,6 +26,8 @@ GAMES = {
 }
 DEFAULT_GAME = "ds1"
 GAMES_DIR = "games"
+GAME_NAME_MAX = 60
+_GAME_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 # Wzorce: napis śmierci, ramka paska zdrowia bossa, komunikat zwycięstwa – (pole w Calibration, pole w AppPaths).
 TEMPLATE_FIELDS = {
@@ -132,10 +137,33 @@ class AppConfig:
     rtss: RtssSettings = field(default_factory=RtssSettings)
     bosses: BossSettings = field(default_factory=BossSettings)
     game: str = DEFAULT_GAME
+    custom_games: dict[str, str] = field(default_factory=dict)  # gry dodane przez użytkownika: id → nazwa
     auto_start: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    def all_games(self) -> dict[str, str]:
+        return {**GAMES, **self.custom_games}
+
+    def game_name(self, game: str) -> str:
+        return self.all_games().get(game, game)
+
+    def add_game(self, name: str) -> str:
+        """Dodaje grę użytkownika i zwraca jej id (nazwa folderu). ValueError z opisem, gdy nazwa się nie nadaje."""
+        name = " ".join(name.split())
+        if not name:
+            raise ValueError("Podaj nazwę gry.")
+        if len(name) > GAME_NAME_MAX:
+            raise ValueError(f"Nazwa gry może mieć najwyżej {GAME_NAME_MAX} znaków.")
+        if any(existing.casefold() == name.casefold() for existing in self.all_games().values()):
+            raise ValueError(f"Gra „{name}” jest już na liście.")
+        base = _slug(name) or "gra"
+        game_id, number = base, 2
+        while game_id in self.all_games():
+            game_id, number = f"{base}-{number}", number + 1
+        self.custom_games[game_id] = name
+        return game_id
 
 
 @dataclass
@@ -202,8 +230,11 @@ class AppPaths:
         return path.with_name(f"{path.stem}_source.jpg")
 
 
-def game_name(game: str) -> str:
-    return GAMES.get(game, game)
+def _slug(name: str) -> str:
+    """„Lies of P: Overture” → „lies-of-p-overture” (bezpieczna nazwa folderu)."""
+    text = unicodedata.normalize("NFKD", name.replace("ł", "l").replace("Ł", "L"))
+    text = text.encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")[:40].strip("-")
 
 
 def load_config(path: Path) -> tuple[AppConfig, str | None]:
@@ -223,7 +254,15 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
     _fill(config.overlay, data.get("overlay"))
     _fill(config.rtss, data.get("rtss"))
     _fill(config.bosses, data.get("bosses"))
-    if data.get("game") in GAMES:
+    custom = data.get("custom_games")
+    if isinstance(custom, dict):
+        config.custom_games = {
+            game_id: " ".join(name.split())[:GAME_NAME_MAX]
+            for game_id, name in custom.items()
+            if isinstance(game_id, str) and _GAME_ID.match(game_id) and game_id not in GAMES
+            and isinstance(name, str) and name.strip()
+        }
+    if data.get("game") in config.all_games():
         config.game = data["game"]
     if isinstance(data.get("auto_start"), bool):
         config.auto_start = data["auto_start"]

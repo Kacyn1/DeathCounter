@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
+    QInputDialog,
     QFormLayout,
     QGridLayout,
     QGroupBox,
@@ -31,7 +32,7 @@ from .boss_panel import BossPanel
 from .bosses import BossTracker, overlay_text
 from .calibration import CalibrationDialog, SavedCalibration
 from .capture import CaptureError, grab_single_frame, list_outputs
-from .config import GAMES, AppConfig, game_name, save_calibration, save_config
+from .config import AppConfig, save_calibration, save_config
 from .game_data import GameData, open_game
 from .detector import CaptureHealth, SampleResult
 from .overlay import OverlayWindow
@@ -58,6 +59,7 @@ HOTKEYS = {
     HOTKEY_MINUS: (winapi.VK_F11, "Ctrl+Alt+F11"),
 }
 HOTKEY_TEXT = HOTKEYS[HOTKEY_SNAPSHOT][1]
+ADD_GAME = "__add_game__"  # pozycja „+ Dodaj grę…” na liście gier
 RTSS_REFRESH_MS = 2000
 BOSS_REFRESH_MS = 1000
 OVERLAY_MODE_LABELS = {
@@ -123,10 +125,11 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(central)
 
         self.game_combo = QComboBox()
-        for game_id, name in GAMES.items():
-            self.game_combo.addItem(name, game_id)
-        self.game_combo.setCurrentIndex(max(0, self.game_combo.findData(self.paths.game)))
-        self.game_combo.setToolTip("Każda gra ma własny licznik śmierci, bossów i kalibrację.")
+        self._fill_games()
+        self.game_combo.setToolTip(
+            "Każda gra ma własny licznik śmierci, bossów i kalibrację.\n"
+            "„+ Dodaj grę…” tworzy nowy licznik dla gry spoza listy."
+        )
         self.game_combo.setMinimumWidth(260)
         self.game_combo.currentIndexChanged.connect(self._on_game_selected)
         game_row = QHBoxLayout()
@@ -387,8 +390,40 @@ class MainWindow(QMainWindow):
         self.bosses = BossTracker(game.boss_store)
         self.bosses.enabled = self.config.bosses.track
 
+    def _fill_games(self) -> None:
+        """Gry wbudowane i dodane przez użytkownika, a na końcu pozycja „+ Dodaj grę…”."""
+        combo = self.game_combo
+        combo.blockSignals(True)
+        combo.clear()
+        for game_id, name in self.config.all_games().items():
+            combo.addItem(name, game_id)
+        combo.insertSeparator(combo.count())
+        combo.addItem("+ Dodaj grę…", ADD_GAME)
+        combo.setCurrentIndex(max(0, combo.findData(self._pending_game or self.paths.game)))
+        combo.blockSignals(False)
+
+    def _add_game(self) -> None:
+        # Lista wraca do bieżącej gry; nowa gra zostanie wybrana dopiero po podaniu nazwy.
+        self._fill_games()
+        name, ok = QInputDialog.getText(
+            self, "Dodaj grę", "Nazwa gry (np. Lies of P):\nGra dostanie własny licznik śmierci, bossów i kalibrację."
+        )
+        if not ok:
+            return
+        try:
+            game_id = self.config.add_game(name)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Dodaj grę", str(exc))
+            return
+        self._save_config()
+        self._fill_games()
+        self.game_combo.setCurrentIndex(self.game_combo.findData(game_id))  # przełącza na nową grę
+
     def _on_game_selected(self) -> None:
         game_id = self.game_combo.currentData()
+        if game_id == ADD_GAME:
+            self._add_game()
+            return
         if game_id == self.paths.game and self._pending_game is None:
             return
         if self.worker is not None:
@@ -418,7 +453,7 @@ class MainWindow(QMainWindow):
                 self._refresh_template_label()
                 self._refresh_footer()
                 self._set_status(self._idle_status(), self._idle_message())
-                self.notice_label.setText(f"Wybrano grę: {game_name(game_id)}.")
+                self.notice_label.setText(f"Wybrano grę: {self.config.game_name(game_id)}.")
                 for warning in game.warnings:
                     QMessageBox.warning(self, "Death Counter", warning)
         self._refresh_boss_hint()
@@ -439,7 +474,7 @@ class MainWindow(QMainWindow):
             path += ".pdf"
         rows = rows_from_records(self.bosses.store.records, self.bosses.current, self.bosses.elapsed())
         try:
-            write_pdf(path, build_report_html(game_name(self.paths.game), self.store.deaths, rows, now))
+            write_pdf(path, build_report_html(self.config.game_name(self.paths.game), self.store.deaths, rows, now))
         except (StorageError, OSError) as exc:
             QMessageBox.critical(self, "Raport PDF", f"Nie udało się zapisać raportu.\n\n{exc}")
             return

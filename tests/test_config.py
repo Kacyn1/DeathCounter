@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from deathcounter.config import (
     GAMES,
     AppConfig,
@@ -136,3 +138,45 @@ def test_no_legacy_data_on_fresh_install(tmp_path):
     assert not legacy_data_present(tmp_path)
     (tmp_path / "config.json").write_text("{}", encoding="utf-8")
     assert not legacy_data_present(tmp_path)
+
+
+def test_add_game_creates_unique_folder_name():
+    config = AppConfig()
+    assert config.add_game("  Lies of   P ") == "lies-of-p"
+    assert config.add_game("Łowcy Dusz: Zażółć") == "lowcy-dusz-zazolc"
+    assert config.add_game("Lies of P!") == "lies-of-p-2"   # inna nazwa, ten sam folder bazowy
+    assert config.add_game("???") == "gra"
+    assert config.game_name("lies-of-p") == "Lies of P"
+    assert list(config.all_games())[:5] == list(GAMES)       # wbudowane zostają na początku
+
+
+@pytest.mark.parametrize("name, message", [
+    ("", "Podaj nazwę"),
+    ("   ", "Podaj nazwę"),
+    ("elden ring", "już na liście"),
+    ("x" * 61, "najwyżej 60"),
+])
+def test_add_game_rejects_bad_names(name, message):
+    with pytest.raises(ValueError, match=message):
+        AppConfig().add_game(name)
+
+
+def test_custom_games_survive_restart(tmp_path):
+    config = AppConfig()
+    config.game = config.add_game("Lies of P")
+    save_config(tmp_path / "config.json", config)
+    loaded, _ = load_config(tmp_path / "config.json")
+    assert loaded.custom_games == {"lies-of-p": "Lies of P"}
+    assert loaded.game == "lies-of-p"
+    assert AppPaths.for_game(tmp_path, loaded.game).game_dir == tmp_path / "games" / "lies-of-p"
+
+
+def test_invalid_custom_games_are_dropped(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({
+        "custom_games": {"../hack": "Zła", "ds1": "Podmiana", "ok-game": "Dobra", "bad": 5},
+        "game": "../hack",
+    }), encoding="utf-8")
+    loaded, _ = load_config(path)
+    assert loaded.custom_games == {"ok-game": "Dobra"}
+    assert loaded.game == "ds1"

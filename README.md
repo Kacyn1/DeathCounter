@@ -26,6 +26,8 @@ Jeśli folderu programu nie da się zapisywać, dane trafiają do `%APPDATA%\Dea
 
 Lista **Gra** nad licznikiem: Dark Souls I, Dark Souls II, Dark Souls III, Sekiro: Shadows Die Twice, Elden Ring. Każda gra ma **osobny** licznik śmierci, bossów i kalibrację (wzorce zapisują się automatycznie dla wybranej gry), a raport PDF ma nazwę gry w tytule. Zmiana gry przy włączonym wykrywaniu zatrzymuje je, wczytuje dane i wzorce tej gry i uruchamia wykrywanie ponownie. Ustawienia programu (nakładka, RTSS, próg, monitor) są wspólne.
 
+Grę spoza listy dodasz pozycją **+ Dodaj grę…** na końcu listy: po podaniu nazwy program tworzy dla niej nowy licznik (z bossami i kalibracją) i od razu ją wybiera. Dodane gry zapisują się w `config.json` (`custom_games`), a ich dane w `games\<nazwa-gry>\`, np. `games\lies-of-p\`.
+
 Dane gry leżą w `games\<gra>\` obok programu (`ds1`, `ds2`, `ds3`, `sekiro`, `eldenring`): `deaths.json`, `bosses.json`, `calibration.json` i pliki wzorców. Po aktualizacji z wersji bez wyboru gry program jednorazowo pyta, do której gry przypisać dotychczasowy licznik, bossów i kalibrację, i przenosi je do jej folderu.
 
 ## Pierwsze użycie: kalibracja
