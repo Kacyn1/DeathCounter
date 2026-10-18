@@ -155,7 +155,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
 | `deathcounter/report.py` | certyfikat PDF (QPdfWriter), weryfikacja |
 | `deathcounter/audit.py` | rejestr ręcznych korekt i zmian poza programem (`audit.json`) |
-| `deathcounter/legal.py` | licencja: akceptacja przy pierwszym uruchomieniu, okno „O programie” |
+| `deathcounter/legal.py` | licencja (GNU GPL v3) i licencje bibliotek, okno „O programie” |
 | `deathcounter/signing.py` | kod weryfikacyjny certyfikatu (HMAC), klucz spoza repozytorium |
 | `deathcounter/discord_presence.py` | status na Discordzie (Rich Presence przez lokalny kanał Discorda) |
 | `deathcounter/config.py` | `config.json`, lista gier, ścieżki, `calibration.json`, przeniesienie starych danych |
@@ -173,10 +173,14 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 
 ## Licencja
 
-Copyright (C) 2026 Mateusz Kacyna. Wszelkie prawa zastrzeżone.
+Copyright (C) 2026 Mateusz Kacyna
 
-Program jest udostępniany na **licencji zastrzeżonej** ([LICENSE](LICENSE)): można go bezpłatnie pobierać i używać (także na streamach i nagraniach), przeglądać kod i budować program na własne potrzeby, ale bez pisemnej zgody autora nie wolno go zmieniać, kopiować kodu do innych projektów ani rozpowszechniać. Przy pierwszym uruchomieniu program prosi o akceptację licencji; jej treść jest też w oknie **O programie**.
+Ten program jest wolnym oprogramowaniem: możesz go rozpowszechniać i/lub modyfikować na warunkach Powszechnej Licencji Publicznej GNU w wersji 3 ([GNU GPL v3](LICENSE), GPL-3.0-only), opublikowanej przez Free Software Foundation. Program jest rozpowszechniany w nadziei, że będzie przydatny, ale **bez jakiejkolwiek gwarancji** – szczegóły w treści licencji.
 
-Program korzysta z bibliotek osób trzecich na ich własnych licencjach – Qt for Python (LGPL v3), OpenCV (Apache 2.0), NumPy (BSD), DXcam i comtypes (MIT) oraz Pythona (PSF); pełne teksty są w [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt). Licencja pozwala zbudować program z własną wersją bibliotek Qt, zgodnie z LGPL v3.
+W skrócie: każdy może używać programu, przeglądać i zmieniać kod oraz rozpowszechniać go dalej, ale zmienione wersje muszą być również udostępniane na GPL v3 razem z kodem źródłowym.
 
-Propozycje zmian: [CONTRIBUTING.md](CONTRIBUTING.md). Po aktualizacji bibliotek listę licencji odświeża `tools\make_third_party_licenses.py`.
+**Certyfikaty.** Klucz podpisu certyfikatów nie jest częścią kodu źródłowego. Program zbudowany z kodu (`build.ps1`) tworzy własny klucz, więc jego certyfikaty nie przejdą weryfikacji w oficjalnych wydaniach z [Releases](https://github.com/Kacyn1/DeathCounter/releases) – i odwrotnie. Dzięki temu „Sprawdź certyfikat…” potwierdza tylko certyfikaty z oficjalnego programu.
+
+Program korzysta z bibliotek osób trzecich na ich własnych licencjach – Qt for Python (LGPL v3), OpenCV (Apache 2.0), NumPy (BSD), DXcam i comtypes (MIT) oraz Pythona (PSF); pełne teksty są w [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt) i w oknie **O programie**. Po aktualizacji bibliotek listę licencji odświeża `tools\make_third_party_licenses.py`.
+
+Propozycje zmian: [CONTRIBUTING.md](CONTRIBUTING.md).

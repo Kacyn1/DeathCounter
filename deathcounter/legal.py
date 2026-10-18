@@ -1,8 +1,7 @@
-"""Licencja programu i licencje bibliotek: odczyt plików, akceptacja przy pierwszym uruchomieniu, okno „O programie”."""
+"""Licencja programu (GNU GPL v3) i licencje bibliotek: odczyt plików i okno „O programie”."""
 
 from __future__ import annotations
 
-import hashlib
 import sys
 from pathlib import Path
 
@@ -10,7 +9,12 @@ from . import __version__
 
 AUTHOR = "Mateusz Kacyna"
 REPOSITORY = "https://github.com/Kacyn1/DeathCounter"
-LICENSE_SUMMARY = "Licencja zastrzeżona: darmowe używanie, bez zmian i rozpowszechniania (szczegóły w licencji)."
+COPYRIGHT = f"Copyright © 2026 {AUTHOR}"
+LICENSE_NOTICE = (
+    "Ten program jest wolnym oprogramowaniem: możesz go rozpowszechniać i/lub modyfikować na warunkach "
+    "Powszechnej Licencji Publicznej GNU (GNU GPL) w wersji 3, opublikowanej przez Free Software Foundation. "
+    "Program jest rozpowszechniany bez jakiejkolwiek gwarancji – szczegóły w treści licencji."
+)
 
 
 def _resource(name: str) -> Path:
@@ -32,37 +36,6 @@ def license_text() -> str:
 
 def third_party_text() -> str:
     return _read("THIRD_PARTY_LICENSES.txt")
-
-
-def license_id() -> str:
-    """Skrót treści licencji – po jej zmianie program poprosi o ponowną akceptację."""
-    normalized = license_text().replace("\r\n", "\n").strip()  # niezależnie od końców linii (Git na Windows)
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
-
-
-def ask_acceptance(parent=None) -> bool:
-    """Okno z treścią licencji i przyciskami „Akceptuję” / „Nie akceptuję”."""
-    from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QTextBrowser, QVBoxLayout
-
-    dialog = QDialog(parent)
-    dialog.setWindowTitle("Death Counter by MK – licencja")
-    dialog.resize(720, 620)
-    layout = QVBoxLayout(dialog)
-    intro = QLabel("Przed pierwszym użyciem zapoznaj się z licencją programu. "
-                   "Używanie programu wymaga jej akceptacji.")
-    intro.setWordWrap(True)
-    layout.addWidget(intro)
-    text = QTextBrowser()
-    text.setPlainText(license_text())
-    layout.addWidget(text, 1)
-    buttons = QDialogButtonBox()
-    accept = buttons.addButton("Akceptuję", QDialogButtonBox.ButtonRole.AcceptRole)
-    buttons.addButton("Nie akceptuję", QDialogButtonBox.ButtonRole.RejectRole)
-    accept.setDefault(True)
-    buttons.accepted.connect(dialog.accept)
-    buttons.rejected.connect(dialog.reject)
-    layout.addWidget(buttons)
-    return dialog.exec() == QDialog.DialogCode.Accepted
 
 
 def show_text(parent, title: str, text: str) -> None:
@@ -100,20 +73,20 @@ def show_about(parent) -> None:
     info = QLabel(
         f"<h2 style='margin:0'>Death Counter by MK</h2>"
         f"<p>Wersja {__version__}</p>"
-        f"<p>Copyright © 2026 {AUTHOR}. Wszelkie prawa zastrzeżone.</p>"
-        f"<p>{LICENSE_SUMMARY}</p>"
-        f"<p><a href='{REPOSITORY}'>{REPOSITORY}</a></p>"
+        f"<p>{COPYRIGHT}</p>"
+        f"<p>{LICENSE_NOTICE}</p>"
+        f"<p>Kod źródłowy: <a href='{REPOSITORY}'>{REPOSITORY}</a></p>"
         "<p style='color:#9aa0a6'>Program korzysta z bibliotek Qt for Python (LGPL v3), OpenCV (Apache 2.0), "
         "NumPy (BSD), DXcam i comtypes (MIT) oraz Pythona (PSF).</p>"
     )
     info.setWordWrap(True)
     info.setOpenExternalLinks(True)
     info.setTextFormat(Qt.TextFormat.RichText)
-    info.setMinimumWidth(420)
+    info.setMinimumWidth(440)
     column.addWidget(info)
     buttons = QHBoxLayout()
     for label, action in (
-        ("Licencja…", lambda: show_text(dialog, "Licencja programu", license_text())),
+        ("Licencja (GNU GPL v3)…", lambda: show_text(dialog, "GNU General Public License v3", license_text())),
         ("Licencje bibliotek…", lambda: show_text(dialog, "Licencje bibliotek osób trzecich", third_party_text())),
         ("Zamknij", dialog.accept),
     ):

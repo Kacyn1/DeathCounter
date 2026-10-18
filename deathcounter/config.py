@@ -156,7 +156,6 @@ class AppConfig:
     discord: DiscordSettings = field(default_factory=DiscordSettings)
     game: str = DEFAULT_GAME
     player_name: str = ""  # nick gracza na certyfikacie
-    license_accepted: str = ""  # skrót zaakceptowanej treści licencji (legal.license_id)
     custom_games: dict[str, str] = field(default_factory=dict)  # gry dodane przez użytkownika: id → nazwa
     auto_start: bool = False
 
@@ -293,8 +292,6 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
         }
     if data.get("game") in config.all_games():
         config.game = data["game"]
-    if isinstance(data.get("license_accepted"), str):
-        config.license_accepted = data["license_accepted"]
     if isinstance(data.get("player_name"), str):
         config.player_name = " ".join(data["player_name"].split())[:GAME_NAME_MAX]
     if isinstance(data.get("auto_start"), bool):

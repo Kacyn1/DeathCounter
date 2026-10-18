@@ -1,12 +1,12 @@
 # Wkład w rozwój Death Counter by MK
 
-Dziękuję za chęć pomocy! Program jest objęty licencją zastrzeżoną ([LICENSE](LICENSE)), więc propozycje
-zmian przyjmuję na poniższych zasadach.
+Dziękuję za chęć pomocy! Program jest wolnym oprogramowaniem na licencji
+[GNU GPL v3](LICENSE) (GPL-3.0-only).
 
 ## Zgłoszenia błędów i pomysły
 
-Błędy i pomysły zgłaszaj w zakładce **Issues** repozytorium. Pomocne są: wersja programu, gra, opis kroków
-i zrzut ekranu (np. okna programu z sekcją „Stan”).
+Błędy i pomysły zgłaszaj w zakładce **Issues** repozytorium. Pomocne są: wersja programu (okno
+„O programie”), gra, opis kroków i zrzut ekranu (np. okna programu z sekcją „Stan”).
 
 ## Pull requesty
 
@@ -14,14 +14,14 @@ Wysyłając pull request albo inną propozycję zmian w kodzie, grafice lub doku
 potwierdzasz, że:
 
 1. jesteś autorem wkładu albo masz prawo go przekazać, i nie narusza on praw osób trzecich;
-2. udzielasz Mateuszowi Kacynie (Autorowi programu) nieodpłatnej, niewyłącznej, nieodwołalnej
-   i nieograniczonej w czasie ani terytorialnie licencji na korzystanie z wkładu na wszystkich polach
-   eksploatacji – w tym na jego zmienianie, łączenie z programem, rozpowszechnianie, zastosowania
-   komercyjne oraz udostępnianie programu na dowolnej, także innej niż obecna, licencji – z prawem
-   udzielania dalszych licencji;
-3. nie oczekujesz wynagrodzenia za wkład.
+2. udostępniasz wkład na licencji GNU GPL v3, tak jak resztę programu;
+3. dodatkowo udzielasz Mateuszowi Kacynie (autorowi programu) nieodpłatnej, niewyłącznej,
+   nieodwołalnej i nieograniczonej w czasie ani terytorialnie licencji na korzystanie z wkładu na
+   wszystkich polach eksploatacji – także na udostępnianie programu z Twoim wkładem na innej licencji
+   niż GPL v3 – z prawem udzielania dalszych licencji. Dzięki temu autor może w przyszłości zmienić
+   licencję kolejnych wersji programu bez zbierania zgód od każdej osoby, która pomogła.
 
-Jeśli wkład jest większy (np. nowa funkcja), Autor może poprosić o potwierdzenie powyższych zasad
+Jeśli wkład jest większy (np. nowa funkcja), autor może poprosić o potwierdzenie powyższych zasad
 w formie pisemnej.
 
 ## Zasady techniczne

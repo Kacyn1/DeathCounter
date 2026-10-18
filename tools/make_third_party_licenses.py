@@ -39,12 +39,12 @@ def main() -> None:
         "=" * 60,
         "",
         "DeathCounter.exe zawiera poniższe biblioteki. Każda z nich jest udostępniana na własnej licencji,",
-        "której warunki obowiązują niezależnie od licencji programu Death Counter by MK (plik LICENSE).",
+        "której warunki obowiązują niezależnie od licencji programu Death Counter by MK (GNU GPL v3, plik LICENSE).",
         "",
         "Qt for Python (PySide6) jest objęte licencją GNU LGPL v3. Kod źródłowy Qt jest dostępny na",
         "https://download.qt.io/official_releases/QtForPython/ oraz https://code.qt.io/. Kod źródłowy",
-        "programu jest dostępny na https://github.com/Kacyn1/DeathCounter, a licencja programu pozwala",
-        "zbudować go z własną, zmodyfikowaną wersją bibliotek Qt.",
+        "programu jest dostępny na https://github.com/Kacyn1/DeathCounter i można go zbudować",
+        "z własną, zmodyfikowaną wersją bibliotek Qt.",
         "",
     ]
     sections = []
