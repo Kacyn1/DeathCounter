@@ -2,10 +2,25 @@
 
 Lokalna aplikacja Windows, która automatycznie liczy śmierci w **Dark Souls II: Scholar of the First Sin**, rozpoznając na obrazie gry napis „NIE ŻYJESZ”. Działa offline i nie ingeruje w pliki ani pamięć gry.
 
-## Uruchomienie
+## Pobranie i uruchomienie
 
-- **Wersja .exe:** `dist\DS2DeathCounter.exe` (budowanie opisane niżej). Pliki `deaths.json`, `config.json` i `template.png` powstają obok pliku .exe. Jeśli tego folderu nie da się zapisywać, trafiają do `%APPDATA%\DS2DeathCounter`.
-- **Ze źródeł:** dwuklik `DS2DeathCounter.pyw` (bez konsoli) albo `python -m ds2counter`.
+### Sposób 1: gotowy program (zalecany)
+
+1. Wejdź w [Releases](https://github.com/Kacyn1/ds2DeathCounter/releases) i pobierz `DS2DeathCounter.exe`.
+2. Umieść go w osobnym folderze, np. `C:\Gry\LicznikDS2`. Obok programu będą zapisywane `deaths.json`, `config.json` i `template.png`.
+3. Uruchom dwuklikiem. Python nie jest potrzebny.
+
+Program nie ma podpisu cyfrowego, więc Windows może pokazać „System Windows ochronił ten komputer”. Kliknij wtedy **Więcej informacji → Uruchom mimo to**.
+
+### Sposób 2: ze źródeł (ZIP z GitHuba)
+
+1. Zainstaluj [Pythona](https://www.python.org/downloads/) w wersji 3.12 lub nowszej. Zostaw zaznaczoną opcję „py launcher”.
+2. Pobierz repozytorium (**Code → Download ZIP**) i rozpakuj je. Najlepiej w krótkiej ścieżce, np. `C:\DS2DeathCounter`.
+3. Uruchom dwuklikiem **`uruchom.bat`**. Za pierwszym razem skrypt utworzy środowisko `.venv` i pobierze biblioteki (ok. 400 MB, zwykle kilkadziesiąt sekund). Kolejne uruchomienia otwierają program od razu.
+
+Z tego samego folderu możesz zbudować własny `.exe`: `powershell -ExecutionPolicy Bypass -File build.ps1` (wynik w `dist\DS2DeathCounter.exe`).
+
+Jeśli folderu programu nie da się zapisywać, dane trafiają do `%APPDATA%\DS2DeathCounter`.
 
 ## Pierwsze użycie: kalibracja
 
@@ -60,11 +75,16 @@ DS2 nie ma trybu okna bez ramek, dlatego program jest przygotowany na pełny ekr
 ## Rozwój
 
 ```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+powershell -ExecutionPolicy Bypass -File setup.ps1 -Dev   # .venv + biblioteki + pytest/PyInstaller
 .\.venv\Scripts\python.exe -m pytest -q
-powershell -ExecutionPolicy Bypass -File build.ps1   # testy + dist\DS2DeathCounter.exe
+powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DS2DeathCounter.exe
 ```
+
+| Skrypt | Rola |
+|---|---|
+| `uruchom.bat` | uruchomienie ze źródeł (przy pierwszym razie woła `setup.ps1`) |
+| `setup.ps1` | tworzy `.venv` na Pythonie 3.12+ i instaluje biblioteki (`-Dev`: także narzędzia) |
+| `build.ps1` | `setup.ps1 -Dev`, testy, budowa `.exe` |
 
 | Moduł | Rola |
 |---|---|
@@ -74,6 +94,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1   # testy + dist\DS2DeathCoun
 | `ds2counter/detector.py` | maszyna stanów detektora, kontrola obrazu (bez Qt, testowalne) |
 | `ds2counter/capture.py` | przechwytywanie DXCam |
 | `ds2counter/worker.py` | wątek wykrywania |
-| `ds2counter/overlay.py` | nakładka (PySide6 + WinAPI) |
+| `ds2counter/overlay.py` | nakładka-okno (PySide6 + WinAPI) |
+| `ds2counter/rtss.py` | tekst w nakładce RTSS (pamięć współdzielona) |
+| `ds2counter/rtss_setup.py` | instalacja RTSS (winget) i start bez UAC (Harmonogram zadań) |
 | `ds2counter/calibration.py` | okno kalibracji |
 | `ds2counter/main_window.py` | okno główne |

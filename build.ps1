@@ -4,12 +4,8 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
+& "$PSScriptRoot\setup.ps1" -Dev
 $python = ".\.venv\Scripts\python.exe"
-if (-not (Test-Path $python)) {
-    py -3.12 -m venv .venv
-    & $python -m pip install --upgrade pip
-}
-& $python -m pip install -r requirements-dev.txt
 
 & $python -m pytest -q
 if ($LASTEXITCODE -ne 0) { throw "Testy nie przeszly - przerwano budowanie." }
