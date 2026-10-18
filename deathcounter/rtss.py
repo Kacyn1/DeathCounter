@@ -63,7 +63,7 @@ class RtssState(Enum):
 
 
 class RtssOsd:
-    def __init__(self, owner: str = "DS2DeathCounter", memory_name: str = SHARED_MEMORY_NAME) -> None:
+    def __init__(self, owner: str = "DeathCounter", memory_name: str = SHARED_MEMORY_NAME) -> None:
         self._owner = owner.encode("ascii")
         self._memory_name = memory_name
 

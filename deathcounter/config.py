@@ -10,7 +10,8 @@ from pathlib import Path
 
 from .storage import StorageError, atomic_write_text
 
-APP_DIR_NAME = "DS2DeathCounter"
+APP_DIR_NAME = "DeathCounter"
+LEGACY_APP_DIR_NAME = "DS2DeathCounter"
 
 
 @dataclass
@@ -209,7 +210,11 @@ def _data_dir() -> Path:
     directory = _app_dir()
     if _writable(directory):
         return directory
-    fallback = Path(os.environ.get("APPDATA") or Path.home()) / APP_DIR_NAME
+    appdata = Path(os.environ.get("APPDATA") or Path.home())
+    fallback = appdata / APP_DIR_NAME
+    legacy = appdata / LEGACY_APP_DIR_NAME
+    if not fallback.exists() and legacy.is_dir():
+        return legacy  # dane zapisane przez wersję sprzed zmiany nazwy
     try:
         fallback.mkdir(parents=True, exist_ok=True)
     except OSError as exc:

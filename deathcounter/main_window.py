@@ -63,7 +63,7 @@ STATUS_COLORS = {
 class MainWindow(QMainWindow):
     def __init__(self, paths: AppPaths, store: DeathStore, config: AppConfig, template: DeathTemplate | None):
         super().__init__()
-        self.setWindowTitle("DS2 Death Counter")
+        self.setWindowTitle("Death Counter")
         self.paths = paths
         self.store = store
         self.config = config

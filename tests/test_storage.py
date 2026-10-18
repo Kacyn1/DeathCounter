@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from ds2counter.storage import DeathStore
+from deathcounter.storage import DeathStore
 
 
 def test_creates_file_with_zero(tmp_path):

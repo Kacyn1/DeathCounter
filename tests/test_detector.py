@@ -1,4 +1,4 @@
-from ds2counter.detector import DeathDetector
+from deathcounter.detector import DeathDetector
 
 HIGH, LOW, MID = 0.95, 0.10, 0.65
 

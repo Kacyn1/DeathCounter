@@ -7,7 +7,7 @@ from ctypes import wintypes
 
 import pytest
 
-from ds2counter.rtss import HEADER, OSD_EX_OFFSET, OWNER_OFFSET, SIGNATURE, RtssOsd, RtssState
+from deathcounter.rtss import HEADER, OSD_EX_OFFSET, OWNER_OFFSET, SIGNATURE, RtssOsd, RtssState
 
 ENTRY_SIZE = 4096 + 512 + 262144  # szOSD + szOSDOwner + szOSDEx + bufor (RTSS 7.x)
 ENTRIES = 4
@@ -25,7 +25,7 @@ kernel32.MapViewOfFile.restype = ctypes.c_void_p
 
 @pytest.fixture
 def fake_rtss():
-    name = f"DS2DeathCounterTestRTSS_{os.getpid()}"
+    name = f"DeathCounterTestRTSS_{os.getpid()}"
     handle = kernel32.CreateFileMappingW(wintypes.HANDLE(-1), None, 0x04, 0, SIZE, name)
     base = kernel32.MapViewOfFile(handle, 0xF001F, 0, 0, 0)
     header = HEADER.pack(SIGNATURE, 0x0002000E, 0, 0, 0, ENTRY_SIZE, ARR_OFFSET, ENTRIES, 0)
@@ -59,7 +59,7 @@ def test_claims_first_free_slot_skipping_entry_zero(fake_rtss):
     name, base = fake_rtss
     assert RtssOsd(memory_name=name).show("ŚMIERCI: 5") is RtssState.SHOWN
     assert owner(base, 0) == b""
-    assert owner(base, 1) == b"DS2DeathCounter"
+    assert owner(base, 1) == b"DeathCounter"
     assert text(base, 1) == b"SMIERCI: 5"
     assert frame(base) == 1
 
@@ -72,7 +72,7 @@ def test_respects_other_owners_and_updates_own_slot(fake_rtss):
     osd.show("ŚMIERCI: 1")  # bez zmian – bez nowej klatki
     osd.show("ŚMIERCI: 2")
     assert owner(base, 1) == b"Afterburner"
-    assert owner(base, 2) == b"DS2DeathCounter"
+    assert owner(base, 2) == b"DeathCounter"
     assert text(base, 2).endswith(b"2")
     assert frame(base) == 2
 

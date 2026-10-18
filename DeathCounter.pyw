@@ -2,7 +2,7 @@
 
 import sys
 
-from ds2counter.app import main
+from deathcounter.app import main
 
 if __name__ == "__main__":
     sys.exit(main())

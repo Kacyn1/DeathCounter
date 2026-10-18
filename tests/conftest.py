@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import pytest
 
-from ds2counter.config import DetectorSettings
+from deathcounter.config import DetectorSettings
 
 WIDTH, HEIGHT = 1280, 720
 TEXT_ROI = (440, 320, 400, 80)  # obszar napisu na syntetycznym ekranie śmierci
@@ -37,7 +37,7 @@ def gameplay_frame(seed: int, width: int = WIDTH, height: int = HEIGHT) -> np.nd
 
 
 def death_frame(seed: int, width: int = WIDTH, height: int = HEIGHT) -> np.ndarray:
-    """Przyciemniona rozgrywka z czerwonym napisem pośrodku (jak ekran śmierci DS2)."""
+    """Przyciemniona rozgrywka z czerwonym napisem pośrodku (jak ekran śmierci w grach z serii Souls)."""
     frame = (gameplay_frame(seed, width, height) * 0.35).astype(np.uint8)
     sx, sy = width / WIDTH, height / HEIGHT
     cv2.putText(

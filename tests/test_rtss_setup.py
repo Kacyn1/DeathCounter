@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from ds2counter.rtss_setup import _task_xml
+from deathcounter.rtss_setup import _task_xml
 
 NS = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
 

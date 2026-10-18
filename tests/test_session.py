@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from ds2counter.detector import CaptureHealth, DetectionSession
-from ds2counter.template import DeathTemplate
+from deathcounter.detector import CaptureHealth, DetectionSession
+from deathcounter.template import DeathTemplate
 
 from .conftest import TEXT_ROI, death_frame, gameplay_frame
 

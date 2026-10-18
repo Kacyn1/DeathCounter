@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from ds2counter.config import TemplateInfo
-from ds2counter.template import DeathTemplate, TemplateError
+from deathcounter.config import TemplateInfo
+from deathcounter.template import DeathTemplate, TemplateError
 
 from .conftest import TEXT_ROI, death_frame, gameplay_frame
 

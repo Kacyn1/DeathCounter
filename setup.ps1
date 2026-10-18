@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
 $venvPython = ".\.venv\Scripts\python.exe"
-$readyMarker = ".\.venv\.ds2-ready"
+$readyMarker = ".\.venv\.deathcounter-ready"
 
 function Find-Python {
     # Najpierw 3.12 (wersja z wymagan), potem najnowszy zainstalowany Python 3.
@@ -50,7 +50,7 @@ if ($Dev) { $requirements = "requirements-dev.txt" }
 & $venvPython -m pip install --disable-pip-version-check -r $requirements
 if ($LASTEXITCODE -ne 0) {
     throw ("Instalacja bibliotek nie powiodla sie - szczegoly powyzej. Sprawdz polaczenie z internetem; " +
-           "jesli blad mowi o dlugich sciezkach (long path), przenies folder programu blizej dysku, np. C:\DS2DeathCounter.")
+           "jesli blad mowi o dlugich sciezkach (long path), przenies folder programu blizej dysku, np. C:\DeathCounter.")
 }
 
 Set-Content -Path $readyMarker -Value "ok" -Encoding ascii

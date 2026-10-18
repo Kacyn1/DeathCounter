@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import sys
 import traceback
 
@@ -10,6 +11,7 @@ from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from .config import AppPaths, load_config
+from .icon import app_icon
 from .main_window import MainWindow
 from .storage import DeathStore, StorageError
 from .template import DeathTemplate, TemplateError
@@ -37,23 +39,33 @@ def _dark_palette() -> QPalette:
 def _install_excepthook() -> None:
     def hook(exc_type, exc, tb):
         details = "".join(traceback.format_exception(exc_type, exc, tb))
-        box = QMessageBox(QMessageBox.Icon.Critical, "DS2 Death Counter – błąd", f"Wystąpił nieoczekiwany błąd:\n{exc}")
+        box = QMessageBox(QMessageBox.Icon.Critical, "Death Counter – błąd", f"Wystąpił nieoczekiwany błąd:\n{exc}")
         box.setDetailedText(details)
         box.exec()
 
     sys.excepthook = hook
 
 
+def _set_app_user_model_id() -> None:
+    # Bez tego pasek zadań grupuje okno pod pythonw.exe i pokazuje ikonę Pythona.
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DeathCounter")
+    except (AttributeError, OSError):
+        pass
+
+
 def main() -> int:
+    _set_app_user_model_id()
     app = QApplication(sys.argv)
-    app.setApplicationName("DS2 Death Counter")
+    app.setApplicationName("Death Counter")
+    app.setWindowIcon(app_icon())
     app.setStyle("Fusion")
     app.setPalette(_dark_palette())
     _install_excepthook()
 
-    lock = QLockFile(QDir.temp().filePath("ds2-death-counter.lock"))
+    lock = QLockFile(QDir.temp().filePath("death-counter.lock"))
     if not lock.tryLock(100):
-        QMessageBox.warning(None, "DS2 Death Counter", "Program jest już uruchomiony.")
+        QMessageBox.warning(None, "Death Counter", "Program jest już uruchomiony.")
         return 1
 
     try:
@@ -61,7 +73,7 @@ def main() -> int:
         store = DeathStore(paths.deaths)
         store.load()
     except StorageError as exc:
-        QMessageBox.critical(None, "DS2 Death Counter", f"Nie można przygotować pliku wyniku.\n\n{exc}")
+        QMessageBox.critical(None, "Death Counter", f"Nie można przygotować pliku wyniku.\n\n{exc}")
         return 1
 
     warnings = [w for w in (store.warning,) if w]
@@ -79,5 +91,5 @@ def main() -> int:
     window = MainWindow(paths, store, config, template)
     window.show()
     for warning in warnings:
-        QMessageBox.warning(window, "DS2 Death Counter", warning)
+        QMessageBox.warning(window, "Death Counter", warning)
     return app.exec()

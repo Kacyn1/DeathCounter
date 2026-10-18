@@ -16,7 +16,7 @@ from ctypes import wintypes
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-TASK_NAME = "DS2DeathCounter - RTSS"
+TASK_NAME = "DeathCounter - RTSS"
 WINGET_ID = "Guru3D.RTSS"
 DEFAULT_PATH = Path(r"C:\Program Files (x86)\RivaTuner Statistics Server\RTSS.exe")
 CREATE_NO_WINDOW = 0x08000000
@@ -78,7 +78,7 @@ def install_with_winget() -> None:
 
 def create_start_task(rtss_path: Path) -> None:
     """Tworzy zadanie uruchamiające RTSS bez okna UAC. Wymaga jednorazowej zgody (UAC)."""
-    xml_path = Path(tempfile.gettempdir()) / "ds2deathcounter_rtss_task.xml"
+    xml_path = Path(tempfile.gettempdir()) / "deathcounter_rtss_task.xml"
     xml_path.write_text(_task_xml(rtss_path), encoding="utf-16")
     try:
         code = run_elevated("schtasks.exe", f'/Create /TN "{TASK_NAME}" /XML "{xml_path}" /F')
@@ -102,7 +102,7 @@ def _task_xml(rtss_path: Path) -> str:
     return f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Uruchamia RivaTuner Statistics Server dla DS2 Death Counter bez pytania o uprawnienia.</Description>
+    <Description>Uruchamia RivaTuner Statistics Server dla Death Counter bez pytania o uprawnienia.</Description>
   </RegistrationInfo>
   <Principals>
     <Principal id="Author">

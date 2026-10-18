@@ -1,6 +1,6 @@
 import json
 
-from ds2counter.config import AppConfig, TemplateInfo, load_config, save_config
+from deathcounter.config import AppConfig, TemplateInfo, load_config, save_config
 
 
 def test_defaults_when_missing(tmp_path):
