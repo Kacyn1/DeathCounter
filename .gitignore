@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.spec
+
+# dane użytkownika tworzone przez program
+deaths.json
+deaths.json.uszkodzony
+config.json
+template.png
