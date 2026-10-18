@@ -1,0 +1,72 @@
+LICENCJA UŻYTKOWNIKA PROGRAMU „DEATH COUNTER BY MK”
+
+Copyright (C) 2026 Mateusz Kacyna. Wszelkie prawa zastrzeżone.
+
+§ 1. Postanowienia ogólne
+
+1. Program „Death Counter by MK” (dalej: „Program”) – w tym jego kod źródłowy, pliki wykonywalne,
+   grafika, logo i dokumentacja – jest utworem chronionym prawem autorskim. Autorskie prawa majątkowe
+   do Programu przysługują Mateuszowi Kacynie (dalej: „Autor”).
+2. Autor udziela każdej osobie, która pobiera lub używa Programu (dalej: „Użytkownik”), nieodpłatnej,
+   niewyłącznej i nieprzenoszalnej licencji na warunkach opisanych poniżej. Licencja nie przenosi na
+   Użytkownika żadnych praw autorskich.
+3. Pobranie, uruchomienie lub używanie Programu oznacza akceptację niniejszej licencji. Jeśli
+   Użytkownik nie akceptuje jej warunków, nie może korzystać z Programu.
+
+§ 2. Co wolno Użytkownikowi
+
+1. Pobierać oficjalne wydania Programu z repozytorium https://github.com/Kacyn1/DeathCounter
+   i uruchamiać je na dowolnej liczbie własnych urządzeń.
+2. Używać Programu bezpłatnie, także podczas transmisji na żywo i nagrań oraz publikować wyniki,
+   zrzuty ekranu i certyfikaty wygenerowane przez Program.
+3. Przeglądać kod źródłowy, pobierać go z oficjalnego repozytorium oraz uruchamiać lub budować
+   z niego Program na własne potrzeby – bez wprowadzania zmian w kodzie.
+4. Przekazywać innym osobom odnośnik do oficjalnego repozytorium lub wydań Programu.
+
+§ 3. Czego nie wolno bez pisemnej zgody Autora
+
+1. Zmieniać, przerabiać ani tłumaczyć Programu, ani tworzyć na jego podstawie innych programów.
+2. Kopiować kodu źródłowego Programu lub jego fragmentów do innych projektów.
+3. Rozpowszechniać Programu – w oryginalnej lub zmienionej postaci – w tym udostępniać go do pobrania
+   w innych miejscach niż oficjalne repozytorium, sprzedawać, wynajmować lub dołączać do innych
+   produktów.
+4. Usuwać ani zmieniać oznaczeń autorstwa, nazwy Programu, logo i informacji o licencji.
+5. Obchodzić zabezpieczeń certyfikatów, wydobywać klucza podpisu z Programu ani wystawiać
+   certyfikatów, które nie zostały wygenerowane przez oficjalne wydanie Programu.
+
+Licencja nie ogranicza uprawnień, które Użytkownikowi przysługują z mocy prawa i których nie można
+wyłączyć umową (w szczególności art. 75 ust. 2 ustawy o prawie autorskim i prawach pokrewnych).
+
+§ 4. Biblioteki osób trzecich
+
+1. Program zawiera biblioteki osób trzecich, udostępniane na ich własnych licencjach, wymienionych
+   w pliku THIRD_PARTY_LICENSES.txt. Warunki tych licencji mają pierwszeństwo przed niniejszą
+   licencją w zakresie dotyczącym tych bibliotek.
+2. Biblioteki Qt for Python (PySide6) i Qt są objęte licencją GNU LGPL v3. Użytkownik może zastąpić
+   je własną, zmodyfikowaną wersją: w tym celu wolno mu zbudować Program z kodu źródłowego
+   z oficjalnego repozytorium oraz zmienić Program w zakresie niezbędnym do takiej podmiany i do
+   usuwania błędów z nią związanych. To uprawnienie nie obejmuje rozpowszechniania zmienionego Programu
+   poza zakresem wymaganym przez licencję LGPL v3.
+
+§ 5. Wkład w rozwój Programu
+
+Propozycje zmian (zgłoszenia błędów, pull requesty) są mile widziane na zasadach opisanych w pliku
+CONTRIBUTING.md.
+
+§ 6. Brak gwarancji
+
+1. Program jest udostępniany w stanie, w jakim się znajduje („tak jak jest”), bez jakiejkolwiek
+   gwarancji, w tym gwarancji przydatności do określonego celu i bezbłędnego działania.
+2. W granicach dopuszczalnych przez prawo Autor nie odpowiada za szkody wynikłe z używania Programu
+   lub niemożności jego używania.
+3. Program nie zmienia plików ani pamięci gier. Użytkownik sam odpowiada za przestrzeganie regulaminów
+   gier i usług (np. Discord, RivaTuner Statistics Server), z którymi używa Programu.
+
+§ 7. Zmiany licencji i postanowienia końcowe
+
+1. Autor może zmienić warunki licencji dla kolejnych wersji Programu. Każda wersja Programu podlega
+   licencji dołączonej do tej wersji.
+2. Naruszenie warunków licencji powoduje jej wygaśnięcie wobec Użytkownika, który ją naruszył.
+3. Licencja podlega prawu polskiemu.
+4. W sprawie zgody na korzystanie z Programu w szerszym zakresie (np. zmiany, rozpowszechnianie,
+   zastosowania komercyjne) należy skontaktować się z Autorem przez https://github.com/Kacyn1/DeathCounter.

@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import winapi
+from . import legal, winapi
 from .boss_panel import BossPanel
 from .bosses import BossTracker, format_duration, overlay_text
 from .calibration import CalibrationDialog, SavedCalibration
@@ -248,6 +248,9 @@ class MainWindow(QMainWindow):
         footer_row.addWidget(footer, 1)
         footer_row.addWidget(self.report_button)
         footer_row.addWidget(self.verify_button)
+        about_button = QPushButton("O programie")
+        about_button.clicked.connect(lambda: legal.show_about(self))
+        footer_row.addWidget(about_button)
         root.addLayout(footer_row)
 
         self.setCentralWidget(central)

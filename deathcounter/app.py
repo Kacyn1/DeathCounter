@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication, QInputDialog, QMessageBox
 from .config import GAMES, data_dir, legacy_data_present, load_config, migrate_legacy, save_config
 from .game_data import open_game
 from .icon import app_icon
+from .legal import ask_acceptance, license_id
 from .main_window import MainWindow
 from .storage import StorageError
 
@@ -94,6 +95,15 @@ def main() -> int:
     except StorageError as exc:
         QMessageBox.critical(None, "Death Counter by MK", f"Nie można przygotować pliku wyniku.\n\n{exc}")
         return 1
+
+    if config.license_accepted != license_id():
+        if not ask_acceptance():
+            return 0
+        config.license_accepted = license_id()
+        try:
+            save_config(base / "config.json", config)
+        except StorageError:
+            pass  # akceptacja zapisze się przy kolejnym zapisie ustawień
 
     warnings = ([config_warning] if config_warning else []) + game.warnings
     window = MainWindow(config, game)

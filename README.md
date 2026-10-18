@@ -155,6 +155,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
 | `deathcounter/report.py` | certyfikat PDF (QPdfWriter), weryfikacja |
 | `deathcounter/audit.py` | rejestr ręcznych korekt i zmian poza programem (`audit.json`) |
+| `deathcounter/legal.py` | licencja: akceptacja przy pierwszym uruchomieniu, okno „O programie” |
 | `deathcounter/signing.py` | kod weryfikacyjny certyfikatu (HMAC), klucz spoza repozytorium |
 | `deathcounter/discord_presence.py` | status na Discordzie (Rich Presence przez lokalny kanał Discorda) |
 | `deathcounter/config.py` | `config.json`, lista gier, ścieżki, `calibration.json`, przeniesienie starych danych |
@@ -169,3 +170,13 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/calibration.py` | okno kalibracji |
 | `deathcounter/main_window.py` | okno główne |
 | `deathcounter/icon.py` | ikona „DC” (okno i plik `.ico` dla `build.ps1`) |
+
+## Licencja
+
+Copyright (C) 2026 Mateusz Kacyna. Wszelkie prawa zastrzeżone.
+
+Program jest udostępniany na **licencji zastrzeżonej** ([LICENSE](LICENSE)): można go bezpłatnie pobierać i używać (także na streamach i nagraniach), przeglądać kod i budować program na własne potrzeby, ale bez pisemnej zgody autora nie wolno go zmieniać, kopiować kodu do innych projektów ani rozpowszechniać. Przy pierwszym uruchomieniu program prosi o akceptację licencji; jej treść jest też w oknie **O programie**.
+
+Program korzysta z bibliotek osób trzecich na ich własnych licencjach – Qt for Python (LGPL v3), OpenCV (Apache 2.0), NumPy (BSD), DXcam i comtypes (MIT) oraz Pythona (PSF); pełne teksty są w [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt). Licencja pozwala zbudować program z własną wersją bibliotek Qt, zgodnie z LGPL v3.
+
+Propozycje zmian: [CONTRIBUTING.md](CONTRIBUTING.md). Po aktualizacji bibliotek listę licencji odświeża `tools\make_third_party_licenses.py`.
