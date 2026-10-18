@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 
 from . import winapi
 from .boss_panel import BossPanel
-from .bosses import BossTracker, overlay_text
+from .bosses import BossTracker, format_duration, overlay_text
 from .calibration import CalibrationDialog, SavedCalibration
 from .icon import render as render_icon
 from .capture import CaptureError, grab_single_frame, list_outputs
@@ -39,7 +39,8 @@ from .game_data import GameData, counter_files, open_game
 from .detector import CaptureHealth, SampleResult
 from .discord_presence import DiscordPresence, build_activity
 from .overlay import OverlayWindow
-from .report import build_report_html, rows_from_records, write_pdf
+from .report import CertificateData, Verdict, rows_from_records, verify_pdf, write_certificate
+from .signing import load_key
 from .rtss import RtssOsd, RtssState
 from .storage import StorageError
 from .template import DeathTemplate, load_source_image, save_source_image
@@ -235,12 +236,18 @@ class MainWindow(QMainWindow):
         footer.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         footer.setWordWrap(True)
         self._refresh_footer()
-        self.report_button = QPushButton("Raport PDF…")
-        self.report_button.setToolTip("Raport: śmierci łącznie oraz bossowie pokonani i niepokonani (śmierci, czas walki).")
+        self.report_button = QPushButton("Certyfikat PDF…")
+        self.report_button.setToolTip(
+            "Certyfikat wybranej gry: śmierci, pokonani bossowie i ich czasy, z kodem weryfikacyjnym."
+        )
         self.report_button.clicked.connect(self.generate_report)
+        self.verify_button = QPushButton("Sprawdź certyfikat…")
+        self.verify_button.setToolTip("Sprawdza, czy plik PDF jest prawdziwym, niezmienionym certyfikatem.")
+        self.verify_button.clicked.connect(self.verify_certificate)
         footer_row = QHBoxLayout()
         footer_row.addWidget(footer, 1)
         footer_row.addWidget(self.report_button)
+        footer_row.addWidget(self.verify_button)
         root.addLayout(footer_row)
 
         self.setCentralWidget(central)
@@ -542,21 +549,67 @@ class MainWindow(QMainWindow):
         self.footer_label.setText(f"Dane gry: {self.paths.game_dir}")
 
     def generate_report(self) -> None:
+        player, ok = QInputDialog.getText(
+            self, "Certyfikat PDF", "Nick gracza na certyfikacie (możesz zostawić puste):", text=self.config.player_name
+        )
+        if not ok:
+            return
+        self.config.player_name = " ".join(player.split())[:60]
+        self._save_timer.start()
         now = datetime.now()
-        default = self.paths.base / f"DeathCounter_raport_{self.paths.game}_{now:%Y-%m-%d}.pdf"
-        path, _ = QFileDialog.getSaveFileName(self, "Zapisz raport PDF", str(default), "Dokument PDF (*.pdf)")
+        default = self.paths.base / f"DeathCounter_certyfikat_{self.paths.game}_{now:%Y-%m-%d}.pdf"
+        path, _ = QFileDialog.getSaveFileName(self, "Zapisz certyfikat PDF", str(default), "Dokument PDF (*.pdf)")
         if not path:
             return
         if not path.lower().endswith(".pdf"):
             path += ".pdf"
         rows = rows_from_records(self.bosses.store.records, self.bosses.current, self.bosses.elapsed())
+        data = CertificateData(self.config.game_name(self.paths.game), self.config.player_name,
+                               self.store.deaths, rows, now.replace(second=0, microsecond=0))
         try:
-            write_pdf(path, build_report_html(self.config.game_name(self.paths.game), self.store.deaths, rows, now))
+            code = write_certificate(path, data, load_key())
         except (StorageError, OSError) as exc:
-            QMessageBox.critical(self, "Raport PDF", f"Nie udało się zapisać raportu.\n\n{exc}")
+            QMessageBox.critical(self, "Certyfikat PDF", f"Nie udało się zapisać certyfikatu.\n\n{exc}")
             return
-        self.notice_label.setText(f"Zapisano raport: {path}")
+        signed = f" (kod {code})" if code else " – bez podpisu: ta wersja programu nie ma klucza"
+        self.notice_label.setText(f"Zapisano certyfikat{signed}: {path}")
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    def verify_certificate(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Sprawdź certyfikat", str(self.paths.base), "Dokument PDF (*.pdf)")
+        if not path:
+            return
+        try:
+            result = verify_pdf(path, load_key())
+        except StorageError as exc:
+            QMessageBox.critical(self, "Sprawdź certyfikat", str(exc))
+            return
+        title, icon = {
+            Verdict.VALID: ("Certyfikat jest prawdziwy", QMessageBox.Icon.Information),
+            Verdict.INVALID: ("Certyfikat został zmieniony albo podrobiony", QMessageBox.Icon.Critical),
+            Verdict.UNSIGNED: ("Certyfikat bez podpisu", QMessageBox.Icon.Warning),
+            Verdict.NO_KEY: ("Nie można sprawdzić podpisu", QMessageBox.Icon.Warning),
+            Verdict.NOT_CERTIFICATE: ("To nie jest certyfikat Death Counter by MK", QMessageBox.Icon.Warning),
+        }[result.verdict]
+        details = {
+            Verdict.VALID: "Dane i kod weryfikacyjny zgadzają się z podpisem. Sprawdź, czy poniższe dane są takie "
+                           "same jak na certyfikacie – tylko te zostały podpisane.",
+            Verdict.INVALID: "Dane zapisane w pliku nie pasują do kodu weryfikacyjnego.",
+            Verdict.UNSIGNED: "Certyfikat wystawiła wersja programu bez klucza podpisu (uruchomiona ze źródeł).",
+            Verdict.NO_KEY: "Ta wersja programu nie ma klucza podpisu. Użyj oficjalnego DeathCounter.exe.",
+            Verdict.NOT_CERTIFICATE: "Plik nie zawiera danych certyfikatu (to inny PDF albo zapisany ponownie "
+                                     "w innym programie).",
+        }[result.verdict]
+        box = QMessageBox(icon, "Sprawdź certyfikat", title, parent=self)
+        text = details
+        if result.data is not None and result.verdict is not Verdict.INVALID:
+            d = result.data
+            bosses = "\n".join(f"   • {b.name}: {b.deaths} śmierci, {format_duration(b.seconds)}"
+                               + ("" if b.defeated else " (w trakcie)") for b in d.bosses) or "   brak"
+            text += (f"\n\nGra: {d.game}\nGracz: {d.player or '–'}\nŚmierci: {d.deaths}\n"
+                     f"Wystawiono: {d.issued:%d.%m.%Y, %H:%M}\nKod: {result.code or '–'}\nBossowie:\n{bosses}")
+        box.setInformativeText(text)
+        box.exec()
 
     def _refresh_boss_hint(self) -> None:
         missing = [label for kind, label in (("boss_bar", "pasek bossa"), ("victory", "komunikat zwycięstwa"))

@@ -155,6 +155,7 @@ class AppConfig:
     bosses: BossSettings = field(default_factory=BossSettings)
     discord: DiscordSettings = field(default_factory=DiscordSettings)
     game: str = DEFAULT_GAME
+    player_name: str = ""  # nick gracza na certyfikacie
     custom_games: dict[str, str] = field(default_factory=dict)  # gry dodane przez użytkownika: id → nazwa
     auto_start: bool = False
 
@@ -289,6 +290,8 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
         }
     if data.get("game") in config.all_games():
         config.game = data["game"]
+    if isinstance(data.get("player_name"), str):
+        config.player_name = " ".join(data["player_name"].split())[:GAME_NAME_MAX]
     if isinstance(data.get("auto_start"), bool):
         config.auto_start = data["auto_start"]
     for part in (config.detector, config.capture, config.overlay, config.bosses, config.discord):

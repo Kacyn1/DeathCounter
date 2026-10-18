@@ -13,8 +13,14 @@ if ($LASTEXITCODE -ne 0) { throw "Testy nie przeszly - przerwano budowanie." }
 & $python -m deathcounter.icon build\DeathCounter.ico
 if ($LASTEXITCODE -ne 0) { throw "Nie udalo sie wygenerowac ikony." }
 
+# Tajny klucz podpisu certyfikatow (deathcounter\_signing_key.py, poza repozytorium) - tworzony raz.
+# Zachowaj jego kopie: bez niego nowe wersje nie potwierdza certyfikatow wystawionych wczesniej.
+& $python -m deathcounter.signing --init
+if ($LASTEXITCODE -ne 0) { throw "Nie udalo sie przygotowac klucza podpisu." }
+
 & $python -m PyInstaller --noconfirm --clean --onefile --windowed `
     --name DeathCounter --icon build\DeathCounter.ico `
+    --hidden-import deathcounter._signing_key `
     --exclude-module PySide6.QtWebEngineCore --exclude-module PySide6.QtWebEngineWidgets `
     --exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick --exclude-module PySide6.QtPdf `
     --exclude-module tkinter --exclude-module pytest `

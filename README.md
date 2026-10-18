@@ -90,9 +90,16 @@ Komunikat zwycięstwa widać tylko kilka sekund, dlatego najwygodniej zrobić zr
 
 Po ponownym uruchomieniu wykrywania (Start) napis widoczny na ekranie nie jest liczony od razu – musi najpierw zniknąć, żeby ta sama śmierć nie została policzona dwa razy.
 
-## Raport PDF
+## Certyfikat PDF
 
-Przycisk **Raport PDF…** (na dole okna) zapisuje raport A4 i od razu go otwiera. Raport zawiera łączną liczbę śmierci, liczbę pokonanych bossów, śmierci przy bossach i łączny czas walk, a w tabelach: **pokonanych bossów** (śmierci i czas pokonania) oraz bossów **niepokonanych** (walka w trakcie). Raport dotyczy wybranej gry; domyślnie plik trafia obok programu jako `DeathCounter_raport_<gra>_RRRR-MM-DD.pdf`.
+Przycisk **Certyfikat PDF…** (na dole okna) zapisuje certyfikat wybranej gry (A4 poziomo) i od razu go otwiera: logo, nick gracza (program pyta o niego i zapamiętuje), gra, śmierci łącznie, liczba pokonanych bossów, śmierci przy bossach i czas ich pokonania oraz lista pokonanych bossów. Gdy bossów jest więcej, pełna lista (także walki w trakcie) trafia do załącznika na kolejnych stronach.
+
+Zabezpieczenia przed podrobieniem:
+- **kod weryfikacyjny** na certyfikacie – podpis HMAC-SHA256 danych certyfikatu tajnym kluczem,
+- podpisane dane ukryte w metadanych pliku (XMP),
+- **niewidoczny znak wodny** – mikrotekst z kodem, grą, nickiem i liczbą śmierci, w kolorze prawie identycznym z tłem (widać go dopiero po powiększeniu i podbiciu kontrastu).
+
+Przycisk **Sprawdź certyfikat…** wczytuje PDF i mówi, czy jest prawdziwy, a także pokazuje podpisane dane – jeśli ktoś zmienił liczby na certyfikacie, widać różnicę. Klucz (`deathcounter\_signing_key.py`) nie trafia do repozytorium: `build.ps1` tworzy go przy pierwszym budowaniu i dołącza do exe. Certyfikaty z wersji uruchomionej ze źródeł (bez klucza) są oznaczone jako niepodpisane. Kod jest publiczny, a klucz da się wydobyć z exe, więc podpis bardzo utrudnia podrabianie, ale go nie wyklucza.
 
 ## Status na Discordzie
 
@@ -144,7 +151,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/storage.py` | `deaths.json`, zapis atomowy |
 | `deathcounter/bosses.py` | walka z bossem: maszyna stanów, timer, `bosses.json` (bez Qt, testowalne) |
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
-| `deathcounter/report.py` | raport PDF (QPdfWriter) |
+| `deathcounter/report.py` | certyfikat PDF (QPdfWriter), weryfikacja |
+| `deathcounter/signing.py` | kod weryfikacyjny certyfikatu (HMAC), klucz spoza repozytorium |
 | `deathcounter/discord_presence.py` | status na Discordzie (Rich Presence przez lokalny kanał Discorda) |
 | `deathcounter/config.py` | `config.json`, lista gier, ścieżki, `calibration.json`, przeniesienie starych danych |
 | `deathcounter/game_data.py` | wczytanie danych jednej gry (licznik, bossowie, wzorce) |

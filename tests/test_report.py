@@ -1,56 +1,105 @@
+import base64
+import os
+import re
 from datetime import datetime
 
 import pytest
 
 from deathcounter.bosses import STATUS_DEFEATED, STATUS_IN_PROGRESS, BossRecord
-from deathcounter.report import BossRow, build_report_html, rows_from_records, write_pdf
+from deathcounter.report import (
+    BossRow,
+    CertificateData,
+    Verdict,
+    rows_from_records,
+    verify_pdf,
+    write_certificate,
+)
+from deathcounter.signing import matches, verification_code
 
-WHEN = datetime(2026, 10, 18, 14, 45)
-
-
-def test_report_lists_defeated_and_pending_bosses():
-    rows = [
-        BossRow("Demon z Azylu", 2, 151, True),
-        BossRow("Taurus <Demon>", 5, 758, True),
-        BossRow("Boss 3", 1, 42, False),
-    ]
-    html = build_report_html("Dark Souls I", 42, rows, WHEN)
-    assert "Dark Souls I" in html
-    assert "18.10.2026, 14:45" in html
-    assert ">42<" in html                       # śmierci łącznie
-    assert "Pokonani bossowie" in html and ">2<" in html
-    assert "Taurus &lt;Demon&gt;" in html       # nazwa bezpiecznie wstawiona do HTML
-    assert "12:38" in html and "02:31" in html  # czasy pokonania
-    assert "Niepokonani" in html and "Boss 3" in html
-    assert "15:51" in html                      # łączny czas walk z bossami
+KEY = bytes(range(32))
+WHEN = datetime(2026, 10, 18, 18, 5)
 
 
-def test_report_without_bosses():
-    html = build_report_html("Elden Ring", 3, [], WHEN)
-    assert "Jeszcze żaden boss nie został pokonany." in html
-    assert "Niepokonani" not in html
+def sample(**changes) -> CertificateData:
+    data = dict(
+        game="Dark Souls I",
+        player="Kacyn",
+        deaths=57,
+        bosses=[BossRow("Demon z Azylu", 2, 151, True), BossRow("Ornstein i Smough", 23, 2710, False)],
+        issued=WHEN,
+    )
+    data.update(changes)
+    return CertificateData(**data)
+
+
+def test_verification_code_format_and_tamper_detection():
+    payload = sample().payload()
+    code = verification_code(payload, KEY)
+    assert re.fullmatch(r"[A-Z2-7]{4}(-[A-Z2-7]{4}){3}", code)
+    assert matches(payload, code, KEY)
+    assert matches(payload, code.lower(), KEY)
+    assert not matches(sample(deaths=5).payload(), code, KEY)       # zmiana liczby śmierci
+    assert not matches(payload, code, bytes(32))                     # inny klucz
+
+
+def test_payload_roundtrip():
+    data = sample()
+    restored = CertificateData.from_payload(data.payload())
+    assert restored == data
 
 
 def test_rows_use_live_time_for_current_boss():
-    records = {
-        "A": BossRecord(1, 100, STATUS_DEFEATED),
-        "B": BossRecord(2, 50, STATUS_IN_PROGRESS),
-    }
-    rows = rows_from_records(records, "B", 61.5)
-    assert rows == [BossRow("A", 1, 100, True), BossRow("B", 2, 61.5, False)]
+    records = {"A": BossRecord(1, 100, STATUS_DEFEATED), "B": BossRecord(2, 50, STATUS_IN_PROGRESS)}
+    assert rows_from_records(records, "B", 61.5) == [BossRow("A", 1, 100, True), BossRow("B", 2, 61.5, False)]
 
 
 @pytest.fixture(scope="module")
 def qt_app():
-    import os
-
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtGui import QGuiApplication
 
     return QGuiApplication.instance() or QGuiApplication([])
 
 
-def test_write_pdf_creates_pdf_file(qt_app, tmp_path):
-    path = tmp_path / "raport ąę.pdf"
-    write_pdf(path, build_report_html("Sekiro: Shadows Die Twice", 1, [BossRow("Demon z Azylu", 1, 60, True)], WHEN))
+def test_certificate_is_valid_after_writing(qt_app, tmp_path):
+    path = tmp_path / "certyfikat ąę.pdf"
+    code = write_certificate(path, sample(), KEY)
     assert path.read_bytes().startswith(b"%PDF")
+    result = verify_pdf(path, KEY)
+    assert result.verdict is Verdict.VALID
+    assert result.code == code
+    assert result.data == sample()
+
+
+def test_edited_certificate_is_detected(qt_app, tmp_path):
+    path = tmp_path / "certyfikat.pdf"
+    write_certificate(path, sample(deaths=57), KEY)
+    raw = path.read_bytes()
+    original = base64.b64encode(sample(deaths=57).payload())
+    forged = base64.b64encode(sample(deaths=3).payload())
+    path.write_bytes(raw.replace(original, forged))  # „poprawka” liczby śmierci w ukrytych danych
+    assert verify_pdf(path, KEY).verdict is Verdict.INVALID
+
+
+def test_unsigned_and_foreign_pdfs(qt_app, tmp_path):
+    unsigned = tmp_path / "bez_klucza.pdf"
+    assert write_certificate(unsigned, sample(), None) == ""
+    assert verify_pdf(unsigned, KEY).verdict is Verdict.UNSIGNED
+    signed = tmp_path / "z_kluczem.pdf"
+    write_certificate(signed, sample(), KEY)
+    assert verify_pdf(signed, None).verdict is Verdict.NO_KEY
+    other = tmp_path / "inny.pdf"
+    other.write_bytes(b"%PDF-1.4\n%zwykly dokument\n")
+    assert verify_pdf(other, KEY).verdict is Verdict.NOT_CERTIFICATE
+
+
+def test_many_bosses_go_to_appendix(qt_app, tmp_path):
+    from PySide6.QtPdf import QPdfDocument
+
+    bosses = [BossRow(f"Boss {i}", i, 60 * i, True) for i in range(30)]
+    path = tmp_path / "duzo.pdf"
+    write_certificate(path, sample(bosses=bosses), KEY)
+    doc = QPdfDocument()
+    doc.load(str(path))
+    assert doc.pageCount() == 3  # certyfikat + 2 strony załącznika (22 wiersze na stronę)
+    assert verify_pdf(path, KEY).verdict is Verdict.VALID
