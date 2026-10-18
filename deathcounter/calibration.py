@@ -25,8 +25,16 @@ from PySide6.QtWidgets import (
 from .template import DeathTemplate, TemplateError, read_image
 
 FrameProvider = Callable[[Callable[[np.ndarray | None, str | None], None]], None]
-# Zapisuje wzorzec danego rodzaju; zwraca komunikat błędu albo None.
-TemplateSaver = Callable[[str, DeathTemplate], "str | None"]
+# Zapisuje wzorzec danego rodzaju razem z pełnym zrzutem, z którego go wycięto; zwraca komunikat błędu albo None.
+TemplateSaver = Callable[[str, DeathTemplate, np.ndarray], "str | None"]
+
+
+@dataclass
+class SavedCalibration:
+    """Zapisany zrzut do pokazania w kalibracji; `full=False` – brak zrzutu, widać tylko sam wzorzec."""
+
+    frame: np.ndarray
+    full: bool
 
 
 def frame_to_qimage(frame: np.ndarray) -> QImage:
@@ -166,6 +174,7 @@ class CalibrationPage(QWidget):
         frame_provider: FrameProvider,
         saver: TemplateSaver,
         current_template: DeathTemplate | None,
+        saved: SavedCalibration | None,
         threshold: float,
         margin: float,
         hotkey_text: str | None,
@@ -176,6 +185,8 @@ class CalibrationPage(QWidget):
         self._frame_provider = frame_provider
         self._saver = saver
         self._current = current_template
+        self._saved = saved if current_template is not None else None
+        self._showing_saved = False
         self._threshold = threshold
         self._margin = margin
 
@@ -203,12 +214,29 @@ class CalibrationPage(QWidget):
         self.capture_button.clicked.connect(self._start_capture)
         load_button = QPushButton("Wczytaj zrzut z pliku…")
         load_button.clicked.connect(self._load_file)
+        self._hotkey_frame: np.ndarray | None = None
+        self.hotkey_button = QPushButton("Zrzut ze skrótu")
+        self.hotkey_button.setToolTip(f"Wstawia ostatni zrzut zrobiony skrótem {hotkey_text or 'Ctrl+Alt+F9'}.")
+        self.hotkey_button.setEnabled(False)
+        self.hotkey_button.clicked.connect(lambda: self.set_frame(self._hotkey_frame))
+        self.saved_button = QPushButton("Pokaż zapisany wzorzec")
+        self.saved_button.setToolTip("Wraca do obrazu, z którego wycięto zapisany wzorzec, z zaznaczonym obszarem.")
+        self.saved_button.clicked.connect(self.show_saved)
         source_row = QHBoxLayout()
         source_row.addWidget(QLabel("Opóźnienie:"))
         source_row.addWidget(self.delay)
         source_row.addWidget(self.capture_button)
         source_row.addWidget(load_button)
+        source_row.addWidget(self.hotkey_button)
         source_row.addStretch(1)
+        source_row.addWidget(self.saved_button)
+
+        self.saved_note = QLabel(
+            "Ten wzorzec zapisano we wcześniejszej wersji programu, bez pełnego zrzutu – widać tylko zaznaczony "
+            "fragment. Po ponownym zapisaniu wzorca kalibracja będzie pokazywać cały obraz."
+        )
+        self.saved_note.setWordWrap(True)
+        self.saved_note.setStyleSheet("color:#e0a050;")
 
         self.check_button = QPushButton("Sprawdź wzorzec")
         self.check_button.clicked.connect(self._check)
@@ -230,6 +258,7 @@ class CalibrationPage(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(intro)
         layout.addLayout(source_row)
+        layout.addWidget(self.saved_note)
         layout.addWidget(self.image, 1)
         layout.addLayout(check_row)
         layout.addLayout(save_row)
@@ -239,14 +268,38 @@ class CalibrationPage(QWidget):
         self._countdown.timeout.connect(self._tick)
         self._remaining = 0
         self._refresh_state()
-        self._on_selection_changed()
+        if self._saved is not None:
+            self.show_saved()
+        else:
+            self._update_saved_view()
+            self._on_selection_changed()
 
     # --- pozyskiwanie obrazu ---
+
+    def show_saved(self) -> None:
+        """Zapisany zrzut z obszarem, z którego wycięto bieżący wzorzec."""
+        if self._saved is None or self._current is None:
+            return
+        self.image.set_frame(self._saved.frame, QRect(*self._current.roi))
+        self.check_label.clear()
+        self._showing_saved = True
+        self._update_saved_view()
+        self._on_selection_changed()
+
+    def set_hotkey_frame(self, frame: np.ndarray) -> None:
+        self._hotkey_frame = frame
+        self.hotkey_button.setEnabled(True)
 
     def set_frame(self, frame: np.ndarray) -> None:
         # Bez automatycznego zaznaczenia: „Sprawdź wzorzec” ma wtedy testować zapisany wzorzec na nowym obrazie.
         self.image.set_frame(frame)
         self.check_label.clear()
+        self._showing_saved = False
+        self._update_saved_view()
+
+    def _update_saved_view(self) -> None:
+        self.saved_button.setEnabled(self._saved is not None and not self._showing_saved)
+        self.saved_note.setVisible(self._showing_saved and self._saved is not None and not self._saved.full)
 
     def _start_capture(self) -> None:
         self._remaining = self.delay.value()
@@ -309,7 +362,8 @@ class CalibrationPage(QWidget):
             self.selection_label.setText("Zaznaczenie: brak")
         else:
             x, y, w, h = selection
-            self.selection_label.setText(f"Zaznaczenie: {w}×{h} px w punkcie ({x}, {y})")
+            saved = " – zapisany wzorzec" if self._showing_saved and selection == self._current.roi else ""
+            self.selection_label.setText(f"Zaznaczenie: {w}×{h} px w punkcie ({x}, {y}){saved}")
         self.save_button.setEnabled(selection is not None)
         self.check_button.setEnabled(self.image.frame is not None and (selection is not None or self._current is not None))
 
@@ -348,11 +402,15 @@ class CalibrationPage(QWidget):
         except TemplateError as exc:
             QMessageBox.warning(self, "Kalibracja", str(exc))
             return
-        error = self._saver(self.kind.key, template)
+        error = self._saver(self.kind.key, template, self.image.frame)
         if error:
             QMessageBox.critical(self, "Błąd zapisu wzorca", error)
             return
         self._current = template
+        self._saved = SavedCalibration(self.image.frame, full=True)
+        self._showing_saved = True
+        self._update_saved_view()
+        self._on_selection_changed()
         self._refresh_state()
         self.check_label.setText("<span style='color:#5fd38d'>Wzorzec zapisany i używany przez wykrywanie.</span>")
 
@@ -367,6 +425,7 @@ class CalibrationDialog(QDialog):
         frame_provider: FrameProvider,
         saver: TemplateSaver,
         templates: dict[str, DeathTemplate | None],
+        saved: dict[str, SavedCalibration | None],
         threshold: float,
         margin: float,
         hotkey_text: str | None,
@@ -375,10 +434,12 @@ class CalibrationDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Kalibracja wzorców")
-        self.resize(1000, 760)
+        self.resize(1000, 800)
 
         self.pages = {
-            key: CalibrationPage(kind, frame_provider, saver, templates.get(key), threshold, margin, hotkey_text)
+            key: CalibrationPage(
+                kind, frame_provider, saver, templates.get(key), saved.get(key), threshold, margin, hotkey_text
+            )
             for key, kind in KINDS.items()
         }
         self.tabs = QTabWidget()
@@ -410,9 +471,11 @@ class CalibrationDialog(QDialog):
         layout.addLayout(buttons)
 
         if initial_frame is not None:
-            # Zrzut ze skrótu mógł dotyczyć dowolnego wzorca – jest dostępny w każdej zakładce.
+            # Świeży zrzut ze skrótu trafia do otwieranej zakładki; pozostałe pokazują zapisane wzorce,
+            # a zrzut można w nich wstawić przyciskiem „Zrzut ze skrótu”.
             for page in self.pages.values():
-                page.set_frame(initial_frame)
+                page.set_hotkey_frame(initial_frame)
+            self.pages[initial_kind].set_frame(initial_frame)
 
     def show_kind(self, key: str) -> None:
         if key == "death":
@@ -428,4 +491,6 @@ class CalibrationDialog(QDialog):
 
     def set_frame(self, frame: np.ndarray) -> None:
         """Zrzut ze skrótu w trakcie kalibracji trafia do zakładki, która jest właśnie otwarta."""
+        for page in self.pages.values():
+            page.set_hotkey_frame(frame)
         self.current_page().set_frame(frame)

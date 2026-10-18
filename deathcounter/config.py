@@ -159,6 +159,11 @@ class AppPaths:
     def template_path(self, kind: str) -> Path:
         return getattr(self, TEMPLATE_FIELDS[kind][1])
 
+    def source_path(self, kind: str) -> Path:
+        """Pełny zrzut, z którego wycięto wzorzec, np. boss_bar.png → boss_bar_source.jpg."""
+        path = self.template_path(kind)
+        return path.with_name(f"{path.stem}_source.jpg")
+
     @classmethod
     def default(cls) -> "AppPaths":
         return cls.in_dir(_data_dir())

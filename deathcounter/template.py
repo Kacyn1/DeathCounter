@@ -41,6 +41,28 @@ def read_image(path: Path) -> np.ndarray:
     return image
 
 
+def save_source_image(path: Path, frame: np.ndarray) -> None:
+    """Pełny zrzut, z którego wycięto wzorzec – pokazywany potem w oknie kalibracji (JPEG, by nie zajmował dużo)."""
+    if frame.ndim == 3 and frame.shape[2] == 4:
+        frame = frame[:, :, :3]
+    ok, encoded = cv2.imencode(".jpg", np.ascontiguousarray(frame), [cv2.IMWRITE_JPEG_QUALITY, 92])
+    if not ok:
+        raise StorageError("Nie można zakodować zrzutu kalibracji.")
+    atomic_write_bytes(Path(path), encoded.tobytes())
+
+
+def load_source_image(path: Path, reference_size: tuple[int, int]) -> np.ndarray | None:
+    """Zapisany zrzut kalibracji albo None, gdy go brak lub nie pasuje do wzorca (inny rozmiar)."""
+    if not Path(path).exists():
+        return None
+    try:
+        image = read_image(path)
+    except TemplateError:
+        return None
+    height, width = image.shape[:2]
+    return image if (width, height) == tuple(reference_size) else None
+
+
 class DeathTemplate:
     def __init__(self, image: np.ndarray, roi: tuple[int, int, int, int], reference_size: tuple[int, int]):
         image = to_gray(image)
@@ -84,6 +106,14 @@ class DeathTemplate:
             raise StorageError("Nie można zakodować obrazu wzorca.")
         atomic_write_bytes(Path(path), encoded.tobytes())
         return TemplateInfo(list(self.roi), list(self.reference_size))
+
+    def preview_frame(self) -> np.ndarray:
+        """Zastępczy obraz kalibracji, gdy brak zapisanego zrzutu: sam wzorzec na czarnym tle w swoim miejscu."""
+        width, height = self.reference_size
+        canvas = np.zeros((height, width, 3), np.uint8)
+        x, y, w, h = self.roi
+        canvas[y:y + h, x:x + w] = cv2.cvtColor(self.image, cv2.COLOR_GRAY2BGR)
+        return canvas
 
     def match(self, frame: np.ndarray, margin: float = 0.5) -> float:
         """Zwraca najlepsze dopasowanie (0–1) w okolicy miejsca, z którego pochodzi wzorzec.

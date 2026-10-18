@@ -34,6 +34,8 @@ Jeśli folderu programu nie da się zapisywać, dane trafiają do `%APPDATA%\Dea
 
 Wzorzec warto też sprawdzić na zwykłym zrzucie z rozgrywki. Wynik powinien być tam wyraźnie niższy od progu.
 
+Po zapisaniu wzorca okno kalibracji przy kolejnym otwarciu pokazuje w każdej zakładce zrzut, z którego go wycięto, wraz z zaznaczonym obszarem (przycisk **Pokaż zapisany wzorzec** wraca do niego po wczytaniu innego obrazu). Zrzuty leżą obok wzorców jako `template_source.jpg`, `boss_bar_source.jpg` i `victory_source.jpg`. Wzorce zapisane w wersji 1.2.0 i starszych nie mają zrzutu – widać wtedy sam wzorzec na czarnym tle, a po ponownym zapisaniu pojawi się cały obraz. Przycisk **Zrzut ze skrótu** wstawia ostatni zrzut zrobiony skrótem Ctrl+Alt+F9.
+
 ## Jak działa wykrywanie
 
 - Co ok. 0,1 s pobierana jest klatka (DXCam). Okolica miejsca napisu jest porównywana ze wzorcem (OpenCV, `TM_CCOEFF_NORMED`). Wzorzec skaluje się automatycznie do bieżącej rozdzielczości.

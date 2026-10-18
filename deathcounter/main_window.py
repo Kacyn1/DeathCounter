@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 from . import winapi
 from .boss_panel import BossPanel
 from .bosses import BossTracker, overlay_text
-from .calibration import CalibrationDialog
+from .calibration import CalibrationDialog, SavedCalibration
 from .capture import CaptureError, grab_single_frame, list_outputs
 from .config import TEMPLATE_FIELDS, AppConfig, AppPaths, save_config
 from .detector import CaptureHealth, SampleResult
@@ -37,7 +37,7 @@ from .overlay import OverlayWindow
 from .report import build_report_html, rows_from_records, write_pdf
 from .rtss import RtssOsd, RtssState
 from .storage import DeathStore, StorageError
-from .template import DeathTemplate
+from .template import DeathTemplate, load_source_image, save_source_image
 from . import rtss_setup
 from .worker import (
     BOSS_BAR_LOST,
@@ -597,15 +597,18 @@ class MainWindow(QMainWindow):
             callback(frame, error)
 
     def open_calibration(self, kind: str = "death") -> None:
+        # Zrzut ze skrótu trafia do otwieranej zakładki tylko raz; potem kalibracja pokazuje zapisane wzorce.
+        hotkey_frame, self._hotkey_frame = self._hotkey_frame, None
         dialog = CalibrationDialog(
             self,
             frame_provider=self.request_frame,
             saver=self._save_template,
             templates=self.templates,
+            saved={k: self._saved_calibration(k) for k in TEMPLATE_FIELDS},
             threshold=self.config.detector.threshold,
             margin=self.config.detector.search_margin,
             hotkey_text=HOTKEY_TEXT if HOTKEY_SNAPSHOT in self._hotkeys else None,
-            initial_frame=self._hotkey_frame,
+            initial_frame=hotkey_frame,
             initial_kind=kind,
         )
         self._calibration = dialog
@@ -614,13 +617,28 @@ class MainWindow(QMainWindow):
         finally:
             self._calibration = None
 
-    def _save_template(self, kind: str, template: DeathTemplate) -> str | None:
-        """Zapis wzorca z okna kalibracji: plik PNG + config.json, od razu używany przez wykrywanie."""
+    def _saved_calibration(self, kind: str) -> SavedCalibration | None:
+        template = self.templates[kind]
+        if template is None:
+            return None
+        frame = load_source_image(self.paths.source_path(kind), template.reference_size)
+        if frame is not None:
+            return SavedCalibration(frame, full=True)
+        return SavedCalibration(template.preview_frame(), full=False)
+
+    def _save_template(self, kind: str, template: DeathTemplate, frame: np.ndarray) -> str | None:
+        """Zapis wzorca z okna kalibracji: wzorzec PNG, pełny zrzut (do podglądu) i config.json.
+        Wzorzec jest od razu używany przez wykrywanie."""
         try:
             self.config.set_template_info(kind, template.save(self.paths.template_path(kind)))
             save_config(self.paths.config, self.config)
         except StorageError as exc:
             return str(exc)
+        try:
+            save_source_image(self.paths.source_path(kind), frame)
+        except StorageError as exc:
+            # Wzorzec działa także bez podglądu – zgłaszamy, ale nie przerywamy.
+            self.notice_label.setText(f"Wzorzec zapisany, ale bez zrzutu do podglądu: {exc}")
         self.templates[kind] = template
         self._refresh_template_label()
         self._refresh_boss_hint()
