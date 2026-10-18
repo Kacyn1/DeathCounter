@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import winsound
+from datetime import datetime
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QGridLayout,
     QGroupBox,
@@ -32,6 +34,7 @@ from .capture import CaptureError, grab_single_frame, list_outputs
 from .config import TEMPLATE_FIELDS, AppConfig, AppPaths, save_config
 from .detector import CaptureHealth, SampleResult
 from .overlay import OverlayWindow
+from .report import build_report_html, rows_from_records, write_pdf
 from .rtss import RtssOsd, RtssState
 from .storage import DeathStore, StorageError
 from .template import DeathTemplate
@@ -207,7 +210,13 @@ class MainWindow(QMainWindow):
         footer.setStyleSheet("color:#7d828a;")
         footer.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         footer.setWordWrap(True)
-        root.addWidget(footer)
+        self.report_button = QPushButton("Raport PDF…")
+        self.report_button.setToolTip("Raport: śmierci łącznie oraz bossowie pokonani i niepokonani (śmierci, czas walki).")
+        self.report_button.clicked.connect(self.generate_report)
+        footer_row = QHBoxLayout()
+        footer_row.addWidget(footer, 1)
+        footer_row.addWidget(self.report_button)
+        root.addLayout(footer_row)
 
         self.setCentralWidget(central)
         self.resize(640, 860)
@@ -360,6 +369,23 @@ class MainWindow(QMainWindow):
         }
         self._boss_event(handlers[event])
         self._refresh_overlay()
+
+    def generate_report(self) -> None:
+        now = datetime.now()
+        default = self.paths.base / f"DeathCounter_raport_{now:%Y-%m-%d}.pdf"
+        path, _ = QFileDialog.getSaveFileName(self, "Zapisz raport PDF", str(default), "Dokument PDF (*.pdf)")
+        if not path:
+            return
+        if not path.lower().endswith(".pdf"):
+            path += ".pdf"
+        rows = rows_from_records(self.bosses.store.records, self.bosses.current, self.bosses.elapsed())
+        try:
+            write_pdf(path, build_report_html(self.store.deaths, rows, now))
+        except (StorageError, OSError) as exc:
+            QMessageBox.critical(self, "Raport PDF", f"Nie udało się zapisać raportu.\n\n{exc}")
+            return
+        self.notice_label.setText(f"Zapisano raport: {path}")
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def _refresh_boss_hint(self) -> None:
         missing = [label for kind, label in (("boss_bar", "pasek bossa"), ("victory", "komunikat zwycięstwa"))

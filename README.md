@@ -78,6 +78,10 @@ Komunikat zwycięstwa widać tylko kilka sekund, dlatego najwygodniej zrobić zr
 
 Po ponownym uruchomieniu wykrywania (Start) napis widoczny na ekranie nie jest liczony od razu – musi najpierw zniknąć, żeby ta sama śmierć nie została policzona dwa razy.
 
+## Raport PDF
+
+Przycisk **Raport PDF…** (na dole okna) zapisuje raport A4 i od razu go otwiera. Raport zawiera łączną liczbę śmierci, liczbę pokonanych bossów, śmierci przy bossach i łączny czas walk, a w tabelach: **pokonanych bossów** (śmierci i czas pokonania) oraz bossów **niepokonanych** (walka w trakcie). Domyślnie plik trafia obok programu jako `DeathCounter_raport_RRRR-MM-DD.pdf`.
+
 ## Gra w pełnym ekranie
 
 Wiele gier (np. Dark Souls II) nie ma trybu okna bez ramek, dlatego program jest przygotowany na pełny ekran:
@@ -122,6 +126,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/storage.py` | `deaths.json`, zapis atomowy |
 | `deathcounter/bosses.py` | walka z bossem: maszyna stanów, timer, `bosses.json` (bez Qt, testowalne) |
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
+| `deathcounter/report.py` | raport PDF (QPdfWriter) |
 | `deathcounter/config.py` | `config.json`, ścieżki |
 | `deathcounter/template.py` | wzorzec napisu i dopasowanie |
 | `deathcounter/detector.py` | maszyna stanów detektora, kontrola obrazu (bez Qt, testowalne) |
