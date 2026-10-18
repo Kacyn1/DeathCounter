@@ -15,7 +15,7 @@ from deathcounter.config import (
     save_calibration,
     save_config,
 )
-from deathcounter.game_data import open_game
+from deathcounter.game_data import counter_files, open_game
 
 
 def test_defaults_when_missing(tmp_path):
@@ -180,3 +180,19 @@ def test_invalid_custom_games_are_dropped(tmp_path):
     loaded, _ = load_config(path)
     assert loaded.custom_games == {"ok-game": "Dobra"}
     assert loaded.game == "ds1"
+
+
+def test_remove_custom_game():
+    config = AppConfig()
+    config.game = config.add_game("Lies of P")
+    config.remove_game("lies-of-p")
+    assert "lies-of-p" not in config.all_games()
+    assert config.game == "ds1"
+    config.remove_game("ds3")  # gry wbudowanej nie da się usunąć z listy
+    assert "ds3" in config.all_games()
+
+
+def test_counter_files_keep_calibration(tmp_path):
+    paths = AppPaths.for_game(tmp_path, "ds1")
+    names = {p.name for p in counter_files(paths)}
+    assert names == {"deaths.json", "deaths.json.uszkodzony", "bosses.json", "bosses.json.uszkodzony"}

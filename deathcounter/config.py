@@ -165,6 +165,12 @@ class AppConfig:
         self.custom_games[game_id] = name
         return game_id
 
+    def remove_game(self, game: str) -> None:
+        """Usuwa grę dodaną przez użytkownika z listy (gier wbudowanych nie można usunąć)."""
+        self.custom_games.pop(game, None)
+        if self.game == game:
+            self.game = DEFAULT_GAME
+
 
 @dataclass
 class Calibration:

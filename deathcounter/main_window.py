@@ -32,8 +32,8 @@ from .boss_panel import BossPanel
 from .bosses import BossTracker, overlay_text
 from .calibration import CalibrationDialog, SavedCalibration
 from .capture import CaptureError, grab_single_frame, list_outputs
-from .config import AppConfig, save_calibration, save_config
-from .game_data import GameData, open_game
+from .config import DEFAULT_GAME, AppConfig, save_calibration, save_config
+from .game_data import GameData, counter_files, open_game
 from .detector import CaptureHealth, SampleResult
 from .overlay import OverlayWindow
 from .report import build_report_html, rows_from_records, write_pdf
@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
         self.config = config
         self._use_game(game)
         self._pending_game: str | None = None   # zmiana gry czeka na zatrzymanie wykrywania
+        self._pending_delete: str | None = None  # usunięcie licznika też
         self.worker: DetectionWorker | None = None
         self._status = DetectorStatus.STOPPED
         self._frame_callbacks: list = []
@@ -132,10 +133,17 @@ class MainWindow(QMainWindow):
         )
         self.game_combo.setMinimumWidth(260)
         self.game_combo.currentIndexChanged.connect(self._on_game_selected)
+        self.delete_counter_button = QPushButton("Usuń licznik")
+        self.delete_counter_button.setToolTip(
+            "Gra dodana przez Ciebie znika z listy razem z licznikiem, bossami i kalibracją.\n"
+            "Przy grze wbudowanej usuwa licznik śmierci i bossów, a kalibracja zostaje. Pliki trafiają do Kosza."
+        )
+        self.delete_counter_button.clicked.connect(self.confirm_delete_counter)
         game_row = QHBoxLayout()
         game_row.addStretch(1)
         game_row.addWidget(QLabel("Gra:"))
         game_row.addWidget(self.game_combo)
+        game_row.addWidget(self.delete_counter_button)
         game_row.addStretch(1)
         root.addLayout(game_row)
 
@@ -433,9 +441,11 @@ class MainWindow(QMainWindow):
             return
         self._switch_game(game_id, restart=False)
 
-    def _switch_game(self, game_id: str, restart: bool) -> None:
-        if game_id != self.paths.game:
-            self._boss_event(self.bosses.pause)  # czas trwającej walki zostaje zapisany
+    def _switch_game(self, game_id: str, restart: bool, reload: bool = False) -> None:
+        """Wczytuje dane gry; `reload` – ponownie tej samej (po usunięciu jej licznika, bez zapisu starych danych)."""
+        if game_id != self.paths.game or reload:
+            if not reload:
+                self._boss_event(self.bosses.pause)  # czas trwającej walki zostaje zapisany
             try:
                 game = open_game(self.paths.base, game_id)
             except StorageError as exc:
@@ -460,6 +470,55 @@ class MainWindow(QMainWindow):
         # Wykrywanie wraca, jeśli działało przed zmianą gry albo ma się włączać samo (np. po grze bez wzorców).
         if (restart or self.config.auto_start) and self.templates["death"] is not None:
             self.start_detection()
+
+    def confirm_delete_counter(self) -> None:
+        game_id = self.paths.game
+        name = self.config.game_name(game_id)
+        custom = game_id in self.config.custom_games
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Usuń licznik")
+        box.setText(f"Czy na pewno chcesz usunąć licznik {name}?")
+        box.setInformativeText(
+            "Gra zniknie z listy, a jej licznik śmierci, bossowie i kalibracja trafią do Kosza."
+            if custom
+            else f"Licznik śmierci ({self.store.deaths}) i lista bossów trafią do Kosza. "
+                 "Gra zostaje na liście, a jej kalibracja się nie zmienia."
+        )
+        yes = box.addButton("Tak", QMessageBox.ButtonRole.YesRole)
+        no = box.addButton("Nie", QMessageBox.ButtonRole.NoRole)
+        box.setDefaultButton(no)
+        box.exec()
+        if box.clickedButton() is not yes:
+            return
+        if self.worker is not None:
+            # Wątek wykrywania korzysta z danych gry – usuwamy je dopiero po jego zatrzymaniu.
+            self._pending_delete = game_id
+            self.stop_detection()
+            return
+        self._delete_counter(game_id, restart=False)
+
+    def _delete_counter(self, game_id: str, restart: bool) -> None:
+        name = self.config.game_name(game_id)
+        old_paths = self.paths
+        try:
+            if game_id in self.config.custom_games:
+                # Najpierw przełączenie na inną grę (zapisuje i zwalnia dane), potem usunięcie folderu.
+                self._switch_game(DEFAULT_GAME, restart=False)
+                winapi.send_to_recycle_bin([old_paths.game_dir])
+                self.config.remove_game(game_id)
+                self._save_config()
+                self._fill_games()
+            else:
+                winapi.send_to_recycle_bin(counter_files(old_paths))
+                self._switch_game(game_id, restart=False, reload=True)
+        except OSError as exc:
+            QMessageBox.critical(self, "Usuń licznik", f"Nie udało się usunąć licznika {name}.\n\n{exc}")
+            return
+        finally:
+            if restart and self.worker is None and self.templates["death"] is not None:
+                self.start_detection()
+        self.notice_label.setText(f"Usunięto licznik {name} (pliki są w Koszu).")
 
     def _refresh_footer(self) -> None:
         self.footer_label.setText(f"Dane gry: {self.paths.game_dir}")
@@ -570,6 +629,9 @@ class MainWindow(QMainWindow):
         if self._pending_game is not None:
             game_id, self._pending_game = self._pending_game, None
             self._switch_game(game_id, restart=True)
+        if self._pending_delete is not None:
+            game_id, self._pending_delete = self._pending_delete, None
+            self._delete_counter(game_id, restart=True)
 
     def _on_sample(self, result: SampleResult) -> None:
         check = result.check

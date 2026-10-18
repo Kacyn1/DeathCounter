@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import wintypes
+from pathlib import Path
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
@@ -71,3 +72,38 @@ def unregister_hotkey(hwnd: int, hotkey_id: int) -> None:
 
 def message_from_native(message) -> wintypes.MSG:
     return wintypes.MSG.from_address(int(message))
+
+
+class _SHFILEOPSTRUCTW(ctypes.Structure):
+    _fields_ = [
+        ("hwnd", wintypes.HWND),
+        ("wFunc", wintypes.UINT),
+        ("pFrom", wintypes.LPCWSTR),
+        ("pTo", wintypes.LPCWSTR),
+        ("fFlags", wintypes.WORD),
+        ("fAnyOperationsAborted", wintypes.BOOL),
+        ("hNameMappings", wintypes.LPVOID),
+        ("lpszProgressTitle", wintypes.LPCWSTR),
+    ]
+
+
+FO_DELETE = 0x0003
+FOF_SILENT, FOF_NOCONFIRMATION, FOF_ALLOWUNDO, FOF_NOERRORUI = 0x0004, 0x0010, 0x0040, 0x0400
+
+shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+shell32.SHFileOperationW.argtypes = [ctypes.POINTER(_SHFILEOPSTRUCTW)]
+shell32.SHFileOperationW.restype = ctypes.c_int
+
+
+def send_to_recycle_bin(paths) -> None:
+    """Przenosi pliki lub foldery do Kosza (można je stamtąd przywrócić). OSError przy niepowodzeniu."""
+    existing = [str(Path(p).resolve()) for p in paths if Path(p).exists()]
+    if not existing:
+        return
+    op = _SHFILEOPSTRUCTW()
+    op.wFunc = FO_DELETE
+    op.pFrom = "\0".join(existing) + "\0\0"  # lista ścieżek zakończona podwójnym zerem
+    op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI
+    code = shell32.SHFileOperationW(ctypes.byref(op))
+    if code != 0 or op.fAnyOperationsAborted:
+        raise OSError(f"Nie udało się przenieść do Kosza (kod {code:#x}). Sprawdź, czy pliki nie są otwarte.")

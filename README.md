@@ -28,6 +28,8 @@ Lista **Gra** nad licznikiem: Dark Souls I, Dark Souls II, Dark Souls III, Sekir
 
 Grę spoza listy dodasz pozycją **+ Dodaj grę…** na końcu listy: po podaniu nazwy program tworzy dla niej nowy licznik (z bossami i kalibracją) i od razu ją wybiera. Dodane gry zapisują się w `config.json` (`custom_games`), a ich dane w `games\<nazwa-gry>\`, np. `games\lies-of-p\`.
 
+Przycisk **Usuń licznik** obok listy (po potwierdzeniu Tak/Nie) przenosi dane wybranej gry do **Kosza**, skąd można je przywrócić. Gra dodana przez użytkownika znika wtedy z listy razem z licznikiem, bossami i kalibracją, a program przechodzi na Dark Souls I. Przy grze wbudowanej usuwany jest licznik śmierci i lista bossów – gra zostaje na liście, a jej kalibracja się nie zmienia.
+
 Dane gry leżą w `games\<gra>\` obok programu (`ds1`, `ds2`, `ds3`, `sekiro`, `eldenring`): `deaths.json`, `bosses.json`, `calibration.json` i pliki wzorców. Po aktualizacji z wersji bez wyboru gry program jednorazowo pyta, do której gry przypisać dotychczasowy licznik, bossów i kalibrację, i przenosi je do jej folderu.
 
 ## Pierwsze użycie: kalibracja
