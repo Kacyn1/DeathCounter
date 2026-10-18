@@ -100,7 +100,7 @@ class RtssSettings:
 
 
 # Identyfikator aplikacji „Death Counter by MK” w Discord Developer Portal (nazwa i logo w statusie).
-DEFAULT_DISCORD_CLIENT_ID = ""
+DEFAULT_DISCORD_CLIENT_ID = "1561403894460846100"
 
 
 @dataclass
