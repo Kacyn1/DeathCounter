@@ -31,6 +31,7 @@ from . import winapi
 from .boss_panel import BossPanel
 from .bosses import BossTracker, overlay_text
 from .calibration import CalibrationDialog, SavedCalibration
+from .icon import render as render_icon
 from .capture import CaptureError, grab_single_frame, list_outputs
 from .config import DEFAULT_GAME, AppConfig, save_calibration, save_config
 from .game_data import GameData, counter_files, open_game
@@ -842,6 +843,7 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self._set_taskbar_icon()
         if self._hotkeys:
             return
         failed = []
@@ -852,6 +854,18 @@ class MainWindow(QMainWindow):
                 failed.append(text)
         if failed:
             self.notice_label.setText(f"Skróty zajęte przez inny program: {', '.join(failed)}.")
+
+    def _set_taskbar_icon(self) -> None:
+        """Qt podaje Windows ikonę 32 px, a pasek zadań przy 100% skalowania ma 24 px – zmniejszona ikona
+        rozmywa napis „by MK”. Dlatego ustawiamy ikonę dokładnie w rozmiarze przycisku na pasku."""
+        size = round(24 * self.devicePixelRatioF())
+        image = render_icon(size)
+        try:
+            hicon = image.toHICON()
+        except (AttributeError, RuntimeError):
+            return
+        self._taskbar_hicon = hicon  # uchwyt musi żyć tak długo jak okno
+        winapi.set_big_icon(int(self.winId()), int(hicon))
 
     def nativeEvent(self, event_type, message):
         if bytes(event_type) == b"windows_generic_MSG":

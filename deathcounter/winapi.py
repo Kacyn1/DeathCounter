@@ -107,3 +107,14 @@ def send_to_recycle_bin(paths) -> None:
     code = shell32.SHFileOperationW(ctypes.byref(op))
     if code != 0 or op.fAnyOperationsAborted:
         raise OSError(f"Nie udało się przenieść do Kosza (kod {code:#x}). Sprawdź, czy pliki nie są otwarte.")
+
+
+WM_SETICON = 0x0080
+ICON_BIG = 1
+user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+user32.SendMessageW.restype = wintypes.LPARAM
+
+
+def set_big_icon(hwnd: int, hicon: int) -> None:
+    """Duża ikona okna – z niej Windows rysuje przycisk na pasku zadań."""
+    user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon)

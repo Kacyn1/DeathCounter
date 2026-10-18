@@ -15,7 +15,6 @@ if ($LASTEXITCODE -ne 0) { throw "Nie udalo sie wygenerowac ikony." }
 
 & $python -m PyInstaller --noconfirm --clean --onefile --windowed `
     --name DeathCounter --icon build\DeathCounter.ico `
-    --add-data "deathcounter\assets\logo.png;deathcounter\assets" `
     --exclude-module PySide6.QtWebEngineCore --exclude-module PySide6.QtWebEngineWidgets `
     --exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick --exclude-module PySide6.QtPdf `
     --exclude-module tkinter --exclude-module pytest `
