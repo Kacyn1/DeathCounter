@@ -36,7 +36,9 @@ from .icon import render as render_icon
 from .capture import CaptureError, grab_single_frame, list_outputs
 from .config import DEFAULT_GAME, AppConfig, save_calibration, save_config
 from .game_data import GameData, counter_files, open_game
+from . import __version__
 from .detector import CaptureHealth, SampleResult
+from .diagnostics import DiagnosticLog
 from .discord_presence import DiscordPresence, build_activity
 from .overlay import OverlayWindow
 from .report import Adjustments, CertificateData, Verdict, rows_from_records, verify_pdf, write_certificate
@@ -89,6 +91,9 @@ class MainWindow(QMainWindow):
         self._use_game(game)
         self._pending_game: str | None = None   # zmiana gry czeka na zatrzymanie wykrywania
         self._pending_delete: str | None = None  # usunięcie licznika też
+        self.diag = DiagnosticLog(self.paths.base / "diagnostyka.log")
+        self.diag.write(f"=== Death Counter by MK {__version__} – gra: {self.config.game_name(self.paths.game)}, "
+                        f"śmierci: {self.store.deaths}, śledzenie bossa: {self.config.bosses.track} ===")
         self.worker: DetectionWorker | None = None
         self._status = DetectorStatus.STOPPED
         self._frame_callbacks: list = []
@@ -380,10 +385,12 @@ class MainWindow(QMainWindow):
         self._refresh_count()
 
     def _manual_plus(self, manual: bool = True) -> None:
+        self.diag.write(f"RĘCZNIE +1 (było {self.store.deaths})")
         self._change_deaths(self.store.increment, manual, self.bosses.manual_add, correction=True)
 
     def _manual_minus(self, manual: bool = True) -> None:
         if self.store.deaths > 0:
+            self.diag.write(f"RĘCZNIE −1 (było {self.store.deaths})")
             self._change_deaths(self.store.decrement, manual, self.bosses.manual_undo, correction=True)
 
     def _refresh_count(self) -> None:
@@ -419,7 +426,10 @@ class MainWindow(QMainWindow):
             BOSS_VICTORY: self.bosses.victory,
             FRAMES_LOST: self.bosses.frames_lost,
         }
+        before = self.bosses.state.value
         self._boss_event(handlers[event])
+        self.diag.write(f"BOSS: zdarzenie {event}, stan {before} → {self.bosses.state.value}"
+                        + (f", niepewne: {self.bosses.uncertain}" if self.bosses.uncertain else ""))
         self._refresh_overlay()
 
     # ------------------------------------------------------------------ gra
@@ -500,6 +510,7 @@ class MainWindow(QMainWindow):
                 self._refresh_footer()
                 self._set_status(self._idle_status(), self._idle_message())
                 self.notice_label.setText(f"Wybrano grę: {self.config.game_name(game_id)}.")
+                self.diag.write(f"ZMIANA GRY: {self.config.game_name(game_id)}, śmierci: {self.store.deaths}")
                 for warning in game.warnings:
                     QMessageBox.warning(self, "Death Counter by MK", warning)
         self._refresh_boss_hint()
@@ -696,7 +707,12 @@ class MainWindow(QMainWindow):
             self._change_deaths(self.store.reset, manual=True, correction=True)
 
     def _on_death_detected(self) -> None:
+        before, state = self.store.deaths, self.bosses.state.value
+        boss_deaths = self.bosses.record.deaths if self.bosses.record else None
         self._change_deaths(self.store.increment, manual=False, boss_event=self.bosses.death)
+        after_boss = self.bosses.record.deaths if self.bosses.record else None
+        self.diag.write(f"ŚMIERĆ WYKRYTA: licznik {before} → {self.store.deaths}, stan bossa {state} → "
+                        f"{self.bosses.state.value}, śmierci bossa {boss_deaths} → {after_boss}")
 
     # ---------------------------------------------------------- wykrywanie
 
@@ -721,6 +737,9 @@ class MainWindow(QMainWindow):
         worker.notice.connect(self.notice_label.setText)
         worker.finished.connect(self._on_worker_finished)
         self.worker = worker
+        self.diag.reset_detector_state()
+        self.diag.write(f"START wykrywania (próg {self.config.detector.threshold:.2f}, wzorce: "
+                        + ", ".join(k for k, v in self.templates.items() if v is not None) + ")")
         self._stop_requested = False
         self.start_button.setText("Stop")
         self._set_status(DetectorStatus.ACTIVE, "Uruchamianie przechwytywania…")
@@ -738,6 +757,7 @@ class MainWindow(QMainWindow):
         worker, self.worker = self.worker, None
         if worker is not None:
             worker.deleteLater()
+        self.diag.write("STOP wykrywania")
         self._flush_frame_callbacks(None, "Wykrywanie zostało zatrzymane przed pobraniem obrazu.")
         self.start_button.setEnabled(True)
         self.start_button.setText("Start")
@@ -786,9 +806,12 @@ class MainWindow(QMainWindow):
         if result.victory_score is not None:
             parts.append(f"zwycięstwo {result.victory_score:.2f}")
         self.boss_score_label.setText(", ".join(parts) or "–")
+        self.diag.sample(result, self.config.detector.threshold, self.bosses.state.value)
 
     def _set_status(self, status: DetectorStatus, message: str) -> None:
         self._status = status
+        if hasattr(self, "diag"):
+            self.diag.status(f"{status.value} – {message}")
         self.status_label.setText(status.value.upper())
         self.status_label.setStyleSheet(
             f"padding:2px 8px; border-radius:4px; color:white; font-weight:bold; background:{STATUS_COLORS[status]};"

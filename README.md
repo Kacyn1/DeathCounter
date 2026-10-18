@@ -130,6 +130,10 @@ Wiele gier (np. Dark Souls II) nie ma trybu okna bez ramek, dlatego program jest
 - **Automatyczny start.** Opcja „Włączaj wykrywanie przy starcie” pozwala uruchomić licznik przed grą i nie przełączać się do jego okna.
 - **Przechwytywanie obrazu** (DXGI Desktop Duplication) działa w pełnym ekranie. Gdy gra zmienia tryb ekranu albo rozdzielczość, przechwytywanie jest odtwarzane automatycznie, a wzorzec przeskalowany.
 
+## Zgłaszanie błędów: plik diagnostyczny
+
+Obok programu powstaje `diagnostyka.log` (najwyżej ok. 2 MB, starsza część trafia do `diagnostyka.log.1`). Zapisuje przebieg wykrywania: start i stop, każdą wykrytą śmierć (licznik ogólny i bossa przed i po), przejścia detektora („gotowy” / „czeka na zniknięcie napisu”), zdarzenia walki z bossem, zmiany stanu i co 5 s wyniki dopasowania wzorców. Nie zawiera obrazów. Przy zgłaszaniu błędu dołącz ten plik i napisz, o której godzinie wystąpił problem.
+
 ## Ograniczenia
 
 - Skuteczność wykrywania trzeba potwierdzić na docelowym komputerze: śmierci od bossów, przeciwników, upadków i efektów obrażeń.
@@ -155,6 +159,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
 | `deathcounter/report.py` | certyfikat PDF (QPdfWriter), weryfikacja |
 | `deathcounter/audit.py` | rejestr ręcznych korekt i zmian poza programem (`audit.json`) |
+| `deathcounter/diagnostics.py` | plik diagnostyczny `diagnostyka.log` |
 | `deathcounter/legal.py` | licencja (GNU GPL v3) i licencje bibliotek, okno „O programie” |
 | `deathcounter/signing.py` | kod weryfikacyjny certyfikatu (HMAC), klucz spoza repozytorium |
 | `deathcounter/discord_presence.py` | status na Discordzie (Rich Presence przez lokalny kanał Discorda) |
