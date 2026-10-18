@@ -99,6 +99,23 @@ class RtssSettings:
         pass
 
 
+# Identyfikator aplikacji „Death Counter by MK” w Discord Developer Portal (nazwa i logo w statusie).
+DEFAULT_DISCORD_CLIENT_ID = ""
+
+
+@dataclass
+class DiscordSettings:
+    enabled: bool = False   # „Status na Discordzie”
+    client_id: str = ""     # puste = DEFAULT_DISCORD_CLIENT_ID
+
+    def sanitize(self) -> None:
+        self.client_id = self.client_id.strip() if self.client_id.strip().isdigit() else ""
+
+    @property
+    def effective_client_id(self) -> str:
+        return self.client_id or DEFAULT_DISCORD_CLIENT_ID
+
+
 @dataclass
 class BossSettings:
     track: bool = False              # „Śledź walkę z bossem”
@@ -136,6 +153,7 @@ class AppConfig:
     overlay: OverlaySettings = field(default_factory=OverlaySettings)
     rtss: RtssSettings = field(default_factory=RtssSettings)
     bosses: BossSettings = field(default_factory=BossSettings)
+    discord: DiscordSettings = field(default_factory=DiscordSettings)
     game: str = DEFAULT_GAME
     custom_games: dict[str, str] = field(default_factory=dict)  # gry dodane przez użytkownika: id → nazwa
     auto_start: bool = False
@@ -260,6 +278,7 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
     _fill(config.overlay, data.get("overlay"))
     _fill(config.rtss, data.get("rtss"))
     _fill(config.bosses, data.get("bosses"))
+    _fill(config.discord, data.get("discord"))
     custom = data.get("custom_games")
     if isinstance(custom, dict):
         config.custom_games = {
@@ -272,7 +291,7 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
         config.game = data["game"]
     if isinstance(data.get("auto_start"), bool):
         config.auto_start = data["auto_start"]
-    for part in (config.detector, config.capture, config.overlay, config.bosses):
+    for part in (config.detector, config.capture, config.overlay, config.bosses, config.discord):
         part.sanitize()
     return config, None
 

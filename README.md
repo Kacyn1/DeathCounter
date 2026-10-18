@@ -94,6 +94,12 @@ Po ponownym uruchomieniu wykrywania (Start) napis widoczny na ekranie nie jest l
 
 Przycisk **Raport PDF…** (na dole okna) zapisuje raport A4 i od razu go otwiera. Raport zawiera łączną liczbę śmierci, liczbę pokonanych bossów, śmierci przy bossach i łączny czas walk, a w tabelach: **pokonanych bossów** (śmierci i czas pokonania) oraz bossów **niepokonanych** (walka w trakcie). Raport dotyczy wybranej gry; domyślnie plik trafia obok programu jako `DeathCounter_raport_<gra>_RRRR-MM-DD.pdf`.
 
+## Status na Discordzie
+
+Opcja **Status na Discordzie** (sekcja „Nakładka”) pokazuje w Twoim statusie Discord wybraną grę, liczbę śmierci i czas od rozpoczęcia sesji. Program rozmawia tylko z aplikacją Discord uruchomioną na tym komputerze (lokalny kanał Rich Presence) i sam łączy się ponownie, gdy Discord zostanie włączony później. Wyłączenie opcji lub zamknięcie programu czyści status.
+
+Do działania potrzebny jest identyfikator aplikacji z [Discord Developer Portal](https://discord.com/developers/applications) (nazwa tej aplikacji pojawia się w statusie jako „Gra w …”). Własny identyfikator można wpisać w `config.json` → `discord` → `client_id`.
+
 ## Gra w pełnym ekranie
 
 Wiele gier (np. Dark Souls II) nie ma trybu okna bez ramek, dlatego program jest przygotowany na pełny ekran:
@@ -139,6 +145,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/bosses.py` | walka z bossem: maszyna stanów, timer, `bosses.json` (bez Qt, testowalne) |
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
 | `deathcounter/report.py` | raport PDF (QPdfWriter) |
+| `deathcounter/discord_presence.py` | status na Discordzie (Rich Presence przez lokalny kanał Discorda) |
 | `deathcounter/config.py` | `config.json`, lista gier, ścieżki, `calibration.json`, przeniesienie starych danych |
 | `deathcounter/game_data.py` | wczytanie danych jednej gry (licznik, bossowie, wzorce) |
 | `deathcounter/template.py` | wzorzec napisu i dopasowanie |

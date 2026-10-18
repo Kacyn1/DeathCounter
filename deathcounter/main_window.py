@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import winsound
 from datetime import datetime
 
@@ -36,6 +37,7 @@ from .capture import CaptureError, grab_single_frame, list_outputs
 from .config import DEFAULT_GAME, AppConfig, save_calibration, save_config
 from .game_data import GameData, counter_files, open_game
 from .detector import CaptureHealth, SampleResult
+from .discord_presence import DiscordPresence, build_activity
 from .overlay import OverlayWindow
 from .report import build_report_html, rows_from_records, write_pdf
 from .rtss import RtssOsd, RtssState
@@ -95,6 +97,9 @@ class MainWindow(QMainWindow):
         self._closing = False
         self._stop_requested = False
         self._rtss_setup: RtssSetupWorker | None = None
+        self.discord: DiscordPresence | None = None
+        self._discord_state = ""                  # ustawiany z wątku Discorda, pokazywany co sekundę
+        self._session_started = int(time.time())  # „gra od…” w statusie Discorda
 
         self.overlay = OverlayWindow(config.overlay)
         self.rtss = RtssOsd()
@@ -115,6 +120,7 @@ class MainWindow(QMainWindow):
         self._refresh_boss_hint()
         self._set_status(self._idle_status(), self._idle_message())
         self._boss_timer.start()
+        self._apply_discord()
 
         if config.auto_start and self.templates["death"] is not None:
             QTimer.singleShot(0, self.start_detection)
@@ -283,6 +289,15 @@ class MainWindow(QMainWindow):
         form.addRow("Pozycja Y:", self.overlay_y)
         form.addRow("Wielkość tekstu:", self.overlay_size)
         form.addRow(self.overlay_hide)
+        self.discord_check = QCheckBox("Status na Discordzie")
+        self.discord_check.setToolTip("Pokazuje w Twoim statusie na Discordzie grę i liczbę śmierci.")
+        self.discord_check.setChecked(self.config.discord.enabled)
+        self.discord_check.toggled.connect(self._on_discord_toggled)
+        self.discord_label = QLabel()
+        self.discord_label.setWordWrap(True)
+        self.discord_label.setStyleSheet("color:#9aa0a6;")
+        form.addRow(self.discord_check)
+        form.addRow("Discord:", self.discord_label)
         return box
 
     def _build_detector_box(self) -> QGroupBox:
@@ -372,6 +387,7 @@ class MainWindow(QMainWindow):
     def _on_boss_tick(self) -> None:
         self._boss_event(self.bosses.tick)
         self._refresh_overlay()
+        self._refresh_discord_label()
 
     def _on_track_bosses(self, checked: bool) -> None:
         self.config.bosses.track = checked
@@ -457,6 +473,7 @@ class MainWindow(QMainWindow):
                 game = None
             if game is not None:
                 self._use_game(game)
+                self._session_started = int(time.time())
                 self.config.game = game_id
                 self._save_timer.start()
                 self.boss_panel.set_tracker(self.bosses)
@@ -557,6 +574,45 @@ class MainWindow(QMainWindow):
         boss = self.bosses.view() if self.bosses.enabled else None
         self.overlay.set_text(overlay_text(self.store.deaths, boss))
         self._update_rtss()
+        self._update_discord()
+
+    # ------------------------------------------------------------- Discord
+
+    def _on_discord_toggled(self, checked: bool) -> None:
+        self.config.discord.enabled = checked
+        self._save_timer.start()
+        self._apply_discord()
+
+    def _apply_discord(self) -> None:
+        d = self.config.discord
+        if d.enabled and d.effective_client_id:
+            if self.discord is None:
+                self._discord_state = "łączenie z Discordem…"
+                self.discord = DiscordPresence(d.effective_client_id, self._set_discord_state)
+            self._update_discord()
+        elif self.discord is not None:
+            self.discord.close()  # czyści status na Discordzie
+            self.discord = None
+        self._refresh_discord_label()
+
+    def _set_discord_state(self, text: str) -> None:
+        self._discord_state = text  # wywoływane z wątku Discorda; etykieta odświeża się co sekundę
+
+    def _update_discord(self) -> None:
+        if self.discord is not None:
+            game = self.config.game_name(self.paths.game)
+            self.discord.update(build_activity(game, self.store.deaths, self._session_started))
+
+    def _refresh_discord_label(self) -> None:
+        d = self.config.discord
+        if not d.enabled:
+            text = "wyłączony"
+        elif not d.effective_client_id:
+            text = "brak ID aplikacji Discord (patrz README)"
+        else:
+            text = self._discord_state
+        if self.discord_label.text() != text:
+            self.discord_label.setText(text)
 
     def confirm_reset(self) -> None:
         answer = QMessageBox.question(
@@ -959,6 +1015,9 @@ class MainWindow(QMainWindow):
         self._boss_event(self.bosses.pause)
         self._rtss_timer.stop()
         self.rtss.clear()
+        if self.discord is not None:
+            self.discord.close()
+            self.discord = None
         self.overlay.close()
         super().closeEvent(event)
 
