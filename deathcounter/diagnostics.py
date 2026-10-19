@@ -36,7 +36,7 @@ class DiagnosticLog:
             self._last_status = text
             self.write(f"STAN: {text}")
 
-    def sample(self, result, threshold: float, boss_state: str) -> None:
+    def sample(self, result, threshold: float, bar_threshold: float, boss_state: str) -> None:
         """Przejścia detektora zapisuje od razu, a pozostałe wyniki co kilka sekund."""
         armed = result.armed
         if armed != self._last_armed and result.score is not None:
@@ -53,9 +53,10 @@ class DiagnosticLog:
         if result.score is not None:
             parts.append(f"śmierć={result.score:.2f}/{threshold:.2f} {'gotowy' if armed else 'czeka'}")
         if result.bar_score is not None:
-            parts.append(f"pasek={result.bar_score:.2f} {'widoczny' if result.bar_visible else 'niewidoczny'}")
+            parts.append(f"pasek={result.bar_score:.2f}/{bar_threshold:.2f} "
+                         f"{'widoczny' if result.bar_visible else 'niewidoczny'}")
         if result.victory_score is not None:
-            parts.append(f"zwycięstwo={result.victory_score:.2f}")
+            parts.append(f"zwycięstwo={result.victory_score:.2f}/{threshold:.2f}")
         parts.append(f"boss={boss_state}")
         self.write("PRÓBKA " + ", ".join(parts))
 

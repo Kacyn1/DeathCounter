@@ -216,7 +216,7 @@ class CalibrationPage(QWidget):
         load_button.clicked.connect(self._load_file)
         self._hotkey_frame: np.ndarray | None = None
         self.hotkey_button = QPushButton("Zrzut ze skrótu")
-        self.hotkey_button.setToolTip(f"Wstawia ostatni zrzut zrobiony skrótem {hotkey_text or 'Ctrl+Alt+F9'}.")
+        self.hotkey_button.setToolTip(f"Wstawia ostatni zrzut zrobiony skrótem {hotkey_text or 'zrzutu'}.")
         self.hotkey_button.setEnabled(False)
         self.hotkey_button.clicked.connect(lambda: self.set_frame(self._hotkey_frame))
         self.saved_button = QPushButton("Pokaż zapisany wzorzec")
@@ -426,7 +426,7 @@ class CalibrationDialog(QDialog):
         saver: TemplateSaver,
         templates: dict[str, DeathTemplate | None],
         saved: dict[str, SavedCalibration | None],
-        threshold: float,
+        thresholds: dict[str, float],
         margin: float,
         hotkey_text: str | None,
         initial_frame: np.ndarray | None = None,
@@ -438,7 +438,7 @@ class CalibrationDialog(QDialog):
 
         self.pages = {
             key: CalibrationPage(
-                kind, frame_provider, saver, templates.get(key), saved.get(key), threshold, margin, hotkey_text
+                kind, frame_provider, saver, templates.get(key), saved.get(key), thresholds[key], margin, hotkey_text
             )
             for key, kind in KINDS.items()
         }

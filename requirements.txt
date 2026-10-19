@@ -2,3 +2,11 @@ PySide6-Essentials>=6.7
 dxcam>=0.3
 opencv-python>=4.9
 numpy>=1.26
+# OCR Windows (odczyt nazwy bossa)
+winrt-runtime>=3.2
+winrt-Windows.Foundation>=3.2
+winrt-Windows.Foundation.Collections>=3.2
+winrt-Windows.Globalization>=3.2
+winrt-Windows.Graphics.Imaging>=3.2
+winrt-Windows.Media.Ocr>=3.2
+winrt-Windows.Storage.Streams>=3.2

@@ -60,7 +60,7 @@ def test_several_attempts_sum_only_fight_time(tracker, clock, path):
     fight(tracker, clock, 25)
     assert tracker.death() is True
     clock.advance(60)
-    assert tracker.view() == BossView("Boss 1", 2, pytest.approx(65), BossState.DEATH, None)
+    assert tracker.view() == BossView("Boss 1", 2, pytest.approx(65), BossState.DEATH, None, False)
     assert saved(path)["Boss 1"] == {"deaths": 2, "total_time_seconds": 65, "status": "W TRAKCIE"}
 
 
@@ -288,14 +288,15 @@ def test_invalid_entry_is_rejected(path, entry):
 
 
 def test_format_duration():
-    assert format_duration(758) == "12:38"
-    assert format_duration(5) == "00:05"
-    assert format_duration(3725.9) == "1:02:05"
+    assert format_duration(758) == "00:12:38"
+    assert format_duration(5) == "00:00:05"
+    assert format_duration(3725.9) == "01:02:05"
+    assert format_duration(360000) == "100:00:00"
 
 
 def test_overlay_text():
     boss = BossView("Smelter Demon", 7, 758, BossState.FIGHT, None)
-    assert overlay_text(42, boss) == "DEATHS: 42\nSmelter Demon — deaths: 7\nCzas: 12:38"
+    assert overlay_text(42, boss) == "DEATHS: 42\nSmelter Demon — deaths: 7\nCzas: 00:12:38"
     assert overlay_text(42, None) == "DEATHS: 42"
     defeated = BossView("Smelter Demon", 7, 758, BossState.DEFEATED, None)
     assert overlay_text(42, defeated) == "DEATHS: 42"

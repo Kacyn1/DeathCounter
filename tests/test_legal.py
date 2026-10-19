@@ -9,7 +9,7 @@ def test_license_is_gpl_v3():
 
 def test_third_party_licenses_are_available():
     third = legal.third_party_text()
-    for library in ("Qt for Python", "OpenCV", "NumPy", "DXcam", "comtypes", "Python"):
+    for library in ("Qt for Python", "OpenCV", "NumPy", "DXcam", "comtypes", "PyWinRT", "Python"):
         assert library in third
     assert "GNU LESSER GENERAL PUBLIC LICENSE" in third
 

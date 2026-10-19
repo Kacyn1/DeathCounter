@@ -10,6 +10,7 @@ import unicodedata
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
+from . import hotkeys
 from .storage import StorageError, atomic_write_text
 
 APP_DIR_NAME = "DeathCounter"
@@ -39,7 +40,7 @@ TEMPLATE_FIELDS = {
 
 @dataclass
 class DetectorSettings:
-    threshold: float = 0.70           # minimalne dopasowanie wzorca (TM_CCOEFF_NORMED)
+    threshold: float = 0.70           # minimalne dopasowanie napisu śmierci i komunikatu zwycięstwa (TM_CCOEFF_NORMED)
     hysteresis: float = 0.10          # napis uznany za zniknięty poniżej threshold - hysteresis
     confirm_samples: int = 3          # tyle kolejnych próbek z napisem = jedna śmierć
     sample_interval_ms: int = 100     # odstęp między próbkami
@@ -119,12 +120,35 @@ class DiscordSettings:
 @dataclass
 class BossSettings:
     track: bool = False              # „Śledź walkę z bossem”
+    read_names: bool = True          # „Odczytuj nazwę bossa z ekranu” (OCR)
+    bar_threshold: float = 0.70      # minimalne dopasowanie wzorca paska zdrowia bossa
     bar_confirm_samples: int = 10    # tyle kolejnych próbek z paskiem bossa = początek walki (ok. 1 s)
     bar_lost_seconds: float = 3.0    # tyle sekund bez paska = pasek zniknął (pauza, nie zwycięstwo)
 
     def sanitize(self) -> None:
+        self.bar_threshold = _clamp(self.bar_threshold, 0.30, 0.99)
         self.bar_confirm_samples = int(_clamp(self.bar_confirm_samples, 1, 100))
         self.bar_lost_seconds = _clamp(self.bar_lost_seconds, 0.5, 60.0)
+
+
+@dataclass
+class HotkeySettings:
+    """Skróty globalne w zapisie „Ctrl+Alt+F9”; pusty tekst = skrót wyłączony."""
+
+    snapshot: str = "Ctrl+Alt+F9"   # zrzut do kalibracji
+    plus: str = "Ctrl+Alt+F10"      # +1
+    minus: str = "Ctrl+Alt+F11"     # −1
+    overlay: str = "Ctrl+Alt+F8"    # włącz/wyłącz nakładkę
+
+    def sanitize(self) -> None:
+        defaults = HotkeySettings()
+        for f in fields(self):
+            text = getattr(self, f.name).strip()
+            try:
+                text = hotkeys.parse(text).text if text else ""
+            except ValueError:
+                text = getattr(defaults, f.name)
+            setattr(self, f.name, text)
 
 
 @dataclass
@@ -154,6 +178,7 @@ class AppConfig:
     rtss: RtssSettings = field(default_factory=RtssSettings)
     bosses: BossSettings = field(default_factory=BossSettings)
     discord: DiscordSettings = field(default_factory=DiscordSettings)
+    hotkeys: HotkeySettings = field(default_factory=HotkeySettings)
     game: str = DEFAULT_GAME
     player_name: str = ""  # nick gracza na certyfikacie
     custom_games: dict[str, str] = field(default_factory=dict)  # gry dodane przez użytkownika: id → nazwa
@@ -229,6 +254,7 @@ class AppPaths:
     template: Path
     boss_bar_template: Path
     victory_template: Path
+    boss_names: Path
 
     @classmethod
     def for_game(cls, base: Path, game: str) -> "AppPaths":
@@ -246,6 +272,7 @@ class AppPaths:
             game_dir / "template.png",
             game_dir / "boss_bar.png",
             game_dir / "victory.png",
+            game_dir / "boss_names.json",
         )
 
     def template_path(self, kind: str) -> Path:
@@ -281,7 +308,12 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
     _fill(config.overlay, data.get("overlay"))
     _fill(config.rtss, data.get("rtss"))
     _fill(config.bosses, data.get("bosses"))
+    bosses = data.get("bosses")
+    if not (isinstance(bosses, dict) and "bar_threshold" in bosses):
+        # Wcześniej pasek bossa używał wspólnego progu – zostaje taki, jaki był ustawiony.
+        config.bosses.bar_threshold = config.detector.threshold
     _fill(config.discord, data.get("discord"))
+    _fill(config.hotkeys, data.get("hotkeys"))
     custom = data.get("custom_games")
     if isinstance(custom, dict):
         config.custom_games = {
@@ -296,7 +328,7 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
         config.player_name = " ".join(data["player_name"].split())[:GAME_NAME_MAX]
     if isinstance(data.get("auto_start"), bool):
         config.auto_start = data["auto_start"]
-    for part in (config.detector, config.capture, config.overlay, config.bosses, config.discord):
+    for part in (config.detector, config.capture, config.overlay, config.bosses, config.discord, config.hotkeys):
         part.sanitize()
     return config, None
 

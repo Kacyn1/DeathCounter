@@ -196,3 +196,13 @@ def test_counter_files_keep_calibration(tmp_path):
     paths = AppPaths.for_game(tmp_path, "ds1")
     names = {p.name for p in counter_files(paths)}
     assert names == {"deaths.json", "deaths.json.uszkodzony", "bosses.json", "bosses.json.uszkodzony", "audit.json"}
+
+
+def test_bar_threshold_defaults_to_old_shared_threshold(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"detector": {"threshold": 0.82}, "bosses": {"track": True}}), encoding="utf-8")
+    config, _ = load_config(path)
+    assert config.bosses.bar_threshold == 0.82  # starsza konfiguracja: pasek dostaje dotychczasowy wspólny próg
+    path.write_text(json.dumps({"detector": {"threshold": 0.82}, "bosses": {"bar_threshold": 0.6}}), encoding="utf-8")
+    config, _ = load_config(path)
+    assert (config.detector.threshold, config.bosses.bar_threshold) == (0.82, 0.6)

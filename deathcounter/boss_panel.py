@@ -27,13 +27,15 @@ STATE_COLORS = {
 
 class BossPanel(QGroupBox):
     track_toggled = Signal(bool)
+    read_names_toggled = Signal(bool)
     changed = Signal()             # dane bossa zmieniły się po akcji w panelu
     save_failed = Signal(str)
     calibrate_requested = Signal()
 
-    def __init__(self, tracker: BossTracker, parent=None) -> None:
+    def __init__(self, tracker: BossTracker, read_names: bool = True, parent=None) -> None:
         super().__init__("Walka z bossem", parent)
         self.tracker = tracker
+        self._note = ""
         form = QFormLayout(self)
 
         self.track_check = QCheckBox("Śledź walkę z bossem")
@@ -43,7 +45,18 @@ class BossPanel(QGroupBox):
             "a komunikat zwycięstwa zatrzymuje go na stałe. Ty tylko zatwierdzasz wynik."
         )
         self.track_check.toggled.connect(self._on_track)
-        form.addRow(self.track_check)
+        self.read_names_check = QCheckBox("Odczytuj nazwę bossa z ekranu")
+        self.read_names_check.setChecked(read_names)
+        self.read_names_check.setToolTip(
+            "Po pojawieniu się paska program czyta nazwę nad nim (OCR Windows, język polski).\n"
+            "Poprawiona ręcznie nazwa zostaje zapamiętana – następnym razem boss zostanie rozpoznany od razu.\n"
+            "Gdy w trakcie walki pojawi się inny boss, walka przechodzi na niego."
+        )
+        self.read_names_check.toggled.connect(self.read_names_toggled)
+        track_row = QHBoxLayout()
+        track_row.addWidget(self.track_check)
+        track_row.addWidget(self.read_names_check, 1)
+        form.addRow(track_row)
 
         self.state_label = QLabel()
         self.state_label.setStyleSheet("padding:2px 8px; border-radius:4px; color:white; font-weight:bold;")
@@ -92,6 +105,7 @@ class BossPanel(QGroupBox):
     def set_tracker(self, tracker: BossTracker) -> None:
         """Po zmianie gry panel pokazuje bossów tej gry."""
         self.tracker = tracker
+        self._note = ""
         self.name_edit.clear()
         self.refresh()
 
@@ -112,11 +126,23 @@ class BossPanel(QGroupBox):
         if not self.name_edit.hasFocus():
             self.name_edit.setText(view.name if view else "")
         self.name_edit.setEnabled(view is not None)
-        self.warning_label.setText((view.uncertain or "") if view else "")
-        self.warning_label.setVisible(bool(view and view.uncertain))
+        warning = view.uncertain if view else None
+        if view is not None and not warning and view.state is BossState.DEFEATED and not view.name_confident:
+            warning = "Nazwa bossa jest niepewna – sprawdź ją (możesz poprawić) i kliknij „Zapisz wynik”."
+        self.warning_label.setText(warning or "")
+        self.warning_label.setVisible(bool(warning))
         self.save_button.setEnabled(view is not None and view.state is not BossState.FIGHT)
         self.continue_button.setVisible(bool(view and view.uncertain))
         self.discard_button.setEnabled(view is not None)
+        if view is not None:
+            self._note = ""
+        if view is None and self._note:
+            self.summary_label.setText(self._note)
+
+    def set_note(self, text: str) -> None:
+        """Komunikat po zakończonej walce (np. automatyczny zapis), widoczny do początku kolejnej walki."""
+        self._note = text
+        self.refresh()
 
     def _on_track(self, checked: bool) -> None:
         self._act(lambda: self.tracker.set_enabled(checked))

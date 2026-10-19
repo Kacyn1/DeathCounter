@@ -89,7 +89,7 @@ class PresenceDetector:
         self._absent_since: float | None = None
 
     def apply_settings(self, settings: DetectorSettings, bosses: BossSettings) -> None:
-        self.threshold = settings.threshold
+        self.threshold = bosses.bar_threshold
         self.hysteresis = settings.hysteresis
         self.confirm_samples = bosses.bar_confirm_samples
         self.lost_seconds = bosses.bar_lost_seconds
@@ -185,6 +185,7 @@ class SampleResult:
     death: bool
     armed: bool
     bar_score: float | None = None
+    bar_rect: tuple[int, int, int, int] | None = None  # miejsce wzorca paska w klatce (x, y, szer., wys.)
     bar_event: BarEvent | None = None
     bar_visible: bool = False
     victory_score: float | None = None
@@ -267,7 +268,7 @@ class DetectionSession:
             result.death = self.detector.update(result.score)
             result.armed = self.detector.armed
             if self.bar_template is not None:
-                result.bar_score = self.bar_template.match(frame, margin)
+                result.bar_score, result.bar_rect = self.bar_template.locate(frame, margin)
                 result.bar_event = self.bar_detector.update(result.bar_score)
             if self.victory_template is not None:
                 result.victory_score = self.victory_template.match(frame, margin)

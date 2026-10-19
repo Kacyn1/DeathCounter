@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import pytest
 
+from deathcounter.config import BossSettings
 from deathcounter.detector import BarEvent, CaptureHealth, DetectionSession
 from deathcounter.template import DeathTemplate
 
@@ -153,3 +154,12 @@ def test_boss_detection_survives_resolution_change(boss_session, clock):
     big = [cv2.resize(f, (1920, 1080)) for f in fight(5, start=9000)]
     _, results = run(boss_session, clock, gameplay(2) + big)
     assert events(results) == [BarEvent.APPEARED]
+
+
+def test_bar_uses_own_threshold(boss_session, clock, settings):
+    bosses = BossSettings(bar_threshold=0.99)
+    boss_session.apply_settings(settings, bosses)
+    _, results = run(boss_session, clock, gameplay(2) + fight(20))
+    assert events(results) == []                      # pasek nie przekracza progu 0.99…
+    assert all(r.bar_score > settings.threshold for r in results[-10:])
+    assert boss_session.detector.threshold == settings.threshold  # …a próg śmierci się nie zmienia

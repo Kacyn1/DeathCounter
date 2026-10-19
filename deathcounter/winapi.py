@@ -23,12 +23,7 @@ WDA_NONE = 0x00
 WDA_EXCLUDEFROMCAPTURE = 0x11
 
 WM_HOTKEY = 0x0312
-MOD_ALT = 0x0001
-MOD_CONTROL = 0x0002
-MOD_NOREPEAT = 0x4000
-VK_F9 = 0x78
-VK_F10 = 0x79
-VK_F11 = 0x7A
+MOD_NOREPEAT = 0x4000  # pozostałe modyfikatory: deathcounter.hotkeys
 
 user32.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
 user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t

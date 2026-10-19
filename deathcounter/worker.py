@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import queue
 import threading
 import time
 from enum import Enum
@@ -10,13 +11,15 @@ from typing import Callable
 
 from PySide6.QtCore import QThread, Signal
 
-from . import rtss_setup
+from . import ocr, rtss_setup
 from .capture import DxcamSource
 from .config import BossSettings, CaptureSettings, DetectorSettings
 from .detector import BarEvent, CaptureHealth, DetectionSession
 from .template import DeathTemplate
 
 RETRY_SECONDS = 3.0
+NAME_SAMPLES = 3            # tyle klatek z nazwą bossa trafia do OCR po pojawieniu się paska
+NAME_SAMPLE_INTERVAL = 0.4  # odstęp między nimi (s) – nazwa bywa jeszcze w trakcie pojawiania się
 SAMPLE_SIGNAL_INTERVAL = 0.2
 SNAPSHOT_TIMEOUT = 2.0
 
@@ -78,6 +81,7 @@ class DetectionWorker(QThread):
     sample = Signal(object)                # SampleResult
     snapshot_ready = Signal(object)        # np.ndarray | None
     notice = Signal(str)
+    boss_name = Signal(str, bool)          # odczytana nazwa bossa ("" – nie udało się) i czy odczyt jest pewny
 
     def __init__(
         self,
@@ -97,10 +101,15 @@ class DetectionWorker(QThread):
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._pending_detector: DetectorSettings | None = None
+        self._pending_bosses: BossSettings | None = None
+        self._ocr_failed = False  # brak OCR – do końca tego uruchomienia nie zbieramy wycinków z nazwą
         self._pending_capture: CaptureSettings | None = None
         self._pending_templates: dict[str, DeathTemplate] = {}
         self._snapshot_requested_at: float | None = None
         self._last_status: tuple | None = None
+        self._name_bands: list | None = None  # wycinki z nazwą zbierane po pojawieniu się paska
+        self._name_next = 0.0
+        self._ocr_queue: queue.Queue | None = None
 
     # --- wywoływane z wątku GUI ---
 
@@ -112,11 +121,15 @@ class DetectionWorker(QThread):
             if self._snapshot_requested_at is None:
                 self._snapshot_requested_at = time.monotonic()
 
-    def update_settings(self, detector: DetectorSettings, capture: CaptureSettings) -> None:
+    def update_settings(self, detector: DetectorSettings, capture: CaptureSettings, bosses: BossSettings) -> None:
         with self._lock:
             self._pending_detector = copy.deepcopy(detector)
+            self._pending_bosses = copy.deepcopy(bosses)
             if capture != self._capture:
                 self._pending_capture = copy.deepcopy(capture)
+
+    def set_read_names(self, enabled: bool) -> None:
+        self._bosses.read_names = enabled
 
     def update_template(self, kind: str, template: DeathTemplate) -> None:
         with self._lock:
@@ -210,8 +223,12 @@ class DetectionWorker(QThread):
                     self.boss_event.emit(BOSS_VICTORY)
                 if result.bar_event is BarEvent.APPEARED:
                     self.boss_event.emit(BOSS_BAR_VISIBLE)
+                    if self._bosses.read_names and not self._ocr_failed:
+                        self._name_bands, self._name_next = [], 0.0
                 elif result.bar_event is BarEvent.LOST:
                     self.boss_event.emit(BOSS_BAR_LOST)
+                    self._name_bands = None
+                self._collect_name(frame, result, started)
                 if result.death or result.victory or result.bar_event or started - last_sample_signal >= SAMPLE_SIGNAL_INTERVAL:
                     last_sample_signal = started
                     self.sample.emit(result)
@@ -222,15 +239,53 @@ class DetectionWorker(QThread):
             if source is not None:
                 source.close()
             self._deliver_snapshot(None)
+            if self._ocr_queue is not None:
+                self._ocr_queue.put(None)
+
+    # --- odczyt nazwy bossa ---
+
+    def _collect_name(self, frame, result, now: float) -> None:
+        """Po pojawieniu się paska zbiera kilka wycinków z nazwą i oddaje je wątkowi OCR."""
+        if self._name_bands is None or frame is None or result.bar_rect is None or now < self._name_next:
+            return
+        band = ocr.crop_band(frame, result.bar_rect)
+        if band is None:
+            return
+        self._name_bands.append(band)
+        self._name_next = now + NAME_SAMPLE_INTERVAL
+        if len(self._name_bands) >= NAME_SAMPLES:
+            if self._ocr_queue is None:
+                self._ocr_queue = queue.Queue()
+                threading.Thread(target=self._ocr_loop, args=(self._ocr_queue,), daemon=True).start()
+            self._ocr_queue.put(self._name_bands)
+            self._name_bands = None
+
+    def _ocr_loop(self, jobs: queue.Queue) -> None:
+        """Osobny wątek: OCR trwa ułamek sekundy i nie może opóźniać próbek wykrywania."""
+        try:
+            reader = ocr.OcrReader()
+        except ocr.OcrUnavailable as exc:
+            self._ocr_failed = True
+            self.notice.emit(f"Odczyt nazwy bossa niedostępny: {exc}.")
+            return
+        while (bands := jobs.get()) is not None:
+            try:
+                reading = reader.read_name(bands)
+                self.boss_name.emit(reading.name if reading else "", bool(reading and reading.confident))
+            except Exception as exc:  # noqa: BLE001 - błąd OCR nie może zatrzymać wykrywania
+                self.notice.emit(f"Błąd odczytu nazwy bossa: {exc}")
 
     def _apply_pending(self, session: DetectionSession) -> bool:
         with self._lock:
             detector, self._pending_detector = self._pending_detector, None
+            bosses, self._pending_bosses = self._pending_bosses, None
             capture, self._pending_capture = self._pending_capture, None
             templates, self._pending_templates = self._pending_templates, {}
         if detector is not None:
             self._detector = detector
-            session.apply_settings(detector)
+            session.apply_settings(detector, bosses)
+        if bosses is not None:
+            self._bosses = bosses
         for kind, template in templates.items():
             session.set_template(kind, template)
         if capture is not None:

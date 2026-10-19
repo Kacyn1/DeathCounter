@@ -120,15 +120,21 @@ class DeathTemplate:
 
         Gdy rozdzielczość klatki różni się od referencyjnej, wzorzec i obszar są skalowane.
         """
+        return self.locate(frame, margin)[0]
+
+    def locate(self, frame: np.ndarray, margin: float = 0.5) -> tuple[float, tuple[int, int, int, int] | None]:
+        """Jak match(), a do tego miejsce najlepszego dopasowania (x, y, szerokość, wysokość) w klatce."""
         height, width = frame.shape[:2]
         template, (x0, y0, x1, y1) = self._prepared(width, height, margin)
         th, tw = template.shape
         if x1 - x0 < tw or y1 - y0 < th:
-            return 0.0
+            return 0.0, None
         region = to_gray(frame[y0:y1, x0:x1])
         result = cv2.matchTemplate(region, template, cv2.TM_CCOEFF_NORMED)
-        _, best, _, _ = cv2.minMaxLoc(result)
-        return float(best) if math.isfinite(best) else 0.0
+        _, best, _, (bx, by) = cv2.minMaxLoc(result)
+        if not math.isfinite(best):
+            return 0.0, None
+        return float(best), (x0 + bx, y0 + by, tw, th)
 
     def _prepared(self, width: int, height: int, margin: float):
         key = (width, height, margin)

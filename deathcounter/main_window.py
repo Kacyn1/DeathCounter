@@ -28,10 +28,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import legal, winapi
+from . import hotkeys, legal, winapi
 from .boss_panel import BossPanel
 from .bosses import BossTracker, format_duration, overlay_text
 from .calibration import CalibrationDialog, SavedCalibration
+from .hotkey_dialog import HotkeyDialog
 from .icon import render as render_icon
 from .capture import CaptureError, grab_single_frame, list_outputs
 from .config import DEFAULT_GAME, AppConfig, save_calibration, save_config
@@ -57,14 +58,8 @@ from .worker import (
     RtssSetupWorker,
 )
 
-# Skróty globalne – działają także, gdy gra jest w pełnym ekranie.
-HOTKEY_SNAPSHOT, HOTKEY_PLUS, HOTKEY_MINUS = 0xD52, 0xD53, 0xD54
-HOTKEYS = {
-    HOTKEY_SNAPSHOT: (winapi.VK_F9, "Ctrl+Alt+F9"),
-    HOTKEY_PLUS: (winapi.VK_F10, "Ctrl+Alt+F10"),
-    HOTKEY_MINUS: (winapi.VK_F11, "Ctrl+Alt+F11"),
-}
-HOTKEY_TEXT = HOTKEYS[HOTKEY_SNAPSHOT][1]
+# Skróty globalne (działają także w pełnym ekranie): identyfikator RegisterHotKey → pole HotkeySettings.
+HOTKEY_IDS = {0xD52: "snapshot", 0xD53: "plus", 0xD54: "minus", 0xD55: "overlay"}
 ADD_GAME = "__add_game__"  # pozycja „+ Dodaj grę…” na liście gier
 RTSS_REFRESH_MS = 2000
 BOSS_REFRESH_MS = 1000
@@ -98,7 +93,7 @@ class MainWindow(QMainWindow):
         self._status = DetectorStatus.STOPPED
         self._frame_callbacks: list = []
         self._hotkey_frame: np.ndarray | None = None
-        self._hotkeys: set[int] = set()
+        self._hotkeys: set[int] = set()  # zarejestrowane identyfikatory z HOTKEY_IDS
         self._calibration: CalibrationDialog | None = None
         self._closing = False
         self._stop_requested = False
@@ -224,8 +219,9 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.calibrate_button, 1, 3)
         root.addLayout(controls)
 
-        self.boss_panel = BossPanel(self.bosses)
+        self.boss_panel = BossPanel(self.bosses, self.config.bosses.read_names)
         self.boss_panel.track_toggled.connect(self._on_track_bosses)
+        self.boss_panel.read_names_toggled.connect(self._on_read_names)
         self.boss_panel.changed.connect(self._refresh_overlay)
         self.boss_panel.save_failed.connect(self._show_error)
         self.boss_panel.calibrate_requested.connect(lambda: self.open_calibration("boss_bar"))
@@ -253,6 +249,10 @@ class MainWindow(QMainWindow):
         footer_row.addWidget(footer, 1)
         footer_row.addWidget(self.report_button)
         footer_row.addWidget(self.verify_button)
+        hotkeys_button = QPushButton("Skróty…")
+        hotkeys_button.setToolTip("Zmiana skrótów klawiszowych działających w grze.")
+        hotkeys_button.clicked.connect(self.open_hotkeys)
+        footer_row.addWidget(hotkeys_button)
         about_button = QPushButton("O programie")
         about_button.clicked.connect(lambda: legal.show_about(self))
         footer_row.addWidget(about_button)
@@ -322,11 +322,15 @@ class MainWindow(QMainWindow):
         self.monitor_combo = QComboBox()
         self._fill_monitors()
         self.monitor_combo.currentIndexChanged.connect(self._on_detector_settings)
-        self.threshold_spin = QDoubleSpinBox()
-        self.threshold_spin.setRange(0.30, 0.99)
-        self.threshold_spin.setSingleStep(0.01)
-        self.threshold_spin.setValue(d.threshold)
-        self.threshold_spin.setToolTip("Minimalne dopasowanie obrazu do wzorca, przy którym napis uznajemy za widoczny.")
+        self.threshold_spin = _threshold_spin(d.threshold)
+        self.threshold_spin.setToolTip(
+            "Minimalne dopasowanie obrazu do wzorca napisu śmierci, przy którym napis uznajemy za widoczny.\n"
+            "Ten sam próg dotyczy komunikatu zwycięstwa – oba to duże napisy na środku ekranu."
+        )
+        self.bar_threshold_spin = _threshold_spin(self.config.bosses.bar_threshold)
+        self.bar_threshold_spin.setToolTip(
+            "Minimalne dopasowanie obrazu do wzorca paska zdrowia bossa, przy którym walka się zaczyna."
+        )
         self.confirm_spin = _spin(1, 50, d.confirm_samples, " próbek")
         self.confirm_spin.setToolTip("Tyle kolejnych próbek (co ok. 0,1 s) musi zawierać napis, by zliczyć śmierć.")
         self.rearm_spin = QDoubleSpinBox()
@@ -335,13 +339,14 @@ class MainWindow(QMainWindow):
         self.rearm_spin.setSuffix(" s")
         self.rearm_spin.setValue(d.rearm_seconds)
         self.rearm_spin.setToolTip("Tyle sekund bez napisu, zanim detektor będzie gotowy na kolejną śmierć.")
-        for widget in (self.threshold_spin, self.confirm_spin, self.rearm_spin):
+        for widget in (self.threshold_spin, self.bar_threshold_spin, self.confirm_spin, self.rearm_spin):
             widget.valueChanged.connect(self._on_detector_settings)
         self.autostart_check = QCheckBox("Włączaj wykrywanie przy starcie")
         self.autostart_check.setChecked(self.config.auto_start)
         self.autostart_check.toggled.connect(self._on_autostart)
         form.addRow("Monitor:", self.monitor_combo)
-        form.addRow("Próg:", self.threshold_spin)
+        form.addRow("Próg śmierci i zwycięstwa:", self.threshold_spin)
+        form.addRow("Próg paska bossa:", self.bar_threshold_spin)
         form.addRow("Potwierdzenie:", self.confirm_spin)
         form.addRow("Ponowne uzbrojenie:", self.rearm_spin)
         form.addRow(self.autostart_check)
@@ -409,7 +414,18 @@ class MainWindow(QMainWindow):
         self.boss_panel.refresh()
 
     def _on_boss_tick(self) -> None:
-        self._boss_event(self.bosses.tick)
+        saved = None
+        try:
+            saved = self.bosses.tick()
+        except StorageError as exc:
+            self._show_error(f"Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.")
+        self.boss_panel.refresh()
+        if saved is not None:
+            text = (f"Automatycznie zapisany: {saved.name} – śmierci: {saved.deaths}, "
+                    f"czas: {format_duration(saved.seconds)}")
+            self.boss_panel.set_note(text)
+            self.notice_label.setText(text)
+            self.diag.write(f"BOSS: {text}")
         self._refresh_overlay()
         self._refresh_discord_label()
 
@@ -418,6 +434,12 @@ class MainWindow(QMainWindow):
         self._save_timer.start()
         self._refresh_overlay()
         self._refresh_boss_hint()
+
+    def _on_read_names(self, checked: bool) -> None:
+        self.config.bosses.read_names = checked
+        self._save_timer.start()
+        if self.worker is not None:
+            self.worker.set_read_names(checked)
 
     def _on_boss_signal(self, event: str) -> None:
         handlers = {
@@ -432,6 +454,22 @@ class MainWindow(QMainWindow):
                         + (f", niepewne: {self.bosses.uncertain}" if self.bosses.uncertain else ""))
         self._refresh_overlay()
 
+    def _on_boss_name(self, reading: str, confident: bool) -> None:
+        if not reading:
+            self.diag.write("BOSS: nie odczytano nazwy z ekranu")
+            return
+        before = self.bosses.current
+        try:
+            name = self.bosses.boss_identified(reading, confident)
+        except StorageError as exc:
+            self._show_error(f"Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.")
+            name = self.bosses.current
+        self.diag.write(f"BOSS: odczyt nazwy „{reading}” ({'pewny' if confident else 'niepewny'})"
+                        + (f", {before} → {name}" if name else ", bez zmian")
+                        + f", nazwa {'pewna' if self.bosses.name_confident else 'do sprawdzenia'}")
+        self.boss_panel.refresh()
+        self._refresh_overlay()
+
     # ------------------------------------------------------------------ gra
 
     def _use_game(self, game: GameData) -> None:
@@ -440,7 +478,7 @@ class MainWindow(QMainWindow):
         self.calibration = game.calibration
         self.templates = dict(game.templates)
         self.audit = game.audit
-        self.bosses = BossTracker(game.boss_store, audit=game.audit)
+        self.bosses = BossTracker(game.boss_store, audit=game.audit, names=game.boss_names)
         self.bosses.enabled = self.config.bosses.track
 
     def _fill_games(self) -> None:
@@ -735,10 +773,12 @@ class MainWindow(QMainWindow):
         worker.sample.connect(self._on_sample)
         worker.snapshot_ready.connect(self._on_snapshot)
         worker.notice.connect(self.notice_label.setText)
+        worker.boss_name.connect(self._on_boss_name)
         worker.finished.connect(self._on_worker_finished)
         self.worker = worker
         self.diag.reset_detector_state()
-        self.diag.write(f"START wykrywania (próg {self.config.detector.threshold:.2f}, wzorce: "
+        self.diag.write(f"START wykrywania (próg śmierci {self.config.detector.threshold:.2f}, "
+                        f"paska {self.config.bosses.bar_threshold:.2f}, wzorce: "
                         + ", ".join(k for k, v in self.templates.items() if v is not None) + ")")
         self._stop_requested = False
         self.start_button.setText("Stop")
@@ -802,11 +842,12 @@ class MainWindow(QMainWindow):
         parts = []
         if result.bar_score is not None:
             bar = "widoczny" if result.bar_visible else "niewidoczny"
-            parts.append(f"pasek {result.bar_score:.2f} ({bar})")
+            parts.append(f"pasek {result.bar_score:.2f}/{self.config.bosses.bar_threshold:.2f} ({bar})")
         if result.victory_score is not None:
-            parts.append(f"zwycięstwo {result.victory_score:.2f}")
+            parts.append(f"zwycięstwo {result.victory_score:.2f}/{self.config.detector.threshold:.2f}")
         self.boss_score_label.setText(", ".join(parts) or "–")
-        self.diag.sample(result, self.config.detector.threshold, self.bosses.state.value)
+        self.diag.sample(result, self.config.detector.threshold, self.config.bosses.bar_threshold,
+                         self.bosses.state.value)
 
     def _set_status(self, status: DetectorStatus, message: str) -> None:
         self._status = status
@@ -829,11 +870,12 @@ class MainWindow(QMainWindow):
     def _on_detector_settings(self) -> None:
         d = self.config.detector
         d.threshold = round(self.threshold_spin.value(), 2)
+        self.config.bosses.bar_threshold = round(self.bar_threshold_spin.value(), 2)
         d.confirm_samples = self.confirm_spin.value()
         d.rearm_seconds = self.rearm_spin.value()
         self.config.capture.output_index = self.monitor_combo.currentData()
         if self.worker is not None:
-            self.worker.update_settings(self.config.detector, self.config.capture)
+            self.worker.update_settings(self.config.detector, self.config.capture, self.config.bosses)
         self._save_timer.start()
 
     def _on_autostart(self, checked: bool) -> None:
@@ -915,9 +957,10 @@ class MainWindow(QMainWindow):
             saver=self._save_template,
             templates=self.templates,
             saved={k: self._saved_calibration(k) for k in self.templates},
-            threshold=self.config.detector.threshold,
+            thresholds={"death": self.config.detector.threshold, "victory": self.config.detector.threshold,
+                        "boss_bar": self.config.bosses.bar_threshold},
             margin=self.config.detector.search_margin,
-            hotkey_text=HOTKEY_TEXT if HOTKEY_SNAPSHOT in self._hotkeys else None,
+            hotkey_text=self._hotkey_text("snapshot"),
             initial_frame=hotkey_frame,
             initial_kind=kind,
         )
@@ -963,21 +1006,25 @@ class MainWindow(QMainWindow):
         parts = [f"{label}: {'✓' if self.templates[kind] is not None else 'brak'}" for kind, label in names]
         self.template_label.setText(", ".join(parts))
 
-    def _on_hotkey(self, hotkey_id: int) -> None:
-        if hotkey_id == HOTKEY_SNAPSHOT:
+    def _on_hotkey(self, action: str) -> None:
+        if action == "snapshot":
             self.request_frame(self._on_hotkey_frame)
             return
-        # Korekta z gry: bez okienek, które zabrałyby fokus grze – tylko sygnał dźwiękowy.
-        if hotkey_id == HOTKEY_PLUS:
+        # Akcje z gry: bez okienek, które zabrałyby fokus grze – tylko sygnał dźwiękowy.
+        if action == "plus":
             self._manual_plus(manual=False)
-        else:
+        elif action == "minus":
             self._manual_minus(manual=False)
-        winsound.MessageBeep(winsound.MB_OK if hotkey_id == HOTKEY_PLUS else winsound.MB_ICONASTERISK)
+        else:
+            self.toggle_overlay()
+        off = action == "minus" or (action == "overlay" and not self.config.overlay.enabled)
+        winsound.MessageBeep(winsound.MB_ICONASTERISK if off else winsound.MB_OK)
 
     def _on_hotkey_frame(self, frame, error) -> None:
+        text = self._hotkey_text("snapshot") or "skrótu"
         if frame is None:
             winsound.MessageBeep(winsound.MB_ICONHAND)
-            self.notice_label.setText(f"Zrzut ze skrótu {HOTKEY_TEXT} nieudany: {error}")
+            self.notice_label.setText(f"Zrzut ze skrótu {text} nieudany: {error}")
             return
         winsound.MessageBeep(winsound.MB_OK)
         self._hotkey_frame = frame
@@ -985,24 +1032,62 @@ class MainWindow(QMainWindow):
             self._calibration.set_frame(frame)
         else:
             self.notice_label.setText(
-                f"Zapamiętano zrzut ekranu ({HOTKEY_TEXT}). Otwórz „Kalibracja…”, aby zaznaczyć napis."
+                f"Zapamiętano zrzut ekranu ({text}). Otwórz „Kalibracja…”, aby zaznaczyć napis."
             )
+
+    # --------------------------------------------------------------- skróty
+
+    def _hotkey_text(self, action: str) -> str | None:
+        """Skrót akcji do pokazania w interfejsie albo None, gdy jest wyłączony lub niezarejestrowany."""
+        registered = {HOTKEY_IDS[i] for i in self._hotkeys}
+        return hotkeys.display(getattr(self.config.hotkeys, action)) if action in registered else None
+
+    def _register_hotkeys(self) -> None:
+        self._unregister_hotkeys()
+        failed = []
+        for hotkey_id, action in HOTKEY_IDS.items():
+            text = getattr(self.config.hotkeys, action)
+            if not text:
+                continue
+            hotkey = hotkeys.parse(text)
+            if winapi.register_hotkey(int(self.winId()), hotkey_id, hotkey.modifiers, hotkey.vk):
+                self._hotkeys.add(hotkey_id)
+            else:
+                failed.append(hotkeys.display(text))
+        if failed:
+            self.notice_label.setText(f"Skróty zajęte przez inny program albo system: {', '.join(failed)}.")
+        self._refresh_hotkey_tooltips()
+
+    def _unregister_hotkeys(self) -> None:
+        for hotkey_id in self._hotkeys:
+            winapi.unregister_hotkey(int(self.winId()), hotkey_id)
+        self._hotkeys.clear()
+
+    def _refresh_hotkey_tooltips(self) -> None:
+        for button, action in ((self.plus_button, "plus"), (self.minus_button, "minus"),
+                               (self.overlay_button, "overlay")):
+            text = self._hotkey_text(action)
+            button.setToolTip(f"Skrót w grze: {text}" if text else "")
+
+    def open_hotkeys(self) -> None:
+        # Na czas zmiany skróty są wyrejestrowane – inaczej naciśnięcie obecnego skrótu nie dotarłoby do pola.
+        self._unregister_hotkeys()
+        dialog = HotkeyDialog(self, self.config.hotkeys)
+        try:
+            if dialog.exec() and dialog.result_settings is not None:
+                self.config.hotkeys = dialog.result_settings
+                self._save_timer.start()
+                self.notice_label.setText("Zapisano skróty klawiszowe.")
+        finally:
+            self._register_hotkeys()
 
     # ---------------------------------------------------------- okno/system
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self._set_taskbar_icon()
-        if self._hotkeys:
-            return
-        failed = []
-        for hotkey_id, (vk, text) in HOTKEYS.items():
-            if winapi.register_hotkey(int(self.winId()), hotkey_id, winapi.MOD_CONTROL | winapi.MOD_ALT, vk):
-                self._hotkeys.add(hotkey_id)
-            else:
-                failed.append(text)
-        if failed:
-            self.notice_label.setText(f"Skróty zajęte przez inny program: {', '.join(failed)}.")
+        if not self._hotkeys:
+            self._register_hotkeys()
 
     def _set_taskbar_icon(self) -> None:
         """Qt podaje Windows ikonę 32 px, a pasek zadań przy 100% skalowania ma 24 px – zmniejszona ikona
@@ -1020,7 +1105,7 @@ class MainWindow(QMainWindow):
         if bytes(event_type) == b"windows_generic_MSG":
             msg = winapi.message_from_native(message)
             if msg.message == winapi.WM_HOTKEY and msg.wParam in self._hotkeys:
-                self._on_hotkey(msg.wParam)
+                self._on_hotkey(HOTKEY_IDS[msg.wParam])
                 return True, 0
         return super().nativeEvent(event_type, message)
 
@@ -1099,9 +1184,7 @@ class MainWindow(QMainWindow):
             self.stop_detection()
             event.ignore()
             return
-        for hotkey_id in self._hotkeys:
-            winapi.unregister_hotkey(int(self.winId()), hotkey_id)
-        self._hotkeys.clear()
+        self._unregister_hotkeys()
         self._save_timer.stop()
         self._save_config()
         self._boss_timer.stop()
@@ -1126,6 +1209,14 @@ class MainWindow(QMainWindow):
 
     def _clear_error(self) -> None:
         self.error_banner.hide()
+
+
+def _threshold_spin(value: float) -> QDoubleSpinBox:
+    spin = QDoubleSpinBox()
+    spin.setRange(0.30, 0.99)
+    spin.setSingleStep(0.01)
+    spin.setValue(value)
+    return spin
 
 
 def _spin(low: int, high: int, value: int, suffix: str = "") -> QSpinBox:

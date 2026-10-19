@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) { throw "Nie udalo sie przygotowac klucza podpisu." }
 
 & $python -m PyInstaller --noconfirm --clean --onefile --windowed `
     --name DeathCounter --icon build\DeathCounter.ico `
-    --hidden-import deathcounter._signing_key `
+    --hidden-import deathcounter._signing_key --collect-submodules winrt `
     --add-data "LICENSE;." --add-data "THIRD_PARTY_LICENSES.txt;." `
     --exclude-module PySide6.QtWebEngineCore --exclude-module PySide6.QtWebEngineWidgets `
     --exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick --exclude-module PySide6.QtPdf `

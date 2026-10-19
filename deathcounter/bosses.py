@@ -17,6 +17,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable
 
+from .boss_names import BossNames, is_placeholder, same_boss
 from .storage import StorageError, atomic_write_text
 
 Clock = Callable[[], float]
@@ -28,6 +29,7 @@ STATUSES = (STATUS_IN_PROGRESS, STATUS_DEFEATED)
 CHECKPOINT_SECONDS = 5.0      # w trakcie walki zgromadzony czas trafia do pliku co tyle sekund
 DEATH_GRACE_SECONDS = 10.0    # pasek znika przy śmierci wcześniej niż pojawia się napis śmierci
 SIMULTANEOUS_SECONDS = 3.0    # śmierć i zwycięstwo tak blisko siebie = wynik niepewny
+AUTO_SAVE_SECONDS = SIMULTANEOUS_SECONDS  # wynik zapisuje się sam dopiero, gdy minie czas na „prawie jednoczesną” śmierć
 
 
 class BossState(Enum):
@@ -60,6 +62,7 @@ class BossView:
     seconds: float
     state: BossState
     uncertain: str | None
+    name_confident: bool = True  # nazwa wpisana ręcznie, znana albo pewnie odczytana z ekranu
 
 
 class BossStore:
@@ -107,9 +110,11 @@ class BossTracker:
     a kolejna zmiana ponowi zapis.
     """
 
-    def __init__(self, store: BossStore, clock: Clock = time.monotonic, audit=None) -> None:
+    def __init__(self, store: BossStore, clock: Clock = time.monotonic, audit=None,
+                 names: BossNames | None = None) -> None:
         self.store = store
         self.audit = audit  # rejestr zmian (audit.AuditLog) – ręczne korekty i zmiany nazw
+        self.names = names  # znane nazwy bossów gry – do dopasowania odczytu OCR
         self._clock = clock
         self.enabled = False
         self.state = BossState.WAITING
@@ -121,9 +126,12 @@ class BossTracker:
         self._death_at: float | None = None
         self._victory_at: float | None = None
         self._last_death_counted = False
+        self._segment_started: float | None = None  # początek bieżącego odcinka walki (od pojawienia się paska)
+        self._reading: str | None = None            # ostatni odczyt OCR nazwy bieżącego bossa
         # Po restarcie wracamy do niezakończonej walki; timer nie biegnie, dopóki pasek się nie pojawi.
         pending = [name for name, r in store.records.items() if r.status == STATUS_IN_PROGRESS]
         self.current = pending[-1] if pending else None
+        self.name_confident = self.current is not None and not is_placeholder(self.current)
 
     # ------------------------------------------------------------- odczyt
 
@@ -142,7 +150,7 @@ class BossTracker:
         record = self.record
         if record is None:
             return None
-        return BossView(self.current, record.deaths, self.elapsed(), self.state, self.uncertain)
+        return BossView(self.current, record.deaths, self.elapsed(), self.state, self.uncertain, self.name_confident)
 
     # ---------------------------------------------------- zdarzenia z gry
 
@@ -159,10 +167,41 @@ class BossTracker:
         if self.record is None:
             self.current = self._placeholder_name()
             self.store.records[self.current] = BossRecord()
+            self.name_confident = False
         self.state = BossState.FIGHT
-        self._fight_started = self._last_checkpoint = self._clock()
+        self._fight_started = self._last_checkpoint = self._segment_started = self._clock()
         self._bar_lost_at = None
         self._save()
+
+    def boss_identified(self, reading: str, confident: bool = False) -> str | None:
+        """Nazwa odczytana z ekranu (OCR) chwilę po pojawieniu się paska. Zwraca nową nazwę bieżącego
+        bossa albo None, gdy nic się nie zmieniło. `confident` – większość prób OCR dała ten sam tekst;
+        pewna jest też nazwa dopasowana do znanej i zgodna z nazwą bieżącego bossa.
+
+        - boss bez nazwy („Boss 1”) dostaje odczytaną nazwę (dopasowaną do znanych nazw gry);
+        - ten sam boss – bez zmian;
+        - inny boss w trakcie walki – walka przechodzi na niego razem z czasem od pojawienia się paska,
+          a poprzedni zostaje w pliku jako niepokonany.
+        """
+        reading = " ".join(reading.split())
+        if not reading or not self.enabled or self.record is None or self.uncertain:
+            return None
+        known = self.names.match(reading, list(self.store.records)) if self.names is not None else None
+        name = known or reading
+        if same_boss(name, self.current):
+            self._reading = reading
+            self.name_confident = True  # odczyt potwierdza nazwę, którą boss już ma
+            return None
+        if is_placeholder(self.current):
+            self._reading = reading
+            self.name_confident = confident or known is not None
+            return self._rename(name)
+        if self.state is not BossState.FIGHT or self._segment_started is None:
+            return None
+        self._switch_to(name)
+        self._reading = reading
+        self.name_confident = confident or known is not None
+        return self.current
 
     def boss_bar_lost(self) -> None:
         """Pasek zniknął bez śmierci i bez zwycięstwa (np. ucieczka z areny) – sama pauza."""
@@ -212,11 +251,22 @@ class BossTracker:
             self.uncertain = "Utracono obraz w trakcie walki – kontynuuj walkę albo zatwierdź wynik."
             self._save()
 
-    def tick(self) -> None:
-        """Wywoływane co sekundę: w trakcie walki co kilka sekund zapisuje zgromadzony czas."""
-        if self.state is BossState.FIGHT and self._clock() - self._last_checkpoint >= CHECKPOINT_SECONDS:
+    def tick(self) -> BossView | None:
+        """Wywoływane co sekundę: w trakcie walki co kilka sekund zapisuje zgromadzony czas.
+
+        Po zwycięstwie zapisuje wynik sam, gdy nic nie budzi wątpliwości: nazwa jest pewna, wynik nie czeka
+        na decyzję, a od komunikatu zwycięstwa minął czas na „prawie jednoczesną” śmierć.
+        Zwraca wtedy zapisany wynik."""
+        now = self._clock()
+        if self.state is BossState.FIGHT and now - self._last_checkpoint >= CHECKPOINT_SECONDS:
             self._checkpoint()
             self._save()
+        if (self.state is BossState.DEFEATED and self.name_confident and not self.uncertain
+                and self._victory_at is not None and now - self._victory_at > AUTO_SAVE_SECONDS):
+            view = self.view()
+            self.confirm_defeated()
+            return view
+        return None
 
     def pause(self) -> None:
         """Zatrzymanie wykrywania lub zamknięcie programu: czas walki zostaje zapisany, a timer staje,
@@ -235,6 +285,8 @@ class BossTracker:
         if self.state is BossState.FIGHT:
             self._pause(BossState.DEFEATED)
         record.status = STATUS_DEFEATED
+        if self.names is not None:
+            self.names.learn(self.current)  # zatwierdzona nazwa – także ta odczytana z ekranu
         self._clear_current()
         self._save()
 
@@ -256,6 +308,16 @@ class BossTracker:
         self._save()
 
     def rename(self, name: str) -> str | None:
+        """Nazwa wpisana ręcznie. Program ją zapamiętuje, a ostatni odczyt OCR – jako jej odmianę,
+        żeby następnym razem od razu rozpoznać bossa. Zwraca nazwę po zmianie."""
+        name = " ".join(name.split())
+        if self.names is not None and self.record is not None and name:
+            self.names.learn(name, self._reading)
+        if self.record is not None and name:
+            self.name_confident = True
+        return self._rename(name)
+
+    def _rename(self, name: str) -> str | None:
         """Nadaje nazwę bieżącemu bossowi. Istniejący niepokonany boss o tej nazwie jest scalany z bieżącym,
         a pokonany dostaje nowy wpis z numerem, np. „Smelter Demon (2)”. Zwraca nazwę po zmianie."""
         name = " ".join(name.split())
@@ -308,12 +370,32 @@ class BossTracker:
             record.total_time_seconds += max(0.0, now - self._fight_started)
             self._fight_started = self._last_checkpoint = now
 
+    def _switch_to(self, name: str) -> None:
+        """Bieżąca walka to inny boss: czas od pojawienia się paska przechodzi na niego."""
+        self._checkpoint()
+        moved = max(0.0, self._clock() - self._segment_started)
+        old = self.record
+        old.total_time_seconds = max(0.0, old.total_time_seconds - moved)
+        records = self.store.records
+        existing = records.get(name)
+        if existing is None or existing.status != STATUS_IN_PROGRESS:
+            if existing is not None:
+                name = _numbered(name, records)
+            records[name] = BossRecord()
+        self.current = name
+        self.record.total_time_seconds += moved
+        self._last_death_counted = False
+        self._death_at = None
+        self._save()
+
     def _clear_current(self) -> None:
         self.current = None
         self.state = BossState.WAITING
         self.uncertain = None
         self._fight_started = self._bar_lost_at = self._death_at = self._victory_at = None
+        self._segment_started = self._reading = None
         self._last_death_counted = False
+        self.name_confident = False
 
     def _recently(self, moment: float | None, seconds: float = DEATH_GRACE_SECONDS) -> bool:
         return moment is not None and self._clock() - moment <= seconds
@@ -332,10 +414,11 @@ class BossTracker:
 
 
 def format_duration(seconds: float) -> str:
+    """Czas zawsze jako GG:MM:SS, np. 00:12:38 (powyżej 99 godzin godzin jest więcej cyfr)."""
     total = int(seconds)
     hours, rest = divmod(total, 3600)
     minutes, secs = divmod(rest, 60)
-    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes:02d}:{secs:02d}"
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 def overlay_text(deaths: int, boss: BossView | None) -> str:

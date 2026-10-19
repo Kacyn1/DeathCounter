@@ -24,7 +24,7 @@ Jeśli folderu programu nie da się zapisywać, dane trafiają do `%APPDATA%\Dea
 
 ## Wybór gry
 
-Lista **Gra** nad licznikiem: Dark Souls I, Dark Souls II, Dark Souls III, Sekiro: Shadows Die Twice, Elden Ring. Każda gra ma **osobny** licznik śmierci, bossów i kalibrację (wzorce zapisują się automatycznie dla wybranej gry), a raport PDF ma nazwę gry w tytule. Zmiana gry przy włączonym wykrywaniu zatrzymuje je, wczytuje dane i wzorce tej gry i uruchamia wykrywanie ponownie. Ustawienia programu (nakładka, RTSS, próg, monitor) są wspólne.
+Lista **Gra** nad licznikiem: Dark Souls I, Dark Souls II, Dark Souls III, Sekiro: Shadows Die Twice, Elden Ring. Każda gra ma **osobny** licznik śmierci, bossów i kalibrację (wzorce zapisują się automatycznie dla wybranej gry), a raport PDF ma nazwę gry w tytule. Zmiana gry przy włączonym wykrywaniu zatrzymuje je, wczytuje dane i wzorce tej gry i uruchamia wykrywanie ponownie. Ustawienia programu (nakładka, RTSS, progi, monitor) są wspólne.
 
 Grę spoza listy dodasz pozycją **+ Dodaj grę…** na końcu listy: po podaniu nazwy program tworzy dla niej nowy licznik (z bossami i kalibracją) i od razu ją wybiera. Dodane gry zapisują się w `config.json` (`custom_games`), a ich dane w `games\<nazwa-gry>\`, np. `games\lies-of-p\`.
 
@@ -53,7 +53,7 @@ Po zapisaniu wzorca okno kalibracji przy kolejnym otwarciu pokazuje w każdej za
 - **Brak duplikatów:** po zliczeniu detektor czeka, aż napis zniknie na co najmniej 3 s. Między dwiema śmierciami musi też minąć co najmniej 8 s.
 - **Błędy obrazu:** brak nowych klatek, zamrożony obraz (ponad 5 s) i zmiana rozdzielczości są sygnalizowane w oknie. W tym czasie nic nie jest liczone.
 
-Próg, liczbę próbek potwierdzenia, czas ponownego uzbrojenia i monitor ustawisz w oknie. Pozostałe parametry są w `config.json` (sekcja `detector`).
+Progi, liczbę próbek potwierdzenia, czas ponownego uzbrojenia i monitor ustawisz w oknie. Są dwa progi dopasowania: **„Próg śmierci i zwycięstwa”** dotyczy napisu śmierci i komunikatu zwycięstwa (oba to duże napisy na środku ekranu), a **„Próg paska bossa”** – wzorca paska zdrowia bossa. Pozostałe parametry są w `config.json` (sekcja `detector`).
 
 ## Dane
 
@@ -77,7 +77,25 @@ Po zaznaczeniu **„Śledź walkę z bossem”** program sam prowadzi walkę:
 - pasek znów widoczny → walka z tym samym bossem trwa dalej;
 - komunikat zwycięstwa → **Boss pokonany**: timer staje na stałe, a nakładka wraca do samego `DEATHS: N`.
 
-Nazwę bossa można wpisać w dowolnym momencie (do tego czasu to „Boss 1”, „Boss 2”…). **Zapisz wynik** zapisuje ostateczny wynik ze statusem POKONANO i czyści panel; dopiero potem kolejny pasek oznacza nowego bossa. **Odrzuć** usuwa pomyłkowy wpis. Gdy śmierć i zwycięstwo wypadną prawie jednocześnie albo w trakcie walki zniknie obraz, panel pokazuje ostrzeżenie i czeka na decyzję („Zapisz wynik” albo „Kontynuuj walkę”). Śmierć poza walką liczy się tylko w ogólnym liczniku, a ręczne +1/−1 w trakcie walki poprawia też licznik bossa. Czas walki jest zapisywany co kilka sekund i przy zamknięciu programu; gdy program jest wyłączony, timer nie biegnie.
+Nazwę bossa można wpisać w dowolnym momencie (do tego czasu to „Boss 1”, „Boss 2”…), ale zwykle nie trzeba – patrz niżej. **Zapisz wynik** zapisuje ostateczny wynik ze statusem POKONANO i czyści panel; dopiero potem kolejny pasek oznacza nowego bossa. **Odrzuć** usuwa pomyłkowy wpis. Gdy śmierć i zwycięstwo wypadną prawie jednocześnie albo w trakcie walki zniknie obraz, panel pokazuje ostrzeżenie i czeka na decyzję („Zapisz wynik” albo „Kontynuuj walkę”). Śmierć poza walką liczy się tylko w ogólnym liczniku, a ręczne +1/−1 w trakcie walki poprawia też licznik bossa. Czas walki jest zapisywany co kilka sekund i przy zamknięciu programu; gdy program jest wyłączony, timer nie biegnie.
+
+### Odczyt nazwy bossa
+
+Gdy opcja **„Odczytuj nazwę bossa z ekranu”** jest włączona (domyślnie tak), program chwilę po pojawieniu się paska czyta nazwę wypisaną nad nim. Używa wbudowanego w Windows rozpoznawania tekstu (OCR) w języku polskim. Działa to bez internetu i niczego nie wysyła. Potrzebny jest polski pakiet OCR Windows. Zwykle jest zainstalowany razem z polskim językiem, a jeśli go brak, program napisze, gdzie go dodać.
+
+- Program uczy się nazw. Nazwa zatwierdzona przyciskiem „Zapisz wynik” albo wpisana ręcznie trafia do `boss_names.json` w folderze gry. Kolejne odczyty są dopasowywane do znanych nazw, więc pomyłka OCR w jednej literze nie tworzy nowego bossa.
+- Jeśli poprawisz źle odczytaną nazwę, program zapamięta ten błędny odczyt. Przy następnej walce od razu da poprawną nazwę.
+- Powrót po śmierci do tego samego bossa łączy podejścia. Jeśli wpiszesz krótszą nazwę (np. „Margit”), też zostanie uznana za tego samego bossa.
+- Gdy pasek pojawi się przy innym bossie niż ostatni niepokonany, walka przechodzi na nowego bossa razem z czasem od pojawienia się paska. Poprzedni zostaje w pliku jako „W TRAKCIE”.
+
+**Automatyczny zapis wyniku.** Program zapisuje wynik sam, ok. 4 s po potwierdzonym komunikacie zwycięstwa, i pokazuje w panelu „Automatycznie zapisany: …”. Robi to tylko wtedy, gdy nazwa bossa jest pewna, czyli:
+- większość prób OCR dała ten sam tekst,
+- albo odczyt pasuje do znanej nazwy,
+- albo nazwę wpisałeś ręcznie.
+
+Dodatkowo nic nie może budzić wątpliwości: śmierć tuż przed albo tuż po zwycięstwie czy utrata obrazu blokują zapis. Gdy nazwa jest niepewna, panel prosi o jej sprawdzenie i kliknięcie **Zapisz wynik**. Taka nazwa jest potem znana, więc następna walka z tym bossem zapisze się już sama.
+
+Nazwa jest szukana w pasie nad paskiem, od miejsca znalezionego wzorca na ok. 1/3 szerokości ekranu w lewo. Dlatego działa bez względu na to, który fragment paska zaznaczysz w kalibracji. Odczyty trafiają do `diagnostyka.log`.
 
 ### Kalibracja walki z bossem
 
@@ -121,12 +139,13 @@ Wiele gier (np. Dark Souls II) nie ma trybu okna bez ramek, dlatego program jest
   Pozycję, kolor i wielkość tekstu ustawia się w RTSS. Uwaga: sam RTSS, podobnie jak nakładki Steam czy Discord, podpina się pod renderowanie gry. Program licznika nie dotyka gry.
 - **Automatyczna instalacja i start RTSS.** Jeśli RTSS nie jest zainstalowany, licznik przy pierwszym uruchomieniu zaproponuje instalację przez winget (paczka `Guru3D.RTSS`). Instalator RTSS poprosi wtedy o zgodę administratora. RTSS wymaga uprawnień administratora przy każdym starcie, dlatego licznik raz, za zgodą w oknie UAC, tworzy zadanie Harmonogramu zadań „DeathCounter - RTSS”. Przez to zadanie uruchamia potem RTSS bez pytania. Sam licznik działa bez uprawnień administratora. Funkcję wyłącza opcja „Uruchamiaj RTSS razem z licznikiem”. Zadanie usuniesz poleceniem `schtasks /Delete /TN "DeathCounter - RTSS" /F` w terminalu uruchomionym jako administrator (zadanie ze starszej wersji programu nazywa się „DS2DeathCounter - RTSS”).
 - **Nakładka-okno.** Może być widoczna także w pełnym ekranie, jeśli Windows stosuje dla gry optymalizacje pełnego ekranu. We właściwościach pliku `.exe` gry (np. `DarkSoulsII.exe`) → Zgodność opcja „Wyłącz optymalizacje pełnego ekranu” musi być odznaczona. Trzeba to sprawdzić na swoim komputerze.
-- **Skróty globalne**, bez wychodzenia z gry:
+- **Skróty globalne**, bez wychodzenia z gry (domyślnie):
   - **Ctrl+Alt+F9** – zrzut do kalibracji;
   - **Ctrl+Alt+F10** – +1;
-  - **Ctrl+Alt+F11** – −1.
+  - **Ctrl+Alt+F11** – −1;
+  - **Ctrl+Alt+F8** – włączenie/wyłączenie nakładki.
 
-  Każdy skrót potwierdza sygnał dźwiękowy.
+  Każdy skrót potwierdza sygnał dźwiękowy. Przycisk **„Skróty…”** pozwala zmienić każdy skrót (kliknij pole i naciśnij nową kombinację), wyłączyć go przyciskiem ✕ albo przywrócić domyślne. Litery, cyfry i spacja wymagają Ctrl, Alt albo Win, żeby nie blokować pisania.
 - **Automatyczny start.** Opcja „Włączaj wykrywanie przy starcie” pozwala uruchomić licznik przed grą i nie przełączać się do jego okna.
 - **Przechwytywanie obrazu** (DXGI Desktop Duplication) działa w pełnym ekranie. Gdy gra zmienia tryb ekranu albo rozdzielczość, przechwytywanie jest odtwarzane automatycznie, a wzorzec przeskalowany.
 
@@ -157,6 +176,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/storage.py` | `deaths.json`, zapis atomowy |
 | `deathcounter/bosses.py` | walka z bossem: maszyna stanów, timer, `bosses.json` (bez Qt, testowalne) |
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
+| `deathcounter/ocr.py` | odczyt nazwy bossa (OCR Windows) |
+| `deathcounter/boss_names.py` | znane nazwy bossów gry i dopasowanie odczytu (`boss_names.json`) |
 | `deathcounter/report.py` | certyfikat PDF (QPdfWriter), weryfikacja |
 | `deathcounter/audit.py` | rejestr ręcznych korekt i zmian poza programem (`audit.json`) |
 | `deathcounter/diagnostics.py` | plik diagnostyczny `diagnostyka.log` |
@@ -186,6 +207,6 @@ W skrócie: każdy może używać programu, przeglądać i zmieniać kod oraz ro
 
 **Certyfikaty.** Klucz podpisu certyfikatów nie jest częścią kodu źródłowego. Program zbudowany z kodu (`build.ps1`) tworzy własny klucz, więc jego certyfikaty nie przejdą weryfikacji w oficjalnych wydaniach z [Releases](https://github.com/Kacyn1/DeathCounter/releases) – i odwrotnie. Dzięki temu „Sprawdź certyfikat…” potwierdza tylko certyfikaty z oficjalnego programu.
 
-Program korzysta z bibliotek osób trzecich na ich własnych licencjach – Qt for Python (LGPL v3), OpenCV (Apache 2.0), NumPy (BSD), DXcam i comtypes (MIT) oraz Pythona (PSF); pełne teksty są w [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt) i w oknie **O programie**. Po aktualizacji bibliotek listę licencji odświeża `tools\make_third_party_licenses.py`.
+Program korzysta z bibliotek osób trzecich na ich własnych licencjach – Qt for Python (LGPL v3), OpenCV (Apache 2.0), NumPy (BSD), DXcam, comtypes i PyWinRT (MIT) oraz Pythona (PSF); pełne teksty są w [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt) i w oknie **O programie**. Po aktualizacji bibliotek listę licencji odświeża `tools\make_third_party_licenses.py`.
 
 Propozycje zmian: [CONTRIBUTING.md](CONTRIBUTING.md).

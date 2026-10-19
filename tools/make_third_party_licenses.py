@@ -23,6 +23,8 @@ LIBRARIES = [
      ["licenses/LICENSE.txt"]),
     ("dxcam", "DXcam", "https://github.com/ra1nty/DXcam", "MIT", ["licenses/LICENSE"]),
     ("comtypes", "comtypes", "https://github.com/enthought/comtypes", "MIT", ["licenses/LICENSE.txt"]),
+    ("winrt-runtime", "PyWinRT (winrt-runtime i pakiety winrt-Windows.*)", "https://github.com/pywinrt/pywinrt",
+     "MIT", ["licenses/pywinrt-MIT.txt"]),
 ]
 
 

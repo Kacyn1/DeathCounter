@@ -77,7 +77,7 @@ def show_about(parent) -> None:
         f"<p>{LICENSE_NOTICE}</p>"
         f"<p>Kod źródłowy: <a href='{REPOSITORY}'>{REPOSITORY}</a></p>"
         "<p style='color:#9aa0a6'>Program korzysta z bibliotek Qt for Python (LGPL v3), OpenCV (Apache 2.0), "
-        "NumPy (BSD), DXcam i comtypes (MIT) oraz Pythona (PSF).</p>"
+        "NumPy (BSD), DXcam, comtypes i PyWinRT (MIT) oraz Pythona (PSF).</p>"
     )
     info.setWordWrap(True)
     info.setOpenExternalLinks(True)

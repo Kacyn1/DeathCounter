@@ -8,9 +8,9 @@ def result(score, armed):
 
 def test_detector_transitions_are_logged(tmp_path):
     log = diagnostics.DiagnosticLog(tmp_path / "diagnostyka.log")
-    log.sample(result(0.1, True), 0.7, "Śmierć")
-    log.sample(result(0.9, False), 0.7, "Śmierć")
-    log.sample(result(0.65, False), 0.7, "Śmierć")  # bez zmiany stanu – bez nowego wpisu przejścia
+    log.sample(result(0.1, True), 0.7, 0.7, "Śmierć")
+    log.sample(result(0.9, False), 0.7, 0.7, "Śmierć")
+    log.sample(result(0.65, False), 0.7, 0.7, "Śmierć")  # bez zmiany stanu – bez nowego wpisu przejścia
     text = (tmp_path / "diagnostyka.log").read_text(encoding="utf-8")
     assert text.count("DETEKTOR GOTOWY") == 1
     assert text.count("DETEKTOR CZEKA NA ZNIKNIĘCIE NAPISU (dopasowanie śmierci 0.90)") == 1
