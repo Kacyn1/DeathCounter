@@ -152,6 +152,19 @@ class HotkeySettings:
 
 
 @dataclass
+class UpdateSettings:
+    """Aktualizacje z GitHuba."""
+
+    check: bool = True        # „Sprawdzaj aktualizacje raz dziennie”
+    last_check: float = 0.0   # ostatnie udane sprawdzenie (sekundy od epoki)
+    latest: str = ""          # najnowsza znana wersja – pasek „Dostępna wersja” od razu po starcie
+
+    def sanitize(self) -> None:
+        if not re.match(r"^\d+(\.\d+)*$", self.latest):
+            self.latest = ""
+
+
+@dataclass
 class UiSettings:
     """Wygląd okna: zwinięte sekcje."""
 
@@ -191,6 +204,7 @@ class AppConfig:
     discord: DiscordSettings = field(default_factory=DiscordSettings)
     hotkeys: HotkeySettings = field(default_factory=HotkeySettings)
     ui: UiSettings = field(default_factory=UiSettings)
+    update: UpdateSettings = field(default_factory=UpdateSettings)
     game: str = DEFAULT_GAME
     player_name: str = ""  # nick gracza na certyfikacie
     custom_games: dict[str, str] = field(default_factory=dict)  # gry dodane przez użytkownika: id → nazwa
@@ -331,6 +345,7 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
     _fill(config.discord, data.get("discord"))
     _fill(config.hotkeys, data.get("hotkeys"))
     _fill(config.ui, data.get("ui"))
+    _fill(config.update, data.get("update"))
     custom = data.get("custom_games")
     if isinstance(custom, dict):
         config.custom_games = {
@@ -345,7 +360,8 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
         config.player_name = " ".join(data["player_name"].split())[:GAME_NAME_MAX]
     if isinstance(data.get("auto_start"), bool):
         config.auto_start = data["auto_start"]
-    for part in (config.detector, config.capture, config.overlay, config.bosses, config.discord, config.hotkeys):
+    for part in (config.detector, config.capture, config.overlay, config.bosses, config.discord, config.hotkeys,
+                 config.update):
         part.sanitize()
     return config, None
 

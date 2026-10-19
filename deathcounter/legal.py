@@ -55,7 +55,8 @@ def show_text(parent, title: str, text: str) -> None:
     dialog.exec()
 
 
-def show_about(parent) -> None:
+def show_about(parent, extra=None) -> None:
+    """`extra` – widżet wstawiany nad przyciskami (np. aktualizacje)."""
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QPixmap
     from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
@@ -84,6 +85,8 @@ def show_about(parent) -> None:
     info.setTextFormat(Qt.TextFormat.RichText)
     info.setMinimumWidth(440)
     column.addWidget(info)
+    if extra is not None:
+        column.addWidget(extra)
     buttons = QHBoxLayout()
     for label, action in (
         ("Licencja (GNU GPL v3)…", lambda: show_text(dialog, "GNU General Public License v3", license_text())),

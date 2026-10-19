@@ -7,13 +7,15 @@ import sys
 import traceback
 
 from PySide6.QtCore import QDir, QLockFile
+from PySide6.QtNetwork import QLocalSocket
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QInputDialog, QMessageBox
 
 from .config import GAMES, data_dir, legacy_data_present, load_config, migrate_legacy, save_config
 from .game_data import open_game
 from .icon import app_icon
-from .main_window import MainWindow
+from .main_window import INSTANCE_SERVER, MainWindow
+from .updater import AFTER_UPDATE_ARG
 from .storage import StorageError
 
 
@@ -54,6 +56,22 @@ def _set_app_user_model_id() -> None:
         pass
 
 
+def _wake_running() -> bool:
+    """Program już działa: prosi go o pokazanie okna (i sprawdzenie aktualizacji). False, gdy nie odpowiada."""
+    try:
+        ctypes.windll.user32.AllowSetForegroundWindow(-1)  # działająca kopia może wyjść na wierzch
+    except (AttributeError, OSError):
+        pass
+    socket = QLocalSocket()
+    socket.connectToServer(INSTANCE_SERVER)
+    if not socket.waitForConnected(1000):
+        return False
+    socket.write(b"show")
+    socket.waitForBytesWritten(1000)
+    socket.disconnectFromServer()
+    return True
+
+
 def _ask_legacy_game(default: str) -> str:
     """Jednorazowo po aktualizacji: do której gry należą dotychczasowy licznik, bossowie i kalibracja."""
     ids = list(GAMES)
@@ -78,8 +96,12 @@ def main() -> int:
     app.setPalette(_dark_palette())
     _install_excepthook()
 
+    # Po aktualizacji nowa wersja czeka, aż stara się zamknie i zwolni blokadę.
+    after_update = AFTER_UPDATE_ARG in sys.argv
     lock = QLockFile(QDir.temp().filePath("death-counter.lock"))
-    if not lock.tryLock(100):
+    if not lock.tryLock(30000 if after_update else 100):
+        if not after_update and _wake_running():
+            return 0  # ponowne kliknięcie ikony – działające okno wychodzi na wierzch
         QMessageBox.warning(None, "Death Counter by MK", "Program jest już uruchomiony.")
         return 1
 
@@ -96,7 +118,7 @@ def main() -> int:
         return 1
 
     warnings = ([config_warning] if config_warning else []) + game.warnings
-    window = MainWindow(config, game)
+    window = MainWindow(config, game, after_update=after_update)
     window.show()
     for warning in warnings:
         QMessageBox.warning(window, "Death Counter by MK", warning)

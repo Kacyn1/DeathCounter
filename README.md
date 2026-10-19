@@ -22,6 +22,17 @@ Z tego samego folderu możesz zbudować własny `.exe`: `powershell -ExecutionPo
 
 Jeśli folderu programu nie da się zapisywać, dane trafiają do `%APPDATA%\DeathCounter`.
 
+### Aktualizacje
+
+Program raz dziennie sprawdza na GitHubie, czy jest nowsza wersja. Wysyła wtedy tylko jedno zapytanie o najnowsze wydanie. Gdy nowa wersja jest dostępna, pod licznikiem pojawia się pasek „Dostępna nowa wersja”:
+- **Co nowego** – otwiera opis zmian;
+- **Aktualizuj** – pobiera nowy `DeathCounter.exe`, sprawdza jego sumę kontrolną SHA-256 podaną przez GitHub, podmienia program i uruchamia go ponownie. Licznik, bossowie, kalibracja i certyfikaty zostają bez zmian. Gdy trwa walka z bossem, program najpierw pyta o zgodę, a czas walki zapisuje przed restartem;
+- **Później** – ukrywa pasek do następnego uruchomienia.
+
+Nic nie instaluje się bez kliknięcia „Aktualizuj”. Stara wersja zostaje na chwilę jako `DeathCounter.old.exe` i znika przy kolejnym starcie. W oknie **O programie** można sprawdzić aktualizacje od razu albo wyłączyć codzienne sprawdzanie. W wersji uruchomionej ze źródeł przycisk „Aktualizuj” jest nieaktywny, bo tam aktualizuje się przez `git pull`.
+
+Program działa w jednej kopii. Ponowne kliknięcie ikony, gdy jest już otwarty, wyciąga jego okno na wierzch i sprawdza, czy jest aktualizacja.
+
 ## Wybór gry
 
 Lista **Gra** nad licznikiem: Dark Souls I, Dark Souls II, Dark Souls III, Sekiro: Shadows Die Twice, Elden Ring. Każda gra ma **osobny** licznik śmierci, bossów i kalibrację (wzorce zapisują się automatycznie dla wybranej gry), a raport PDF ma nazwę gry w tytule. Zmiana gry przy włączonym wykrywaniu zatrzymuje je, wczytuje dane i wzorce tej gry i uruchamia wykrywanie ponownie. Ustawienia programu (nakładka, RTSS, progi, monitor) są wspólne.
@@ -197,6 +208,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/bosses.py` | walka z bossem: maszyna stanów, timer, `bosses.json` (bez Qt, testowalne) |
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
 | `deathcounter/results_window.py` | okno „Wyniki” z tabelą bossów |
+| `deathcounter/updater.py` | aktualizacja z GitHuba (sprawdzenie, pobranie, podmiana exe) |
 | `deathcounter/attempts.py` | historia pojedynczych prób (`attempts.json`) |
 | `deathcounter/recent_fights.py` | ostatnie walki w panelu (`recent_fights.json`) |
 | `deathcounter/collapsible.py` | zwijane sekcje okna („Nakładka”, „Wykrywanie”) |

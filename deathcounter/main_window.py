@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import getpass
 import time
 import winsound
+from pathlib import Path
 from datetime import datetime
 
 import numpy as np
 from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtNetwork import QLocalServer
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
+    QFrame,
     QInputDialog,
     QFormLayout,
     QGridLayout,
@@ -22,16 +26,18 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
-from . import hotkeys, legal, winapi
+from . import hotkeys, legal, updater, winapi
 from .boss_panel import BossPanel
 from .collapsible import CollapsibleBox
-from .bosses import BossTracker, format_duration, overlay_text
+from .bosses import BossState, BossTracker, format_duration, overlay_text
 from .calibration import CalibrationDialog, SavedCalibration
 from .hotkey_dialog import HotkeyDialog
 from .icon import render as render_icon
@@ -58,7 +64,14 @@ from .worker import (
     DetectionWorker,
     DetectorStatus,
     RtssSetupWorker,
+    UpdateCheckWorker,
+    UpdateDownloadWorker,
 )
+
+# Kanał, przez który ponowne uruchomienie exe prosi działający program o pokazanie okna.
+INSTANCE_SERVER = f"DeathCounterByMK-{getpass.getuser()}"
+UPDATE_CHECK_TIMER_MS = 3600 * 1000  # co godzinę: czy minęła doba od ostatniego sprawdzenia
+TIMEOUT_MS_ON_CLOSE = 20000          # zamknięcie czeka na wątek aktualizacji (sieć ma 15 s limitu)
 
 # Skróty globalne (działają także w pełnym ekranie): identyfikator RegisterHotKey → pole HotkeySettings.
 HOTKEY_IDS = {0xD52: "snapshot", 0xD53: "plus", 0xD54: "minus", 0xD55: "overlay"}
@@ -81,7 +94,7 @@ STATUS_COLORS = {
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, config: AppConfig, game: GameData):
+    def __init__(self, config: AppConfig, game: GameData, after_update: bool = False):
         super().__init__()
         self.setWindowTitle("Death Counter by MK")
         self.config = config
@@ -129,6 +142,7 @@ class MainWindow(QMainWindow):
         if config.auto_start and self.templates["death"] is not None:
             QTimer.singleShot(0, self.start_detection)
         QTimer.singleShot(300, self._auto_start_rtss)
+        self._init_updates(after_update)
 
     # ------------------------------------------------------------------ UI
 
@@ -174,6 +188,7 @@ class MainWindow(QMainWindow):
         self.error_banner.setStyleSheet("background:#5a1d1d; color:#ffd7d7; padding:6px; border-radius:4px;")
         self.error_banner.hide()
         root.addWidget(self.error_banner)
+        root.addWidget(self._build_update_banner())
 
         status_box = QGroupBox("Stan")
         status_form = QFormLayout(status_box)
@@ -259,7 +274,7 @@ class MainWindow(QMainWindow):
         hotkeys_button.clicked.connect(self.open_hotkeys)
         footer_row.addWidget(hotkeys_button)
         about_button = QPushButton("O programie")
-        about_button.clicked.connect(lambda: legal.show_about(self))
+        about_button.clicked.connect(lambda: legal.show_about(self, self._build_about_updates()))
         footer_row.addWidget(about_button)
         root.addLayout(footer_row)
 
@@ -1204,6 +1219,208 @@ class MainWindow(QMainWindow):
         if checked:
             self._auto_start_rtss()
 
+    # ---------------------------------------------------------- aktualizacje
+
+    def _build_update_banner(self) -> QFrame:
+        banner = self.update_banner = QFrame()
+        banner.setStyleSheet("QFrame { background:#1d3550; border-radius:4px; } QLabel { color:#d6e6f7; }")
+        row = QHBoxLayout(banner)
+        row.setContentsMargins(8, 4, 8, 4)
+        self.update_label = QLabel()
+        self.update_label.setWordWrap(True)
+        self.update_progress = QProgressBar()
+        self.update_progress.setMaximumWidth(160)
+        self.update_progress.hide()
+        self.update_notes_button = QPushButton("Co nowego")
+        self.update_notes_button.clicked.connect(self._open_release_page)
+        self.update_button = QPushButton("Aktualizuj")
+        self.update_button.clicked.connect(self.start_update)
+        self.update_later_button = QPushButton("Później")
+        self.update_later_button.setToolTip("Ukrywa pasek do następnego uruchomienia programu.")
+        self.update_later_button.clicked.connect(banner.hide)
+        row.addWidget(self.update_label, 1)
+        row.addWidget(self.update_progress)
+        for button in (self.update_notes_button, self.update_button, self.update_later_button):
+            row.addWidget(button)
+        banner.hide()
+        return banner
+
+    def _init_updates(self, after_update: bool) -> None:
+        self._release: updater.Release | None = None
+        self._update_check: UpdateCheckWorker | None = None
+        self._update_download: UpdateDownloadWorker | None = None
+        self._update_after_check = False   # „Aktualizuj” przed sprawdzeniem – pobieranie po sprawdzeniu
+        self._restart_exe: Path | None = None
+        self._about_update_label: QLabel | None = None
+        self._instance_server = QLocalServer(self)
+        QLocalServer.removeServer(INSTANCE_SERVER)
+        self._instance_server.newConnection.connect(self._on_instance_wake)
+        self._instance_server.listen(INSTANCE_SERVER)
+        exe = updater.running_exe()
+        if exe is not None:
+            updater.cleanup(exe)
+            QTimer.singleShot(15000, lambda: updater.cleanup(exe))  # stara wersja mogła jeszcze się zamykać
+        if after_update:
+            self.notice_label.setText(f"Zaktualizowano do wersji {__version__}.")
+            self.diag.write(f"AKTUALIZACJA: uruchomiono wersję {__version__}")
+        if updater.is_newer(self.config.update.latest):
+            self._show_update_banner(self.config.update.latest)
+        self._update_timer = QTimer(self, interval=UPDATE_CHECK_TIMER_MS)
+        self._update_timer.timeout.connect(self._auto_check_updates)
+        self._update_timer.start()
+        QTimer.singleShot(5000, self._auto_check_updates)
+
+    def _on_instance_wake(self) -> None:
+        """Ponowne kliknięcie ikony: okno wychodzi na wierzch i program sprawdza aktualizację (bez instalacji)."""
+        while (connection := self._instance_server.nextPendingConnection()) is not None:
+            connection.disconnected.connect(connection.deleteLater)
+        if self.isMinimized():
+            self.showNormal()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.check_updates(manual=False)
+
+    def _auto_check_updates(self) -> None:
+        u = self.config.update
+        if u.check and updater.due(u.last_check, time.time()):
+            self.check_updates(manual=False)
+
+    def check_updates(self, manual: bool) -> None:
+        if self._update_check is not None:
+            return
+        self._set_about_update_status("Sprawdzanie…")
+        worker = UpdateCheckWorker(self)
+        worker.done.connect(lambda release, error: self._on_update_checked(release, error, manual))
+        self._update_check = worker
+        worker.start()
+
+    def _on_update_checked(self, release, error: str, manual: bool) -> None:
+        worker, self._update_check = self._update_check, None
+        if worker is not None:
+            worker.wait()
+            worker.deleteLater()
+        if release is None:
+            self.diag.write(f"AKTUALIZACJA: {error}")
+            self._set_about_update_status(error)
+            if manual or self._update_after_check:
+                self.notice_label.setText(error)
+            self._update_after_check = False
+            return
+        u = self.config.update
+        u.last_check, u.latest = time.time(), release.version
+        self._save_timer.start()
+        if not updater.is_newer(release.version):
+            text = f"Masz najnowszą wersję ({__version__})."
+            self._set_about_update_status(text)
+            if manual:
+                self.notice_label.setText(text)
+            self.update_banner.hide()
+            self._update_after_check = False
+            return
+        self._release = release
+        self.diag.write(f"AKTUALIZACJA: dostępna wersja {release.version}")
+        self._set_about_update_status(f"Dostępna wersja {release.version}.")
+        self._show_update_banner(release.version)
+        if self._update_after_check:
+            self._update_after_check = False
+            self.start_update()
+
+    def _show_update_banner(self, version: str) -> None:
+        self.update_label.setText(f"Dostępna nowa wersja <b>{version}</b> (masz {__version__}).")
+        source = updater.running_exe() is None
+        self.update_button.setEnabled(not source)
+        self.update_button.setToolTip("Program uruchomiony ze źródeł – zaktualizuj go poleceniem git pull."
+                                      if source else "Pobiera nową wersję, podmienia program i uruchamia go ponownie.")
+        self.update_progress.hide()
+        self.update_banner.show()
+
+    def _open_release_page(self) -> None:
+        url = self._release.page_url if self._release else f"{legal.REPOSITORY}/releases/latest"
+        QDesktopServices.openUrl(QUrl(url))
+
+    def start_update(self) -> None:
+        exe = updater.running_exe()
+        if exe is None or self._update_download is not None:
+            return
+        if self._release is None:
+            # Pasek z zapamiętanej wersji – najpierw pobieramy dane wydania.
+            self._update_after_check = True
+            self.check_updates(manual=True)
+            return
+        if self.bosses.current is not None and self.bosses.state is not BossState.WAITING:
+            answer = QMessageBox.question(
+                self, "Aktualizacja",
+                "Trwa walka z bossem. Program zapisze jej czas i uruchomi się ponownie w nowej wersji. Kontynuować?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        worker = UpdateDownloadWorker(self._release, exe.with_name("DeathCounter.new.exe"), self)
+        worker.progress.connect(self._on_update_progress)
+        worker.done.connect(self._on_update_downloaded)
+        self._update_download = worker
+        for button in (self.update_button, self.update_later_button):
+            button.setEnabled(False)
+        self.update_label.setText(f"Pobieranie wersji {self._release.version}…")
+        self.update_progress.setRange(0, 0)
+        self.update_progress.show()
+        self.diag.write(f"AKTUALIZACJA: pobieranie {self._release.version}")
+        worker.start()
+
+    def _on_update_progress(self, done: int, total: int) -> None:
+        if total:
+            self.update_progress.setRange(0, 1000)
+            self.update_progress.setValue(int(done * 1000 / total))
+
+    def _on_update_downloaded(self, path: str, error: str) -> None:
+        worker, self._update_download = self._update_download, None
+        if worker is not None:
+            worker.wait()
+            worker.deleteLater()
+        exe = updater.running_exe()
+        if not error and exe is not None:
+            try:
+                updater.install(Path(path), exe)
+            except updater.UpdateError as exc:
+                error = str(exc)
+        if error:
+            self.diag.write(f"AKTUALIZACJA: {error}")
+            self.update_progress.hide()
+            self.update_label.setText(f"Aktualizacja nieudana: {error}")
+            for button in (self.update_button, self.update_later_button):
+                button.setEnabled(True)
+            return
+        self.diag.write(f"AKTUALIZACJA: zainstalowano {self._release.version}, ponowne uruchomienie")
+        self.update_label.setText(f"Uruchamianie wersji {self._release.version}…")
+        self._restart_exe = exe
+        self.close()
+
+    def _build_about_updates(self) -> QWidget:
+        box = QWidget()
+        row = QHBoxLayout(box)
+        row.setContentsMargins(0, 0, 0, 0)
+        auto = QCheckBox("Sprawdzaj aktualizacje raz dziennie")
+        auto.setChecked(self.config.update.check)
+        auto.setToolTip("Program raz na dobę pyta GitHuba o najnowsze wydanie. Niczego nie instaluje bez Twojej zgody.")
+        auto.toggled.connect(self._on_auto_update_check)
+        check = QPushButton("Sprawdź aktualizacje")
+        check.clicked.connect(lambda: self.check_updates(manual=True))
+        self._about_update_label = QLabel()
+        self._about_update_label.setStyleSheet("color:#9aa0a6;")
+        row.addWidget(auto)
+        row.addWidget(check)
+        row.addWidget(self._about_update_label, 1)
+        return box
+
+    def _set_about_update_status(self, text: str) -> None:
+        label = self._about_update_label
+        if label is not None and isValid(label):  # okno „O programie” mogło zostać zamknięte
+            label.setText(text)
+
+    def _on_auto_update_check(self, checked: bool) -> None:
+        self.config.update.check = checked
+        self._save_timer.start()
+
     # ---------------------------------------------------------- zamykanie
 
     def closeEvent(self, event) -> None:
@@ -1230,7 +1447,15 @@ class MainWindow(QMainWindow):
             self.discord.close()
             self.discord = None
         self.overlay.close()
+        for thread in (self._update_check, self._update_download):
+            if thread is not None:
+                if isinstance(thread, UpdateDownloadWorker):
+                    thread.cancel()
+                thread.wait(TIMEOUT_MS_ON_CLOSE)
+        self._instance_server.close()
         super().closeEvent(event)
+        if self._restart_exe is not None:
+            updater.restart(self._restart_exe)
 
     def _save_config(self) -> None:
         try:

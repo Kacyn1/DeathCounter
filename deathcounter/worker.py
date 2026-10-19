@@ -11,7 +11,9 @@ from typing import Callable
 
 from PySide6.QtCore import QThread, Signal
 
-from . import ocr, rtss_setup
+from pathlib import Path
+
+from . import ocr, rtss_setup, updater
 from .capture import DxcamSource
 from .config import BossSettings, CaptureSettings, DetectorSettings
 from .detector import BarEvent, CaptureHealth, DetectionSession
@@ -68,6 +70,41 @@ class RtssSetupWorker(QThread):
         self.progress.emit("Uruchamianie RTSS…")
         rtss_setup.start_rtss(path)
         return "RTSS uruchomiony."
+
+
+class UpdateCheckWorker(QThread):
+    """Pyta GitHuba o najnowsze wydanie w tle – interfejs nie czeka na sieć."""
+
+    done = Signal(object, str)  # updater.Release | None, opis błędu
+
+    def run(self) -> None:
+        try:
+            self.done.emit(updater.fetch_latest(), "")
+        except updater.UpdateError as exc:
+            self.done.emit(None, str(exc))
+
+
+class UpdateDownloadWorker(QThread):
+    """Pobiera nowy DeathCounter.exe i sprawdza jego sumę kontrolną."""
+
+    progress = Signal(int, int)  # pobrane bajty, rozmiar
+    done = Signal(str, str)      # ścieżka pobranego pliku, opis błędu
+
+    def __init__(self, release: updater.Release, dest: Path, parent=None) -> None:
+        super().__init__(parent)
+        self._release = release
+        self._dest = dest
+        self._cancel = threading.Event()
+
+    def cancel(self) -> None:
+        self._cancel.set()
+
+    def run(self) -> None:
+        try:
+            path = updater.download(self._release, self._dest, self.progress.emit, cancelled=self._cancel.is_set)
+            self.done.emit(str(path), "")
+        except updater.UpdateError as exc:
+            self.done.emit("", str(exc))
 
 
 # Zdarzenia walki z bossem przekazywane sygnałem boss_event.
