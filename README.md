@@ -87,6 +87,18 @@ Nazwę bossa można wpisać w dowolnym momencie (do tego czasu to „Boss 1”, 
 
 Przycisk **Wyniki…** w panelu walki otwiera osobne okno z tabelą wszystkich bossów wybranej gry: nazwa, status (bieżąca walka, w trakcie, pokonany), liczba śmierci i czas. Nad tabelą jest podsumowanie: śmierci łącznie, pokonani bossowie, śmierci przy bossach i łączny czas walk. Okno nie blokuje programu i odświeża się co sekundę, a kliknięcie nagłówka kolumny zmienia sortowanie.
 
+**Historia prób.** Dwuklik w bossa w oknie „Wyniki” rozwija pod nim listę jego prób, od najnowszej. Widać 15 wierszy, a starsze próby są dostępne po przewinięciu. Każda próba ma numer, godzinę rozpoczęcia, czas walki i wynik:
+- Śmierć albo Śmierć (ręcznie),
+- Zwycięstwo,
+- Przerwano (opuszczono arenę),
+- Przerwano (zatrzymano wykrywanie),
+- Cofnięto (−1),
+- W toku – dla trwającej próby, z czasem na żywo.
+
+Nad listą jest podsumowanie: liczba prób, średni i najdłuższy czas oraz numer próby, w której boss został pokonany.
+
+Próba trwa od pojawienia się paska do śmierci, zwycięstwa albo przerwania. Pasek, który zniknie na chwilę i wróci bez śmierci (np. przerywnik między fazami), to wciąż ta sama próba. Historia zapisuje się w `attempts.json` w folderze gry i zbiera się od wersji 1.8.0.
+
 ### Odczyt nazwy bossa
 
 Gdy opcja **„Odczytuj nazwę bossa z ekranu”** jest włączona (domyślnie tak), program chwilę po pojawieniu się paska czyta nazwę wypisaną nad nim. Używa wbudowanego w Windows rozpoznawania tekstu (OCR) w języku polskim. Działa to bez internetu i niczego nie wysyła. Potrzebny jest polski pakiet OCR Windows. Zwykle jest zainstalowany razem z polskim językiem, a jeśli go brak, program napisze, gdzie go dodać.
@@ -185,6 +197,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/bosses.py` | walka z bossem: maszyna stanów, timer, `bosses.json` (bez Qt, testowalne) |
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
 | `deathcounter/results_window.py` | okno „Wyniki” z tabelą bossów |
+| `deathcounter/attempts.py` | historia pojedynczych prób (`attempts.json`) |
 | `deathcounter/recent_fights.py` | ostatnie walki w panelu (`recent_fights.json`) |
 | `deathcounter/collapsible.py` | zwijane sekcje okna („Nakładka”, „Wykrywanie”) |
 | `deathcounter/ocr.py` | odczyt nazwy bossa (OCR Windows) |

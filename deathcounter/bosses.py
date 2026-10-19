@@ -17,7 +17,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable
 
+from . import attempts as attempt_log
 from . import recent_fights
+from .attempts import Attempt, AttemptLog
 from .boss_names import BossNames, is_placeholder, same_boss
 from .recent_fights import RecentFights
 from .storage import StorageError, atomic_write_text
@@ -133,8 +135,12 @@ class BossTracker:
     """
 
     def __init__(self, store: BossStore, clock: Clock = time.monotonic, audit=None,
-                 names: BossNames | None = None, recent: RecentFights | None = None) -> None:
+                 names: BossNames | None = None, recent: RecentFights | None = None,
+                 attempts: AttemptLog | None = None, wall: Clock = time.time) -> None:
         self.store = store
+        self.attempts = attempts  # historia pojedynczych prób (okno „Wyniki”)
+        self._wall = wall         # zegar ścienny – godzina rozpoczęcia próby
+        self._attempt: Attempt | None = None  # trwająca próba bieżącego bossa (zapisywana po zakończeniu)
         self.audit = audit  # rejestr zmian (audit.AuditLog) – ręczne korekty i zmiany nazw
         self.names = names  # znane nazwy bossów gry – do dopasowania odczytu OCR
         self.recent = recent  # ostatnie walki pokazywane w panelu
@@ -178,6 +184,14 @@ class BossTracker:
             return None
         return BossView(self.current, record.deaths, self.elapsed(), self.state, self.uncertain, self.name_confident)
 
+    def attempts_for(self, name: str) -> list[Attempt]:
+        """Próby bossa od najstarszej; trwająca próba bieżącego bossa (W toku) na końcu, z czasem na żywo."""
+        attempts = list(self.attempts.bosses.get(name, [])) if self.attempts is not None else []
+        if name == self.current and self._attempt is not None:
+            running = self._clock() - self._fight_started if self._fight_started is not None else 0.0
+            attempts.append(Attempt(self._attempt.start, self._attempt.seconds + running, attempt_log.IN_PROGRESS))
+        return attempts
+
     def recent_rows(self, limit: int = 3) -> list[RecentRow]:
         """Ostatnie walki poza bieżącą (ta jest pokazywana osobno), od najnowszej."""
         rows = []
@@ -197,6 +211,7 @@ class BossTracker:
         self.enabled = enabled
         if not enabled and self.state is BossState.FIGHT:
             self._pause(BossState.WAITING)
+            self._end_attempt(attempt_log.STOPPED)
             self._save()
 
     def boss_bar_visible(self) -> None:
@@ -207,6 +222,8 @@ class BossTracker:
             self.current = self._placeholder_name()
             self.store.records[self.current] = BossRecord()
             self.name_confident = False
+        if self._attempt is None:  # pasek wrócił bez śmierci (np. po przerywniku) – ta sama próba trwa dalej
+            self._attempt = Attempt(self._wall(), 0.0, attempt_log.IN_PROGRESS)
         self.state = BossState.FIGHT
         self._fight_started = self._last_checkpoint = self._segment_started = self._clock()
         self._bar_lost_at = None
@@ -266,6 +283,7 @@ class BossTracker:
         self._death_at = now
         self.record.deaths += 1
         self._last_death_counted = True
+        self._end_attempt(attempt_log.DEATH)
         self._save()
         return True
 
@@ -281,6 +299,7 @@ class BossTracker:
             return
         self.state = BossState.DEFEATED
         self._victory_at = self._clock()
+        self._end_attempt(attempt_log.VICTORY)
         self._save()
 
     def frames_lost(self) -> None:
@@ -313,6 +332,7 @@ class BossTracker:
             view = self.view()
             if self.recent is not None:
                 self.recent.touch(self.current, recent_fights.ABANDONED)
+            self._end_attempt(attempt_log.ABANDONED)
             self._clear_current()
             self._save()
             return FightEnd(view, abandoned=True)
@@ -324,6 +344,7 @@ class BossTracker:
         if self.state is BossState.FIGHT:
             self._pause(BossState.WAITING)
             self._save()
+        self._end_attempt(attempt_log.STOPPED)  # nie wiadomo, co działo się dalej
         self._bar_lost_at = None  # bez wykrywania nie da się stwierdzić, że gracz opuścił arenę
 
     # ------------------------------------------------------- akcje użytkownika
@@ -335,6 +356,11 @@ class BossTracker:
             return
         if self.state is BossState.FIGHT:
             self._pause(BossState.DEFEATED)
+        if self._attempt is not None:
+            self._end_attempt(attempt_log.VICTORY)
+        elif self.uncertain and self.attempts is not None:
+            # „Komunikat zwycięstwa po śmierci” zatwierdzony jako wygrana – ostatnia próba to zwycięstwo.
+            self.attempts.set_last_outcome(self.current, attempt_log.VICTORY, only_if=(attempt_log.DEATH,))
         record.status = STATUS_DEFEATED
         if self.names is not None:
             self.names.learn(self.current)  # zatwierdzona nazwa – także ta odczytana z ekranu
@@ -348,7 +374,11 @@ class BossTracker:
         if self.record is None or not self.uncertain:
             return
         self.uncertain = None
-        self.state = BossState.DEATH if self._death_at is not None and self._last_death_counted else BossState.WAITING
+        died = self._death_at is not None and self._last_death_counted
+        if died and self.attempts is not None:
+            # Śmierć tuż po komunikacie zwycięstwa – próba skończyła się śmiercią, nie wygraną.
+            self.attempts.set_last_outcome(self.current, attempt_log.DEATH, only_if=(attempt_log.VICTORY,))
+        self.state = BossState.DEATH if died else BossState.WAITING
         self._victory_at = None
         self._save()
 
@@ -359,6 +389,8 @@ class BossTracker:
         self.store.records.pop(self.current, None)
         if self.recent is not None:
             self.recent.remove(self.current)
+        if self.attempts is not None:
+            self.attempts.remove(self.current)
         self._clear_current()
         self._save()
 
@@ -372,6 +404,9 @@ class BossTracker:
             self.names.learn(name)
         if self.recent is not None:
             self.recent.set_outcome(name, recent_fights.DEFEATED)
+        if self.attempts is not None:
+            self.attempts.set_last_outcome(name, attempt_log.VICTORY,
+                                           only_if=(attempt_log.ABANDONED, attempt_log.STOPPED))
         self._save()
 
     def remove(self, name: str) -> None:
@@ -383,6 +418,8 @@ class BossTracker:
             return
         if self.recent is not None:
             self.recent.remove(name)
+        if self.attempts is not None:
+            self.attempts.remove(name)
         self._save()
 
     def rename(self, name: str) -> str | None:
@@ -414,6 +451,8 @@ class BossTracker:
             self.store.records = {(name if key == self.current else key): value for key, value in records.items()}
         if self.audit is not None:
             self.audit.boss_renamed(self.current, name)
+        if self.attempts is not None:
+            self.attempts.rename(self.current, name)
         self.current = name
         self._save()
         return name
@@ -424,6 +463,11 @@ class BossTracker:
         if self.record is not None and self.state in (BossState.FIGHT, BossState.DEATH):
             self.record.deaths += 1
             self._last_death_counted = True
+            if self._attempt is not None:
+                self._checkpoint()
+                self._end_attempt(attempt_log.MANUAL_DEATH)
+                if self.state is BossState.FIGHT:  # walka trwa – liczy się kolejna próba
+                    self._attempt = Attempt(self._wall(), 0.0, attempt_log.IN_PROGRESS)
             self._save(manual=True)
 
     def manual_undo(self) -> None:
@@ -432,6 +476,9 @@ class BossTracker:
         if self._last_death_counted and record is not None and record.deaths > 0:
             record.deaths -= 1
             self._last_death_counted = False
+            if self.attempts is not None:
+                self.attempts.set_last_outcome(self.current, attempt_log.CANCELLED,
+                                               only_if=(attempt_log.DEATH, attempt_log.MANUAL_DEATH))
             self._save(manual=True)
 
     # ------------------------------------------------------------ wewnętrzne
@@ -445,7 +492,10 @@ class BossTracker:
         record = self.record
         if record is not None and self._fight_started is not None:
             now = self._clock()
-            record.total_time_seconds += max(0.0, now - self._fight_started)
+            delta = max(0.0, now - self._fight_started)
+            record.total_time_seconds += delta
+            if self._attempt is not None:
+                self._attempt.seconds += delta
             self._fight_started = self._last_checkpoint = now
 
     def _switch_to(self, name: str) -> None:
@@ -454,6 +504,13 @@ class BossTracker:
         moved = max(0.0, self._clock() - self._segment_started)
         old = self.record
         old.total_time_seconds = max(0.0, old.total_time_seconds - moved)
+        if self._attempt is not None:
+            # Część próby sprzed pojawienia się paska (gdy pasek wrócił bez śmierci) należy do poprzedniego bossa.
+            earlier = self._attempt.seconds - moved
+            if earlier >= 1.0 and self.attempts is not None:
+                self.attempts.add(self.current, Attempt(self._attempt.start, round(earlier, 1),
+                                                        attempt_log.ABANDONED))
+            self._attempt = Attempt(self._wall() - moved, moved, attempt_log.IN_PROGRESS)
         records = self.store.records
         existing = records.get(name)
         if existing is None or existing.status != STATUS_IN_PROGRESS:
@@ -474,6 +531,13 @@ class BossTracker:
         self._segment_started = self._reading = None
         self._last_death_counted = False
         self.name_confident = False
+        self._attempt = None
+
+    def _end_attempt(self, outcome: str) -> None:
+        """Kończy trwającą próbę bieżącego bossa i zapisuje ją w historii."""
+        attempt, self._attempt = self._attempt, None
+        if attempt is not None and self.attempts is not None and self.current is not None:
+            self.attempts.add(self.current, Attempt(attempt.start, round(attempt.seconds, 1), outcome))
 
     def _recently(self, moment: float | None, seconds: float = DEATH_GRACE_SECONDS) -> bool:
         return moment is not None and self._clock() - moment <= seconds

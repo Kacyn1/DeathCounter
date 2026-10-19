@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -18,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import recent_fights
+from .attempts import format_when
 from .bosses import BossState, BossTracker, RecentRow, format_duration
 from .storage import StorageError
 
@@ -189,7 +188,7 @@ class BossPanel(QGroupBox):
                 continue
             status, color = OUTCOME_LABELS[row.outcome]
             text = (f"{row.name} · <b style='color:{color}'>{status}</b> · śmierci: {row.deaths} · "
-                    f"{format_duration(row.seconds)} · <span style='color:#7d828a'>{_when(row.time)}</span>")
+                    f"{format_duration(row.seconds)} · <span style='color:#7d828a'>{format_when(row.time)}</span>")
             if label.text() != text:
                 label.setText(text)
             open_fight = row.outcome != recent_fights.DEFEATED
@@ -245,9 +244,3 @@ class BossPanel(QGroupBox):
             self.save_failed.emit(f"Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.")
         self.refresh()
         self.changed.emit()
-
-
-def _when(timestamp: float) -> str:
-    """„dziś 19:42” albo „18.10 21:05”."""
-    moment = datetime.fromtimestamp(timestamp)
-    return f"dziś {moment:%H:%M}" if moment.date() == datetime.now().date() else f"{moment:%d.%m %H:%M}"

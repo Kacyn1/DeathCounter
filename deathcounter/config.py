@@ -268,6 +268,7 @@ class AppPaths:
     victory_template: Path
     boss_names: Path
     recent_fights: Path
+    attempts: Path
 
     @classmethod
     def for_game(cls, base: Path, game: str) -> "AppPaths":
@@ -287,6 +288,7 @@ class AppPaths:
             game_dir / "victory.png",
             game_dir / "boss_names.json",
             game_dir / "recent_fights.json",
+            game_dir / "attempts.json",
         )
 
     def template_path(self, kind: str) -> Path:

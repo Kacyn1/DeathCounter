@@ -8,6 +8,7 @@ from pathlib import Path
 from .audit import AuditLog, open_audit
 from .boss_names import BossNames
 from .bosses import BossStore
+from .attempts import AttemptLog
 from .recent_fights import RecentFights
 from .config import TEMPLATE_FIELDS, AppPaths, Calibration, load_calibration
 from .storage import DeathStore, StorageError
@@ -27,6 +28,7 @@ class GameData:
     audit: AuditLog | None = None
     boss_names: BossNames | None = None
     recent: RecentFights | None = None
+    attempts: AttemptLog | None = None
     warnings: list[str] = field(default_factory=list)
 
 
@@ -54,7 +56,9 @@ def open_game(base: Path, game: str) -> GameData:
     boss_store.load()
     boss_names = BossNames(paths.boss_names)
     recent = RecentFights(paths.recent_fights)
-    warnings = [w for w in (store.warning, boss_store.warning, boss_names.load(), recent.load()) if w]
+    attempts = AttemptLog(paths.attempts)
+    warnings = [w for w in (store.warning, boss_store.warning, boss_names.load(), recent.load(), attempts.load())
+                if w]
     audit, warning = open_audit(paths.audit, load_key(), store.deaths, boss_store.records)
     if warning:
         warnings.append(warning)
@@ -71,4 +75,4 @@ def open_game(base: Path, game: str) -> GameData:
                 templates[kind] = DeathTemplate.load(paths.template_path(kind), info)
             except TemplateError as exc:
                 warnings.append(f"Nie można wczytać wzorca {TEMPLATE_LABELS[kind]}: {exc} Wykonaj kalibrację ponownie.")
-    return GameData(paths, store, boss_store, calibration, templates, audit, boss_names, recent, warnings)
+    return GameData(paths, store, boss_store, calibration, templates, audit, boss_names, recent, attempts, warnings)

@@ -510,7 +510,8 @@ class MainWindow(QMainWindow):
         self.calibration = game.calibration
         self.templates = dict(game.templates)
         self.audit = game.audit
-        self.bosses = BossTracker(game.boss_store, audit=game.audit, names=game.boss_names, recent=game.recent)
+        self.bosses = BossTracker(game.boss_store, audit=game.audit, names=game.boss_names, recent=game.recent,
+                                  attempts=game.attempts)
         self.bosses.enabled = self.config.bosses.track
 
     def _fill_games(self) -> None:
