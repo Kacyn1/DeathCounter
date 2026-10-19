@@ -6,7 +6,7 @@ Lokalna aplikacja Windows, która automatycznie liczy śmierci w grach wyświetl
 
 ### Sposób 1: gotowy program (zalecany)
 
-1. Wejdź w [Releases](https://github.com/Kacyn1/DeathCounter/releases) i pobierz `DeathCounter.exe`.
+1. Pobierz najnowszy [`DeathCounter.exe`](https://github.com/Kacyn1/DeathCounter/releases/latest/download/DeathCounter.exe). Link zawsze prowadzi do najnowszej wersji. Opis zmian i starsze wersje są w [Releases](https://github.com/Kacyn1/DeathCounter/releases).
 2. Umieść go w osobnym folderze, np. `C:\Gry\DeathCounter`. Obok programu będą zapisywane `config.json` i folder `games` z danymi każdej gry (licznik, bossowie, wzorce kalibracji).
 3. Uruchom dwuklikiem. Python nie jest potrzebny.
 

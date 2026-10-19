@@ -174,7 +174,7 @@ class MainWindow(QMainWindow):
 
         title = QLabel("ŚMIERCI")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color:#b9a77f; letter-spacing:4px; font-weight:bold;")
+        title.setStyleSheet("color:#b9a77f; letter-spacing:8px; font-weight:bold; font-size:20pt;")
         self.count_label = QLabel("0")
         self.count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         count_font = QFont("Segoe UI", 54)
