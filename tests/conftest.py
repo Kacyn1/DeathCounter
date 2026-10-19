@@ -69,3 +69,11 @@ def victory_frame(seed: int) -> np.ndarray:
     cv2.rectangle(frame, (0, 300), (WIDTH, 390), (10, 10, 10), -1)
     cv2.putText(frame, "VICTORY", (450, 370), cv2.FONT_HERSHEY_DUPLEX, 2.4, (60, 170, 210), 4, cv2.LINE_AA)
     return frame
+
+
+@pytest.fixture(scope="session", autouse=True)
+def qt_app():
+    """Jedna aplikacja Qt na wszystkie testy. QApplication (z widżetami) musi powstać przed testami,
+    które same tworzą QGuiApplication – inaczej okna, np. ResultsWindow, nie dałoby się utworzyć."""
+    from PySide6.QtWidgets import QApplication
+    return QApplication.instance() or QApplication([])

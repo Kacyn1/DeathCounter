@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from . import hotkeys, legal, winapi
 from .boss_panel import BossPanel
+from .collapsible import CollapsibleBox
 from .bosses import BossTracker, format_duration, overlay_text
 from .calibration import CalibrationDialog, SavedCalibration
 from .hotkey_dialog import HotkeyDialog
@@ -42,6 +43,7 @@ from .detector import CaptureHealth, SampleResult
 from .diagnostics import DiagnosticLog
 from .discord_presence import DiscordPresence, build_activity
 from .overlay import OverlayWindow
+from .results_window import ResultsWindow
 from .report import Adjustments, CertificateData, Verdict, rows_from_records, verify_pdf, write_certificate
 from .signing import load_key
 from .rtss import RtssOsd, RtssState
@@ -95,6 +97,7 @@ class MainWindow(QMainWindow):
         self._hotkey_frame: np.ndarray | None = None
         self._hotkeys: set[int] = set()  # zarejestrowane identyfikatory z HOTKEY_IDS
         self._calibration: CalibrationDialog | None = None
+        self._results: ResultsWindow | None = None
         self._closing = False
         self._stop_requested = False
         self._rtss_setup: RtssSetupWorker | None = None
@@ -225,12 +228,14 @@ class MainWindow(QMainWindow):
         self.boss_panel.changed.connect(self._refresh_overlay)
         self.boss_panel.save_failed.connect(self._show_error)
         self.boss_panel.calibrate_requested.connect(lambda: self.open_calibration("boss_bar"))
+        self.boss_panel.results_requested.connect(self.open_results)
         root.addWidget(self.boss_panel)
 
         settings_row = QHBoxLayout()
-        settings_row.addWidget(self._build_overlay_box())
-        settings_row.addWidget(self._build_detector_box())
+        settings_row.addWidget(self._build_overlay_box(), 1, Qt.AlignmentFlag.AlignTop)
+        settings_row.addWidget(self._build_detector_box(), 1, Qt.AlignmentFlag.AlignTop)
         root.addLayout(settings_row)
+        root.addStretch(1)
 
         footer = self.footer_label = QLabel()
         footer.setStyleSheet("color:#7d828a;")
@@ -261,9 +266,22 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         self.resize(640, 860)
 
+    def _collapsible(self, title: str, setting: str) -> tuple[CollapsibleBox, QFormLayout]:
+        box = CollapsibleBox(title, getattr(self.config.ui, setting))
+        box.collapsed_changed.connect(lambda collapsed: self._on_section_collapsed(setting, collapsed))
+        return box, QFormLayout(box.content)
+
+    def _on_section_collapsed(self, setting: str, collapsed: bool) -> None:
+        setattr(self.config.ui, setting, collapsed)
+        self._save_timer.start()
+        if collapsed:
+            # Okno kurczy się o zwiniętą sekcję (rozwinięcie samo je powiększy, jeśli trzeba).
+            for layout in (self.centralWidget().layout(), self.layout()):
+                layout.activate()  # przelicza wysokość od razu, bez ukrytej sekcji
+            self.resize(self.width(), self.minimumSizeHint().height())
+
     def _build_overlay_box(self) -> QGroupBox:
-        box = QGroupBox("Nakładka")
-        form = QFormLayout(box)
+        box, form = self._collapsible("Nakładka", "overlay_collapsed")
         s = self.config.overlay
         self.overlay_mode = QComboBox()
         for mode, label in OVERLAY_MODE_LABELS.items():
@@ -316,8 +334,7 @@ class MainWindow(QMainWindow):
         return box
 
     def _build_detector_box(self) -> QGroupBox:
-        box = QGroupBox("Wykrywanie")
-        form = QFormLayout(box)
+        box, form = self._collapsible("Wykrywanie", "detector_collapsed")
         d = self.config.detector
         self.monitor_combo = QComboBox()
         self._fill_monitors()
@@ -414,20 +431,35 @@ class MainWindow(QMainWindow):
         self.boss_panel.refresh()
 
     def _on_boss_tick(self) -> None:
-        saved = None
+        ended = None
         try:
-            saved = self.bosses.tick()
+            ended = self.bosses.tick()
         except StorageError as exc:
             self._show_error(f"Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.")
         self.boss_panel.refresh()
-        if saved is not None:
-            text = (f"Automatycznie zapisany: {saved.name} – śmierci: {saved.deaths}, "
-                    f"czas: {format_duration(saved.seconds)}")
+        if ended is not None:
+            saved = ended.view
+            what = "Walka przerwana (opuszczono arenę)" if ended.abandoned else "Automatycznie zapisany"
+            text = f"{what}: {saved.name} – śmierci: {saved.deaths}, czas: {format_duration(saved.seconds)}"
             self.boss_panel.set_note(text)
             self.notice_label.setText(text)
             self.diag.write(f"BOSS: {text}")
         self._refresh_overlay()
         self._refresh_discord_label()
+        self._refresh_results()
+
+    def open_results(self) -> None:
+        """Okno nie blokuje programu – może zostać otwarte obok w trakcie gry."""
+        if self._results is None:
+            self._results = ResultsWindow(self)
+        self._refresh_results(force=True)
+        self._results.show()
+        self._results.raise_()
+        self._results.activateWindow()
+
+    def _refresh_results(self, force: bool = False) -> None:
+        if self._results is not None and (force or self._results.isVisible()):
+            self._results.show_results(self.config.game_name(self.paths.game), self.store.deaths, self.bosses)
 
     def _on_track_bosses(self, checked: bool) -> None:
         self.config.bosses.track = checked
@@ -478,7 +510,7 @@ class MainWindow(QMainWindow):
         self.calibration = game.calibration
         self.templates = dict(game.templates)
         self.audit = game.audit
-        self.bosses = BossTracker(game.boss_store, audit=game.audit, names=game.boss_names)
+        self.bosses = BossTracker(game.boss_store, audit=game.audit, names=game.boss_names, recent=game.recent)
         self.bosses.enabled = self.config.bosses.track
 
     def _fill_games(self) -> None:
@@ -678,6 +710,8 @@ class MainWindow(QMainWindow):
         box.exec()
 
     def _refresh_boss_hint(self) -> None:
+        # Bez wzorca zwycięstwa nie da się odróżnić wygranej od opuszczenia areny.
+        self.bosses.abandon_enabled = self.templates["victory"] is not None
         missing = [label for kind, label in (("boss_bar", "pasek bossa"), ("victory", "komunikat zwycięstwa"))
                    if self.templates[kind] is None]
         if missing:

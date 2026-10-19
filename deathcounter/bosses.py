@@ -17,7 +17,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable
 
+from . import recent_fights
 from .boss_names import BossNames, is_placeholder, same_boss
+from .recent_fights import RecentFights
 from .storage import StorageError, atomic_write_text
 
 Clock = Callable[[], float]
@@ -30,6 +32,7 @@ CHECKPOINT_SECONDS = 5.0      # w trakcie walki zgromadzony czas trafia do pliku
 DEATH_GRACE_SECONDS = 10.0    # pasek znika przy śmierci wcześniej niż pojawia się napis śmierci
 SIMULTANEOUS_SECONDS = 3.0    # śmierć i zwycięstwo tak blisko siebie = wynik niepewny
 AUTO_SAVE_SECONDS = SIMULTANEOUS_SECONDS  # wynik zapisuje się sam dopiero, gdy minie czas na „prawie jednoczesną” śmierć
+ABANDON_SECONDS = 15.0        # pasek zniknął i przez tyle sekund nie było śmierci ani zwycięstwa = opuszczenie areny
 
 
 class BossState(Enum):
@@ -37,6 +40,25 @@ class BossState(Enum):
     FIGHT = "Walka"
     DEATH = "Śmierć"
     DEFEATED = "Boss pokonany"
+
+
+@dataclass
+class FightEnd:
+    """Walka zakończona przez program sam: wynik zapisany automatycznie albo walka przerwana."""
+
+    view: "BossView"
+    abandoned: bool
+
+
+@dataclass
+class RecentRow:
+    """Wiersz listy ostatnich walk w panelu."""
+
+    name: str
+    outcome: str      # recent_fights.IN_PROGRESS / ABANDONED / DEFEATED
+    deaths: int
+    seconds: float
+    time: float       # chwila ostatniej zmiany (sekundy od epoki)
 
 
 @dataclass
@@ -111,10 +133,12 @@ class BossTracker:
     """
 
     def __init__(self, store: BossStore, clock: Clock = time.monotonic, audit=None,
-                 names: BossNames | None = None) -> None:
+                 names: BossNames | None = None, recent: RecentFights | None = None) -> None:
         self.store = store
         self.audit = audit  # rejestr zmian (audit.AuditLog) – ręczne korekty i zmiany nazw
         self.names = names  # znane nazwy bossów gry – do dopasowania odczytu OCR
+        self.recent = recent  # ostatnie walki pokazywane w panelu
+        self.abandon_enabled = False  # przerywanie walki po opuszczeniu areny (wymaga wzorca zwycięstwa)
         self._clock = clock
         self.enabled = False
         self.state = BossState.WAITING
@@ -129,7 +153,9 @@ class BossTracker:
         self._segment_started: float | None = None  # początek bieżącego odcinka walki (od pojawienia się paska)
         self._reading: str | None = None            # ostatni odczyt OCR nazwy bieżącego bossa
         # Po restarcie wracamy do niezakończonej walki; timer nie biegnie, dopóki pasek się nie pojawi.
-        pending = [name for name, r in store.records.items() if r.status == STATUS_IN_PROGRESS]
+        # Przerwana walka (opuszczona arena) nie wraca – boss wróci, gdy pasek pojawi się znowu.
+        pending = [name for name, r in store.records.items() if r.status == STATUS_IN_PROGRESS
+                   and (recent is None or recent.outcome(name) != recent_fights.ABANDONED)]
         self.current = pending[-1] if pending else None
         self.name_confident = self.current is not None and not is_placeholder(self.current)
 
@@ -151,6 +177,19 @@ class BossTracker:
         if record is None:
             return None
         return BossView(self.current, record.deaths, self.elapsed(), self.state, self.uncertain, self.name_confident)
+
+    def recent_rows(self, limit: int = 3) -> list[RecentRow]:
+        """Ostatnie walki poza bieżącą (ta jest pokazywana osobno), od najnowszej."""
+        rows = []
+        for fight in self.recent.fights if self.recent is not None else []:
+            record = self.store.records.get(fight.name)
+            if record is None or fight.name == self.current:
+                continue  # boss usunięty albo przemianowany
+            outcome = recent_fights.DEFEATED if record.status == STATUS_DEFEATED else fight.outcome
+            rows.append(RecentRow(fight.name, outcome, record.deaths, record.total_time_seconds, fight.time))
+            if len(rows) == limit:
+                break
+        return rows
 
     # ---------------------------------------------------- zdarzenia z gry
 
@@ -251,12 +290,14 @@ class BossTracker:
             self.uncertain = "Utracono obraz w trakcie walki – kontynuuj walkę albo zatwierdź wynik."
             self._save()
 
-    def tick(self) -> BossView | None:
+    def tick(self) -> FightEnd | None:
         """Wywoływane co sekundę: w trakcie walki co kilka sekund zapisuje zgromadzony czas.
 
-        Po zwycięstwie zapisuje wynik sam, gdy nic nie budzi wątpliwości: nazwa jest pewna, wynik nie czeka
-        na decyzję, a od komunikatu zwycięstwa minął czas na „prawie jednoczesną” śmierć.
-        Zwraca wtedy zapisany wynik."""
+        - Po zwycięstwie zapisuje wynik sam, gdy nic nie budzi wątpliwości: nazwa jest pewna, wynik nie czeka
+          na decyzję, a od komunikatu zwycięstwa minął czas na „prawie jednoczesną” śmierć.
+        - Gdy pasek zniknął i przez ABANDON_SECONDS nie było ani śmierci, ani zwycięstwa, gracz opuścił arenę:
+          walka jest przerwana, a boss zostaje w pliku „W TRAKCIE” (z dotychczasowymi śmierciami i czasem).
+        Zwraca zakończoną walkę albo None."""
         now = self._clock()
         if self.state is BossState.FIGHT and now - self._last_checkpoint >= CHECKPOINT_SECONDS:
             self._checkpoint()
@@ -265,7 +306,16 @@ class BossTracker:
                 and self._victory_at is not None and now - self._victory_at > AUTO_SAVE_SECONDS):
             view = self.view()
             self.confirm_defeated()
-            return view
+            return FightEnd(view, abandoned=False)
+        if (self.abandon_enabled and self.state is BossState.WAITING and self.record is not None
+                and not self.uncertain and self._bar_lost_at is not None
+                and now - self._bar_lost_at >= ABANDON_SECONDS):
+            view = self.view()
+            if self.recent is not None:
+                self.recent.touch(self.current, recent_fights.ABANDONED)
+            self._clear_current()
+            self._save()
+            return FightEnd(view, abandoned=True)
         return None
 
     def pause(self) -> None:
@@ -274,6 +324,7 @@ class BossTracker:
         if self.state is BossState.FIGHT:
             self._pause(BossState.WAITING)
             self._save()
+        self._bar_lost_at = None  # bez wykrywania nie da się stwierdzić, że gracz opuścił arenę
 
     # ------------------------------------------------------- akcje użytkownika
 
@@ -287,6 +338,8 @@ class BossTracker:
         record.status = STATUS_DEFEATED
         if self.names is not None:
             self.names.learn(self.current)  # zatwierdzona nazwa – także ta odczytana z ekranu
+        if self.recent is not None:
+            self.recent.touch(self.current, recent_fights.DEFEATED)
         self._clear_current()
         self._save()
 
@@ -304,7 +357,32 @@ class BossTracker:
         if self.current is None:
             return
         self.store.records.pop(self.current, None)
+        if self.recent is not None:
+            self.recent.remove(self.current)
         self._clear_current()
+        self._save()
+
+    def mark_defeated(self, name: str) -> None:
+        """Walka z listy ostatnich (np. przerwana) była w rzeczywistości wygraną, której program nie wykrył."""
+        record = self.store.records.get(name)
+        if record is None or name == self.current:
+            return
+        record.status = STATUS_DEFEATED
+        if self.names is not None:
+            self.names.learn(name)
+        if self.recent is not None:
+            self.recent.set_outcome(name, recent_fights.DEFEATED)
+        self._save()
+
+    def remove(self, name: str) -> None:
+        """Usuwa bossa z listy ostatnich walk i z pliku (np. fałszywy start przy bossie w otwartym świecie)."""
+        if name == self.current:
+            self.discard()
+            return
+        if self.store.records.pop(name, None) is None:
+            return
+        if self.recent is not None:
+            self.recent.remove(name)
         self._save()
 
     def rename(self, name: str) -> str | None:
@@ -408,6 +486,8 @@ class BossTracker:
 
     def _save(self, manual: bool = False) -> None:
         self.store.save()
+        if self.recent is not None and self.current is not None:
+            self.recent.touch(self.current, recent_fights.IN_PROGRESS)
         if self.audit is not None:
             self.audit.bosses_saved(self.store.records, self.current if manual else None)
             self.audit.save()

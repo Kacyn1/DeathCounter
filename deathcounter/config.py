@@ -152,6 +152,17 @@ class HotkeySettings:
 
 
 @dataclass
+class UiSettings:
+    """Wygląd okna: zwinięte sekcje."""
+
+    overlay_collapsed: bool = False
+    detector_collapsed: bool = False
+
+    def sanitize(self) -> None:
+        pass
+
+
+@dataclass
 class TemplateInfo:
     roi: list[int]             # x, y, szerokość, wysokość w pikselach obrazu referencyjnego
     reference_size: list[int]  # szerokość, wysokość obrazu, z którego wycięto wzorzec
@@ -179,6 +190,7 @@ class AppConfig:
     bosses: BossSettings = field(default_factory=BossSettings)
     discord: DiscordSettings = field(default_factory=DiscordSettings)
     hotkeys: HotkeySettings = field(default_factory=HotkeySettings)
+    ui: UiSettings = field(default_factory=UiSettings)
     game: str = DEFAULT_GAME
     player_name: str = ""  # nick gracza na certyfikacie
     custom_games: dict[str, str] = field(default_factory=dict)  # gry dodane przez użytkownika: id → nazwa
@@ -255,6 +267,7 @@ class AppPaths:
     boss_bar_template: Path
     victory_template: Path
     boss_names: Path
+    recent_fights: Path
 
     @classmethod
     def for_game(cls, base: Path, game: str) -> "AppPaths":
@@ -273,6 +286,7 @@ class AppPaths:
             game_dir / "boss_bar.png",
             game_dir / "victory.png",
             game_dir / "boss_names.json",
+            game_dir / "recent_fights.json",
         )
 
     def template_path(self, kind: str) -> Path:
@@ -314,6 +328,7 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
         config.bosses.bar_threshold = config.detector.threshold
     _fill(config.discord, data.get("discord"))
     _fill(config.hotkeys, data.get("hotkeys"))
+    _fill(config.ui, data.get("ui"))
     custom = data.get("custom_games")
     if isinstance(custom, dict):
         config.custom_games = {

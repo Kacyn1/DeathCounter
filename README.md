@@ -53,7 +53,7 @@ Po zapisaniu wzorca okno kalibracji przy kolejnym otwarciu pokazuje w każdej za
 - **Brak duplikatów:** po zliczeniu detektor czeka, aż napis zniknie na co najmniej 3 s. Między dwiema śmierciami musi też minąć co najmniej 8 s.
 - **Błędy obrazu:** brak nowych klatek, zamrożony obraz (ponad 5 s) i zmiana rozdzielczości są sygnalizowane w oknie. W tym czasie nic nie jest liczone.
 
-Progi, liczbę próbek potwierdzenia, czas ponownego uzbrojenia i monitor ustawisz w oknie. Są dwa progi dopasowania: **„Próg śmierci i zwycięstwa”** dotyczy napisu śmierci i komunikatu zwycięstwa (oba to duże napisy na środku ekranu), a **„Próg paska bossa”** – wzorca paska zdrowia bossa. Pozostałe parametry są w `config.json` (sekcja `detector`).
+Sekcje „Nakładka” i „Wykrywanie” zwija i rozwija kliknięcie w ich tytuł. Stan jest zapamiętywany. Progi, liczbę próbek potwierdzenia, czas ponownego uzbrojenia i monitor ustawisz w oknie. Są dwa progi dopasowania: **„Próg śmierci i zwycięstwa”** dotyczy napisu śmierci i komunikatu zwycięstwa (oba to duże napisy na środku ekranu), a **„Próg paska bossa”** – wzorca paska zdrowia bossa. Pozostałe parametry są w `config.json` (sekcja `detector`).
 
 ## Dane
 
@@ -78,6 +78,14 @@ Po zaznaczeniu **„Śledź walkę z bossem”** program sam prowadzi walkę:
 - komunikat zwycięstwa → **Boss pokonany**: timer staje na stałe, a nakładka wraca do samego `DEATHS: N`.
 
 Nazwę bossa można wpisać w dowolnym momencie (do tego czasu to „Boss 1”, „Boss 2”…), ale zwykle nie trzeba – patrz niżej. **Zapisz wynik** zapisuje ostateczny wynik ze statusem POKONANO i czyści panel; dopiero potem kolejny pasek oznacza nowego bossa. **Odrzuć** usuwa pomyłkowy wpis. Gdy śmierć i zwycięstwo wypadną prawie jednocześnie albo w trakcie walki zniknie obraz, panel pokazuje ostrzeżenie i czeka na decyzję („Zapisz wynik” albo „Kontynuuj walkę”). Śmierć poza walką liczy się tylko w ogólnym liczniku, a ręczne +1/−1 w trakcie walki poprawia też licznik bossa. Czas walki jest zapisywany co kilka sekund i przy zamknięciu programu; gdy program jest wyłączony, timer nie biegnie.
+
+**Opuszczenie areny.** Gdy pasek zniknie, a przez kolejne 15 s nie pojawi się ani napis śmierci, ani komunikat zwycięstwa, program uznaje, że wyszedłeś z areny. Walka zostaje przerwana, a panel pokazuje „Walka przerwana (opuszczono arenę): …”. Licząc od zniknięcia paska, trwa to ok. 18 s, bo samo zniknięcie paska jest potwierdzane po 3 s. Boss zostaje w `bosses.json` jako „W TRAKCIE”, ze wszystkimi śmierciami i czasem. Gdy wrócisz na arenę, odczyt nazwy podłączy walkę z powrotem do tego bossa. Funkcja działa tylko przy skalibrowanym komunikacie zwycięstwa, bo bez niego nie da się odróżnić wygranej od ucieczki.
+
+**Ostatnie walki.** Pod bieżącą walką panel pokazuje 3 ostatnie walki z ich wynikiem: W TRAKCIE, PRZERWANO albo POKONANO, z liczbą śmierci, czasem i chwilą ostatniej zmiany. Lista jest zapisywana w `recent_fights.json` w folderze gry i przetrwa ponowne uruchomienie. Przy walce niezakończonej są dwa przyciski:
+- **Pokonany** – gdy to była wygrana, której program nie wykrył;
+- **Usuń** – gdy to był fałszywy start, np. przebiegnięcie obok bossa w otwartym świecie. Usuwa bossa razem z wynikiem.
+
+Przycisk **Wyniki…** w panelu walki otwiera osobne okno z tabelą wszystkich bossów wybranej gry: nazwa, status (bieżąca walka, w trakcie, pokonany), liczba śmierci i czas. Nad tabelą jest podsumowanie: śmierci łącznie, pokonani bossowie, śmierci przy bossach i łączny czas walk. Okno nie blokuje programu i odświeża się co sekundę, a kliknięcie nagłówka kolumny zmienia sortowanie.
 
 ### Odczyt nazwy bossa
 
@@ -176,6 +184,9 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/storage.py` | `deaths.json`, zapis atomowy |
 | `deathcounter/bosses.py` | walka z bossem: maszyna stanów, timer, `bosses.json` (bez Qt, testowalne) |
 | `deathcounter/boss_panel.py` | panel „Walka z bossem” |
+| `deathcounter/results_window.py` | okno „Wyniki” z tabelą bossów |
+| `deathcounter/recent_fights.py` | ostatnie walki w panelu (`recent_fights.json`) |
+| `deathcounter/collapsible.py` | zwijane sekcje okna („Nakładka”, „Wykrywanie”) |
 | `deathcounter/ocr.py` | odczyt nazwy bossa (OCR Windows) |
 | `deathcounter/boss_names.py` | znane nazwy bossów gry i dopasowanie odczytu (`boss_names.json`) |
 | `deathcounter/report.py` | certyfikat PDF (QPdfWriter), weryfikacja |

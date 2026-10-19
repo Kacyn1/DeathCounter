@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -14,8 +17,16 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 
-from .bosses import BossState, BossTracker, format_duration
+from . import recent_fights
+from .bosses import BossState, BossTracker, RecentRow, format_duration
 from .storage import StorageError
+
+RECENT_ROWS = 3
+OUTCOME_LABELS = {
+    recent_fights.IN_PROGRESS: ("W TRAKCIE", "#9aa0a6"),
+    recent_fights.ABANDONED: ("PRZERWANO", "#c97a1e"),
+    recent_fights.DEFEATED: ("POKONANO", "#2f9e5b"),
+}
 
 STATE_COLORS = {
     BossState.WAITING: "#6b6f76",
@@ -31,6 +42,7 @@ class BossPanel(QGroupBox):
     changed = Signal()             # dane bossa zmieniły się po akcji w panelu
     save_failed = Signal(str)
     calibrate_requested = Signal()
+    results_requested = Signal()
 
     def __init__(self, tracker: BossTracker, read_names: bool = True, parent=None) -> None:
         super().__init__("Walka z bossem", parent)
@@ -90,6 +102,28 @@ class BossPanel(QGroupBox):
             buttons.addWidget(button)
         form.addRow(buttons)
 
+        # Ostatnie walki: stałe wiersze, odświeżane co sekundę bez przebudowy widżetów.
+        recent_grid = QGridLayout()
+        recent_grid.setColumnStretch(0, 1)
+        self.recent_title = QLabel("Ostatnie walki:")
+        self.recent_title.setStyleSheet("color:#9aa0a6;")
+        recent_grid.addWidget(self.recent_title, 0, 0, 1, 3)
+        self._recent: list[tuple[QLabel, QPushButton, QPushButton]] = []
+        for index in range(RECENT_ROWS):
+            label = QLabel()
+            defeated = QPushButton("Pokonany")
+            defeated.setToolTip("To była wygrana, której program nie wykrył – zapisz wynik jako POKONANO.")
+            defeated.clicked.connect(lambda _=False, i=index: self._recent_action(i, defeated=True))
+            remove = QPushButton("Usuń")
+            remove.setToolTip("Pomyłka (np. przebiegnięcie obok bossa) – usuwa bossa razem z wynikiem.")
+            remove.clicked.connect(lambda _=False, i=index: self._recent_action(i, defeated=False))
+            recent_grid.addWidget(label, index + 1, 0)
+            recent_grid.addWidget(defeated, index + 1, 1)
+            recent_grid.addWidget(remove, index + 1, 2)
+            self._recent.append((label, defeated, remove))
+        self._recent_rows: list[RecentRow] = []
+        form.addRow(recent_grid)
+
         self.hint_label = QLabel()
         self.hint_label.setWordWrap(True)
         self.hint_label.setStyleSheet("color:#9aa0a6;")
@@ -98,6 +132,10 @@ class BossPanel(QGroupBox):
         calibrate_button.clicked.connect(self.calibrate_requested)
         hint_row = QHBoxLayout()
         hint_row.addWidget(self.hint_label, 1)
+        results_button = QPushButton("Wyniki…")
+        results_button.setToolTip("Tabela wszystkich bossów tej gry: śmierci, czas i status.")
+        results_button.clicked.connect(self.results_requested)
+        hint_row.addWidget(results_button)
         hint_row.addWidget(calibrate_button)
         form.addRow(hint_row)
         self.refresh()
@@ -138,6 +176,42 @@ class BossPanel(QGroupBox):
             self._note = ""
         if view is None and self._note:
             self.summary_label.setText(self._note)
+        self._refresh_recent()
+
+    def _refresh_recent(self) -> None:
+        rows = self._recent_rows = self.tracker.recent_rows(RECENT_ROWS)
+        self.recent_title.setVisible(bool(rows))
+        for index, (label, defeated, remove) in enumerate(self._recent):
+            row = rows[index] if index < len(rows) else None
+            for widget in (label, defeated, remove):
+                widget.setVisible(row is not None)
+            if row is None:
+                continue
+            status, color = OUTCOME_LABELS[row.outcome]
+            text = (f"{row.name} · <b style='color:{color}'>{status}</b> · śmierci: {row.deaths} · "
+                    f"{format_duration(row.seconds)} · <span style='color:#7d828a'>{_when(row.time)}</span>")
+            if label.text() != text:
+                label.setText(text)
+            open_fight = row.outcome != recent_fights.DEFEATED
+            defeated.setVisible(open_fight)
+            remove.setVisible(open_fight)
+
+    def _recent_action(self, index: int, defeated: bool) -> None:
+        if index >= len(self._recent_rows):
+            return
+        row = self._recent_rows[index]
+        if defeated:
+            self._act(lambda: self.tracker.mark_defeated(row.name))
+            return
+        answer = QMessageBox.question(
+            self,
+            "Usuń walkę",
+            f"Usunąć „{row.name}” razem z wynikiem (śmierci: {row.deaths}, czas: {format_duration(row.seconds)})?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self._act(lambda: self.tracker.remove(row.name))
 
     def set_note(self, text: str) -> None:
         """Komunikat po zakończonej walce (np. automatyczny zapis), widoczny do początku kolejnej walki."""
@@ -171,3 +245,9 @@ class BossPanel(QGroupBox):
             self.save_failed.emit(f"Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.")
         self.refresh()
         self.changed.emit()
+
+
+def _when(timestamp: float) -> str:
+    """„dziś 19:42” albo „18.10 21:05”."""
+    moment = datetime.fromtimestamp(timestamp)
+    return f"dziś {moment:%H:%M}" if moment.date() == datetime.now().date() else f"{moment:%d.%m %H:%M}"

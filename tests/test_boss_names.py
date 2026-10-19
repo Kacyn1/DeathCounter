@@ -206,7 +206,7 @@ def test_confident_name_saved_automatically_after_victory(tracker, clock):
     clock.advance(1)
     assert tracker.tick() is None  # czas na „prawie jednoczesną” śmierć
     clock.advance(3)
-    saved = tracker.tick()
+    saved = tracker.tick().view
     assert (saved.name, saved.deaths, round(saved.seconds)) == ("Demon z Azylu", 0, 60)
     assert tracker.current is None
     assert records(tracker) == {"Demon z Azylu": (0, 60, "POKONANO")}
@@ -224,7 +224,7 @@ def test_known_name_is_confident(tracker, clock, names):
     names.learn("Demon z Azylu")
     win(tracker, clock, "Dernon z Azylu", confident=False)
     clock.advance(4)
-    assert tracker.tick().name == "Demon z Azylu"
+    assert tracker.tick().view.name == "Demon z Azylu"
 
 
 def test_manual_name_is_confident(tracker, clock):
@@ -233,7 +233,7 @@ def test_manual_name_is_confident(tracker, clock):
     clock.advance(30)
     tracker.victory()
     clock.advance(4)
-    assert tracker.tick().name == "Gwyn"
+    assert tracker.tick().view.name == "Gwyn"
 
 
 def test_placeholder_never_saved_automatically(tracker, clock):
