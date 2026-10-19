@@ -69,6 +69,10 @@ def variants(band: np.ndarray):
         return
     for scale in SCALES:
         big = cv2.resize(band, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        # Zachowaj cienkie kreski i wygładzanie liter: progowanie potrafi
+        # zmienić np. „i” w „ł”. Ten wariant nie odcina odcieni tekstu.
+        gray = cv2.copyMakeBorder(255 - big, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
+        yield cv2.cvtColor(gray, cv2.COLOR_GRAY2BGRA)
         for level in BRIGHTNESS_LEVELS:
             binary = np.where(big >= peak * level, 0, 255).astype(np.uint8)
             binary = cv2.copyMakeBorder(binary, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)

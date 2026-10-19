@@ -46,6 +46,26 @@ def test_normalize_ignores_case_diacritics_and_punctuation():
     assert ocr.normalize("Demon z Ażylu") == "demon z azylu"
 
 
+def test_variants_preserve_gray_letter_edges():
+    band = np.full((20, 100), 25, np.uint8)
+    band[5:15, 20:80] = 220
+    band[5:15, 19] = 120
+    images = list(ocr.variants(band))
+    assert images
+    assert any(np.any((im[:, :, 0] > 0) & (im[:, :, 0] < 255)) for im in images)
+    assert all(im.shape[2] == 4 for im in images)
+
+
+def test_naika_manual_correction_survives_reload(tracker, names, tmp_path):
+    tracker.boss_bar_visible()
+    tracker.boss_identified("Skorppłonłca Nałka", confident=True)
+    tracker.rename("Skorpionica Naika")
+    restored = BossNames(tmp_path / "boss_names.json")
+    restored.load()
+    assert restored.match("Skorppłonłca Nałka") == "Skorpionica Naika"
+    assert tracker.current == "Skorpionica Naika"
+
+
 def test_vote_prefers_most_common_reading():
     readings = ["Demon z Azylu", "Dernon z Azylu", "demon z azylu", "z Azylu", "Demon z Azylu"]
     assert ocr.vote(readings, 6) == ocr.NameReading("Demon z Azylu", True)   # 3 z 6 prób zgodne
