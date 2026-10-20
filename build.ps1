@@ -22,6 +22,7 @@ if ($LASTEXITCODE -ne 0) { throw "Nie udalo sie przygotowac klucza podpisu." }
     --name DeathCounter --icon build\DeathCounter.ico `
     --hidden-import deathcounter._signing_key --collect-submodules winrt `
     --add-data "LICENSE;." --add-data "THIRD_PARTY_LICENSES.txt;." `
+    --add-data "deathcounter\data\boss_names\*.json;deathcounter\data\boss_names" `
     --exclude-module PySide6.QtWebEngineCore --exclude-module PySide6.QtWebEngineWidgets `
     --exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick --exclude-module PySide6.QtPdf `
     --exclude-module tkinter --exclude-module pytest `

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from deathcounter import ocr
-from deathcounter.boss_names import BossNames, base_name, is_placeholder, same_boss
+from deathcounter.boss_names import BossNames, base_name, builtin_path, is_placeholder, same_boss
 from deathcounter.bosses import BossState, BossStore, BossTracker
 from deathcounter.template import DeathTemplate
 
@@ -122,6 +122,61 @@ def test_learn_saves_names_and_aliases(names, tmp_path):
     reloaded = BossNames(tmp_path / "boss_names.json")
     assert reloaded.load() is None
     assert reloaded.match("Mrgt Updly 0men") == "Margit, Upadły Omen"
+
+
+@pytest.mark.parametrize("game, reading, expected", [
+    ("ds1", "Dernon z Azylu", "Demon z Azylu"),
+    ("ds1", "Gravel0rd Nit0", "Nito, Władca Grobów"),  # nazwa nieprzetłumaczona w grze → polska
+    ("ds2", "Ostatni 0lbrzym", "Ostatni Olbrzym"),
+    ("ds2", "Velstadt, Krolewska Tarcza", "Velstadt, Królewska Tarcza"),
+    ("ds3", "Tancerka z Mrożnej Dolny", "Tancerka z Mroźnej Doliny"),
+    ("ds3", "Midir Mrokozerca", "Midir Mrokożerca"),
+])
+def test_builtin_names_match_readings_of_selected_game(tmp_path, game, reading, expected):
+    names = BossNames(tmp_path / "boss_names.json", builtin_path(game))
+    assert names.load() is None
+    assert names.match(reading) == expected
+
+
+def test_builtin_names_belong_to_their_game(tmp_path):
+    names = BossNames(tmp_path / "boss_names.json", builtin_path("ds2"))
+    names.load()
+    assert names.match("Midir Mrokożerca") is None  # boss z DS3
+    custom = BossNames(tmp_path / "boss_names.json", builtin_path("moja-gra"))
+    assert custom.load() is None and custom.builtin_names == []
+
+
+@pytest.mark.parametrize("game", ["ds1", "ds2", "ds3"])
+def test_builtin_lists_are_valid(game):
+    data = json.loads(builtin_path(game).read_text(encoding="utf-8"))
+    assert len(data["names"]) == len(set(data["names"])) > 20
+    assert all(key == ocr.normalize(key) and name in data["names"] for key, name in data["aliases"].items())
+
+
+def test_min_ratio_decides_how_bad_reading_still_matches(tmp_path):
+    names = BossNames(tmp_path / "boss_names.json", builtin_path("ds2"))
+    names.load()
+    reading = "Skrpnca Nka"  # podobieństwo ok. 0,7 do „Skorpionica Najka”
+    assert names.match(reading) == "Skorpionica Najka"
+    names.min_ratio = 0.8
+    assert names.match(reading) is None
+    names.min_ratio = 1.0
+    assert names.match("Skorpionica Najka") == "Skorpionica Najka"
+    assert names.match("Skorpionica Naika") is None
+
+
+def test_default_ratio_keeps_other_games_bosses_apart(tmp_path):
+    names = BossNames(tmp_path / "boss_names.json", builtin_path("ds2"))
+    names.load()
+    assert names.match("Demon z Azylu") is None  # boss z DS1; przy 0,5 dostałby „Demon kuźni”
+
+
+def test_learned_names_extend_builtin_list(tmp_path):
+    names = BossNames(tmp_path / "boss_names.json", builtin_path("ds1"))
+    names.load()
+    names.learn("Wiatraczek", reading="Pirnvheel")
+    assert names.match("Pirnvheel") == "Wiatraczek"
+    assert names.match("Pinwheel") == "Wiatraczek"
 
 
 def test_broken_file_gives_warning(tmp_path):

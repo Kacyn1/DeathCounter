@@ -122,11 +122,13 @@ class BossSettings:
     track: bool = False              # „Śledź walkę z bossem”
     read_names: bool = True          # „Odczytuj nazwę bossa z ekranu” (OCR)
     bar_threshold: float = 0.70      # minimalne dopasowanie wzorca paska zdrowia bossa
+    name_match_ratio: float = 0.60   # minimalne podobieństwo odczytu OCR do znanej nazwy bossa
     bar_confirm_samples: int = 10    # tyle kolejnych próbek z paskiem bossa = początek walki (ok. 1 s)
     bar_lost_seconds: float = 3.0    # tyle sekund bez paska = pasek zniknął (pauza, nie zwycięstwo)
 
     def sanitize(self) -> None:
         self.bar_threshold = _clamp(self.bar_threshold, 0.30, 0.99)
+        self.name_match_ratio = _clamp(self.name_match_ratio, 0.30, 1.0)
         self.bar_confirm_samples = int(_clamp(self.bar_confirm_samples, 1, 100))
         self.bar_lost_seconds = _clamp(self.bar_lost_seconds, 0.5, 60.0)
 

@@ -1,0 +1,37 @@
+{
+  "names": [
+    "Demon Mędrzec Ognia",
+    "Zbłąkany demon",
+    "Demon z Azylu",
+    "Demon Capra",
+    "Demon taurus",
+    "Żelazny golem",
+    "Egzekutor Smough",
+    "Półsmoczyca Priscilla",
+    "Księżycowy Motyl",
+    "Wiatraczek",
+    "Strażnik sanktuarium",
+    "Rycerz Artorias",
+    "Manus, Ojciec Otchłani",
+    "Czarny Smok Kalameet",
+    "Demon stonoga",
+    "Wielki Szary Wilk Sif",
+    "Nito, Władca Grobów",
+    "Nieustanne Wyładowanie",
+    "Ziewający Smok",
+    "Ornstein Zabójca Smoków",
+    "Quelaag Wiedźma Chaosu",
+    "Seath Bezłuski",
+    "Gwyndolin Mroczne Słońce",
+    "Gargulec dzwonu",
+    "Gwyn, władca popiołów",
+    "Czterej Królowie",
+    "Łoże Chaosu"
+  ],
+  "aliases": {
+    "demon firesage": "Demon Mędrzec Ognia",
+    "pinwheel": "Wiatraczek",
+    "gravelord nito": "Nito, Władca Grobów",
+    "seath scaleless": "Seath Bezłuski"
+  }
+}

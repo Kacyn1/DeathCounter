@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .audit import AuditLog, open_audit
-from .boss_names import BossNames
+from .boss_names import BossNames, builtin_path
 from .bosses import BossStore
 from .attempts import AttemptLog
 from .recent_fights import RecentFights
@@ -54,7 +54,7 @@ def open_game(base: Path, game: str) -> GameData:
     store.load()
     boss_store = BossStore(paths.bosses)
     boss_store.load()
-    boss_names = BossNames(paths.boss_names)
+    boss_names = BossNames(paths.boss_names, builtin_path(game))
     recent = RecentFights(paths.recent_fights)
     attempts = AttemptLog(paths.attempts)
     warnings = [w for w in (store.warning, boss_store.warning, boss_names.load(), recent.load(), attempts.load())

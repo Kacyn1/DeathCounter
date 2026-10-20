@@ -206,3 +206,14 @@ def test_bar_threshold_defaults_to_old_shared_threshold(tmp_path):
     path.write_text(json.dumps({"detector": {"threshold": 0.82}, "bosses": {"bar_threshold": 0.6}}), encoding="utf-8")
     config, _ = load_config(path)
     assert (config.detector.threshold, config.bosses.bar_threshold) == (0.82, 0.6)
+
+
+def test_name_match_ratio_default_and_limits(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"bosses": {"track": True}}), encoding="utf-8")
+    config, _ = load_config(path)
+    assert config.bosses.name_match_ratio == 0.6
+    for value, expected in ((0.5, 0.5), (0.1, 0.3), (2.0, 1.0)):
+        path.write_text(json.dumps({"bosses": {"name_match_ratio": value}}), encoding="utf-8")
+        config, _ = load_config(path)
+        assert config.bosses.name_match_ratio == expected

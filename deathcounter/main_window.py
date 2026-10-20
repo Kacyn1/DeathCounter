@@ -363,6 +363,14 @@ class MainWindow(QMainWindow):
         self.bar_threshold_spin.setToolTip(
             "Minimalne dopasowanie obrazu do wzorca paska zdrowia bossa, przy którym walka się zaczyna."
         )
+        self.name_ratio_spin = _threshold_spin(self.config.bosses.name_match_ratio)
+        self.name_ratio_spin.setRange(0.30, 1.00)
+        self.name_ratio_spin.setToolTip(
+            "Minimalne podobieństwo nazwy odczytanej z ekranu do znanej nazwy bossa wybranej gry.\n"
+            "Odczyt dostaje najbardziej podobną nazwę z listy, jeśli podobieństwo jest co najmniej takie.\n"
+            "Niżej – więcej poprawionych błędów OCR, ale boss spoza listy łatwiej dostanie cudzą nazwę.\n"
+            "1,00 – tylko nazwy odczytane bez błędu."
+        )
         self.confirm_spin = _spin(1, 50, d.confirm_samples, " próbek")
         self.confirm_spin.setToolTip("Tyle kolejnych próbek (co ok. 0,1 s) musi zawierać napis, by zliczyć śmierć.")
         self.rearm_spin = QDoubleSpinBox()
@@ -371,7 +379,8 @@ class MainWindow(QMainWindow):
         self.rearm_spin.setSuffix(" s")
         self.rearm_spin.setValue(d.rearm_seconds)
         self.rearm_spin.setToolTip("Tyle sekund bez napisu, zanim detektor będzie gotowy na kolejną śmierć.")
-        for widget in (self.threshold_spin, self.bar_threshold_spin, self.confirm_spin, self.rearm_spin):
+        for widget in (self.threshold_spin, self.bar_threshold_spin, self.name_ratio_spin, self.confirm_spin,
+                       self.rearm_spin):
             widget.valueChanged.connect(self._on_detector_settings)
         self.autostart_check = QCheckBox("Włączaj wykrywanie przy starcie")
         self.autostart_check.setChecked(self.config.auto_start)
@@ -379,6 +388,7 @@ class MainWindow(QMainWindow):
         form.addRow("Monitor:", self.monitor_combo)
         form.addRow("Próg śmierci i zwycięstwa:", self.threshold_spin)
         form.addRow("Próg paska bossa:", self.bar_threshold_spin)
+        form.addRow("Podobieństwo nazwy bossa:", self.name_ratio_spin)
         form.addRow("Potwierdzenie:", self.confirm_spin)
         form.addRow("Ponowne uzbrojenie:", self.rearm_spin)
         form.addRow(self.autostart_check)
@@ -525,6 +535,8 @@ class MainWindow(QMainWindow):
         self.calibration = game.calibration
         self.templates = dict(game.templates)
         self.audit = game.audit
+        if game.boss_names is not None:
+            game.boss_names.min_ratio = self.config.bosses.name_match_ratio
         self.bosses = BossTracker(game.boss_store, audit=game.audit, names=game.boss_names, recent=game.recent,
                                   attempts=game.attempts)
         self.bosses.enabled = self.config.bosses.track
@@ -921,6 +933,9 @@ class MainWindow(QMainWindow):
         d = self.config.detector
         d.threshold = round(self.threshold_spin.value(), 2)
         self.config.bosses.bar_threshold = round(self.bar_threshold_spin.value(), 2)
+        self.config.bosses.name_match_ratio = round(self.name_ratio_spin.value(), 2)
+        if self.bosses.names is not None:
+            self.bosses.names.min_ratio = self.config.bosses.name_match_ratio
         d.confirm_samples = self.confirm_spin.value()
         d.rearm_seconds = self.rearm_spin.value()
         self.config.capture.output_index = self.monitor_combo.currentData()

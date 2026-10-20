@@ -1,6 +1,7 @@
 """Znane nazwy bossów jednej gry (games/<gra>/boss_names.json), uzupełniane z każdą walką.
 
-OCR myli pojedyncze litery, więc odczyt dopasowujemy do najbliższej znanej nazwy. Lista rośnie sama:
+OCR myli pojedyncze litery, więc odczyt dopasowujemy do najbliższej znanej nazwy. Gry wbudowane mają
+od początku listę polskich nazw z plików gry (data/boss_names/<gra>.json). Lista rośnie sama:
 nazwa zatwierdzona wynikiem albo poprawiona ręcznie trafia do pliku, a błędny odczyt, który
 poprawiłeś, zostaje zapamiętany jako jej odmiana (alias) – następnym razem od razu da właściwą nazwę.
 """
@@ -15,9 +16,28 @@ from pathlib import Path
 from .ocr import normalize
 from .storage import atomic_write_text
 
-MATCH_RATIO = 0.8  # minimalne podobieństwo odczytu do znanej nazwy
+MATCH_RATIO = 0.6  # domyślne minimalne podobieństwo odczytu do znanej nazwy (ustawienie name_match_ratio)
+BUILTIN_DIR = Path(__file__).resolve().parent / "data" / "boss_names"
 _NUMBERED = re.compile(r"^(.*) \(\d+\)$")
 _PLACEHOLDER = re.compile(r"^Boss \d+$")
+
+
+def builtin_path(game: str) -> Path:
+    """Wbudowana lista nazw bossów gry (dla gier dodanych przez użytkownika plik nie istnieje)."""
+    return BUILTIN_DIR / f"{game}.json"
+
+
+def _read(path: Path) -> tuple[list[str], dict[str, str]]:
+    """Nazwy i aliasy z pliku; OSError/ValueError, gdy nie da się go odczytać."""
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
+    names: list[str] = []
+    aliases: dict[str, str] = {}
+    if isinstance(data, dict):
+        if isinstance(data.get("names"), list):
+            names = [n for n in data["names"] if isinstance(n, str) and n.strip()]
+        if isinstance(data.get("aliases"), dict):
+            aliases = {k: v for k, v in data["aliases"].items() if isinstance(k, str) and isinstance(v, str)}
+    return names, aliases
 
 
 def base_name(name: str) -> str:
@@ -38,27 +58,31 @@ def same_boss(a: str, b: str) -> bool:
 
 
 class BossNames:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, builtin: Path | None = None, min_ratio: float = MATCH_RATIO) -> None:
         self.path = Path(path)
+        self.builtin = builtin  # wbudowana lista gry – tylko do odczytu
+        self.min_ratio = min_ratio
         self.names: list[str] = []
         self.aliases: dict[str, str] = {}  # znormalizowany błędny odczyt → nazwa
+        self.builtin_names: list[str] = []
+        self.builtin_aliases: dict[str, str] = {}
 
     def load(self) -> str | None:
-        """Wczytuje plik; uszkodzony pomija (lista zbuduje się od nowa) i zwraca ostrzeżenie."""
+        """Wczytuje listę wbudowaną i plik gry; uszkodzony plik pomija (lista zbuduje się od nowa)
+        i zwraca ostrzeżenie."""
         self.names, self.aliases = [], {}
+        self.builtin_names, self.builtin_aliases = [], {}
+        if self.builtin is not None and self.builtin.exists():
+            try:
+                self.builtin_names, self.builtin_aliases = _read(self.builtin)
+            except (OSError, ValueError):
+                pass  # bez listy wbudowanej program i tak działa – uczy się nazw z walk
         if not self.path.exists():
             return None
         try:
-            data = json.loads(self.path.read_text(encoding="utf-8-sig"))
+            self.names, self.aliases = _read(self.path)
         except (OSError, ValueError) as exc:
             return f"Nie można odczytać {self.path.name} ({exc}); lista znanych bossów zacznie się od nowa."
-        if isinstance(data, dict):
-            names = data.get("names")
-            aliases = data.get("aliases")
-            if isinstance(names, list):
-                self.names = [n for n in names if isinstance(n, str) and n.strip()]
-            if isinstance(aliases, dict):
-                self.aliases = {k: v for k, v in aliases.items() if isinstance(k, str) and isinstance(v, str)}
         return None
 
     def save(self) -> None:
@@ -72,9 +96,12 @@ class BossNames:
             return None
         if key in self.aliases:
             return self.aliases[key]
-        candidates = {normalize(n): n for n in (*extra, *self.names) if not is_placeholder(n)}
+        if key in self.builtin_aliases:
+            return self.builtin_aliases[key]
+        candidates = {normalize(n): n for n in (*self.builtin_names, *extra, *self.names) if not is_placeholder(n)}
+        candidates.update(self.builtin_aliases)
         candidates.update(self.aliases)
-        best, best_ratio = None, MATCH_RATIO
+        best, best_ratio = None, self.min_ratio
         for known, name in candidates.items():
             ratio = SequenceMatcher(None, key, known).ratio()
             if ratio >= best_ratio:
