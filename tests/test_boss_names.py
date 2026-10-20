@@ -5,8 +5,11 @@ import numpy as np
 import pytest
 
 from deathcounter import ocr
+from deathcounter.attempts import AttemptLog
+from deathcounter.audit import open_audit
 from deathcounter.boss_names import BossNames, base_name, builtin_path, is_placeholder, same_boss
 from deathcounter.bosses import BossState, BossStore, BossTracker
+from deathcounter.recent_fights import RecentFights
 from deathcounter.template import DeathTemplate
 
 from .conftest import BAR_ROI, boss_frame
@@ -336,3 +339,111 @@ def test_victory_after_death_blocks_auto_save(tracker, clock):
     tracker.victory()
     clock.advance(10)
     assert tracker.tick() is None
+
+
+# ------------------------------------------------ poprawianie zapisanych nazw
+
+def _saved_game(tmp_path, game, bosses, learned=None, recent=(), attempts=None):
+    """Zapisane dane gry z wcześniejszej wersji, wczytane jak przy starcie programu."""
+    (tmp_path / "bosses.json").write_text(json.dumps(bosses, ensure_ascii=False), encoding="utf-8")
+    if learned is not None:
+        (tmp_path / "boss_names.json").write_text(json.dumps(learned, ensure_ascii=False), encoding="utf-8")
+    (tmp_path / "recent_fights.json").write_text(json.dumps(
+        [{"name": n, "outcome": o, "time": 100.0 - i} for i, (n, o) in enumerate(recent)], ensure_ascii=False),
+        encoding="utf-8")
+    (tmp_path / "attempts.json").write_text(json.dumps(attempts or {}, ensure_ascii=False), encoding="utf-8")
+    return _open_saved(tmp_path, game)
+
+
+def _open_saved(tmp_path, game):
+    store = BossStore(tmp_path / "bosses.json")
+    store.load()
+    names = BossNames(tmp_path / "boss_names.json", builtin_path(game))
+    names.load()
+    recent = RecentFights(tmp_path / "recent_fights.json")
+    recent.load()
+    attempts = AttemptLog(tmp_path / "attempts.json")
+    attempts.load()
+    audit, _ = open_audit(tmp_path / "audit.json", None, 0, store.records)
+    return BossTracker(store, names=names, recent=recent, attempts=attempts, audit=audit)
+
+
+def _entry(deaths, seconds=60, status="W TRAKCIE"):
+    return {"deaths": deaths, "total_time_seconds": seconds, "status": status}
+
+
+def test_saved_misread_name_gets_builtin_name_with_history(tmp_path):
+    tracker = _saved_game(
+        tmp_path, "ds2",
+        {"Skorppłonłca Nałka": _entry(7, 300), "Ostatni Olbrzym": _entry(2, 90, "POKONANO")},
+        recent=[("Skorppłonłca Nałka", "w trakcie")],
+        attempts={"Skorppłonłca Nałka": [{"start": 1.0, "seconds": 40.0, "outcome": "death"}]})
+    assert tracker.current == "Skorppłonłca Nałka"
+    assert tracker.fix_names() == [("Skorppłonłca Nałka", "Skorpionica Najka")]
+    assert tracker.current == "Skorpionica Najka"
+    assert records(tracker) == {"Skorpionica Najka": (7, 300, "W TRAKCIE"), "Ostatni Olbrzym": (2, 90, "POKONANO")}
+    reopened = _open_saved(tmp_path, "ds2")
+    assert list(reopened.store.records) == ["Skorpionica Najka", "Ostatni Olbrzym"]
+    assert [f.name for f in reopened.recent.fights] == ["Skorpionica Najka"]
+    assert list(reopened.attempts.bosses) == ["Skorpionica Najka"]
+    assert reopened.audit.bosses.keys() == {"Skorpionica Najka", "Ostatni Olbrzym"}
+    reopened.names.min_ratio = 1.0  # stary błędny odczyt rozpoznany wprost, bez podobieństwa
+    assert reopened.names.match("Skorppłonłca Nałka") == "Skorpionica Najka"
+
+
+def test_two_entries_of_same_boss_are_merged_or_numbered(tmp_path):
+    tracker = _saved_game(tmp_path, "ds3", {
+        "Midir Mrokozerca": _entry(3, 100),
+        "Midir Mrokożerca": _entry(4, 200),
+        "Tancerka z Mroznej Dolny": _entry(5, 50, "POKONANO"),
+        "Tancerka z Mroźnej Doliny": _entry(1, 10, "POKONANO"),
+    })
+    tracker.fix_names()
+    assert records(tracker) == {
+        "Midir Mrokożerca": (7, 300, "W TRAKCIE"),
+        "Tancerka z Mroźnej Doliny (2)": (5, 50, "POKONANO"),
+        "Tancerka z Mroźnej Doliny": (1, 10, "POKONANO"),
+    }
+
+
+def test_learned_names_are_fixed_and_old_reading_kept_as_alias(tmp_path):
+    tracker = _saved_game(tmp_path, "ds2", {}, learned={
+        "names": ["Skorpionica Naika", "Mój własny boss"],
+        "aliases": {"skorpplonlca nalka": "Skorpionica Naika"},
+    })
+    tracker.fix_names()
+    names = tracker.names
+    assert names.names == ["Skorpionica Najka", "Mój własny boss"]
+    assert names.match("Skorppłonłca Nałka") == "Skorpionica Najka"
+    assert names.match("Skorpionica Naika") == "Skorpionica Najka"
+
+
+def test_names_are_checked_once_per_builtin_list(tmp_path):
+    tracker = _saved_game(tmp_path, "ds1", {"Gravelord Nito": _entry(1)})
+    assert tracker.fix_names() == [("Gravelord Nito", "Nito, Władca Grobów")]
+    tracker.rename("Gravelord Nito")  # użytkownik woli nazwę z gry
+    reopened = _open_saved(tmp_path, "ds1")
+    assert reopened.fix_names() == []
+    assert list(reopened.store.records) == ["Gravelord Nito"]
+
+
+def test_placeholders_unknown_and_correct_names_stay(tmp_path):
+    tracker = _saved_game(tmp_path, "ds1", {
+        "Boss 1": _entry(1), "Wiatraczek": _entry(1, status="POKONANO"), "Margit, Upadły Omen": _entry(1),
+    })
+    assert tracker.fix_names() == []
+    custom = _saved_game(tmp_path, "moja-gra", {"Dernon z Azylu": _entry(1)})
+    assert custom.fix_names() == []
+
+
+def test_fix_on_demand_after_names_were_checked(tmp_path):
+    tracker = _saved_game(tmp_path, "ds2", {"Ostatni Olbrzym": _entry(1)})
+    assert tracker.fix_names() == []  # sprawdzenie przy wczytaniu gry – nic do poprawy
+    tracker.store.records["Przeg1ly"] = tracker.store.records.pop("Ostatni Olbrzym")  # nowy błędny odczyt
+    tracker.current = "Przeg1ly"
+    assert tracker.fix_names() == []  # lista już sprawdzona – automatycznie nic się nie dzieje
+    assert tracker.name_fixes() == [("Przeg1ly", "Przegniły")]
+    assert list(tracker.store.records) == ["Przeg1ly"]  # podgląd niczego nie zmienia
+    assert tracker.fix_names(force=True) == [("Przeg1ly", "Przegniły")]
+    assert tracker.current == "Przegniły"
+    assert tracker.name_fixes() == []

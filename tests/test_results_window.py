@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt
 
 from deathcounter.attempts import AttemptLog
+from deathcounter.boss_names import BossNames, builtin_path
 from deathcounter.bosses import BossRecord, BossStore, BossTracker
 from deathcounter.results_window import ResultsWindow
 
@@ -69,3 +70,22 @@ def test_sorting_keeps_attempts_under_boss(tmp_path, clock):
         shown = [window.table.item(r, 0).text() if window.table.item(r, 0) else "próby"
                  for r in range(window.table.rowCount())]
         assert shown == names
+
+
+def test_fix_names_button_only_for_games_with_name_list(tmp_path, clock):
+    store = BossStore(tmp_path / "bosses.json")
+    store.records = {"Ostatni 0lbrzym": BossRecord(2, 60, "W TRAKCIE")}
+    names = BossNames(tmp_path / "boss_names.json", builtin_path("ds2"))
+    names.load()
+    window = ResultsWindow()
+    window.show_results("Dark Souls II", 2, BossTracker(store, clock, names=names))
+    assert not window.fix_names_button.isHidden() and window.fix_names_button.isEnabled()
+    requested = []
+    window.fix_names_requested.connect(lambda: requested.append(True))
+    window.fix_names_button.click()
+    assert requested == [True]
+
+    custom = BossNames(tmp_path / "custom.json", builtin_path("moja-gra"))
+    custom.load()
+    window.show_results("Moja gra", 2, BossTracker(store, clock, names=custom))
+    assert window.fix_names_button.isHidden()

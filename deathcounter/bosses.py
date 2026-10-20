@@ -20,7 +20,8 @@ from typing import Callable
 from . import attempts as attempt_log
 from . import recent_fights
 from .attempts import Attempt, AttemptLog
-from .boss_names import BossNames, is_placeholder, same_boss
+from .boss_names import BossNames, base_name, is_placeholder, same_boss
+from .ocr import normalize
 from .recent_fights import RecentFights
 from .storage import StorageError, atomic_write_text
 
@@ -455,6 +456,60 @@ class BossTracker:
             self.attempts.rename(self.current, name)
         self.current = name
         self._save()
+        return name
+
+    def name_fixes(self) -> list[tuple[str, str]]:
+        """Bossowie zapisani pod nazwą podobną do nazwy z listy gry (np. odczytaną z błędem OCR):
+        pary (zapisana nazwa, nazwa z listy). Nic nie zmienia."""
+        if self.names is None:
+            return []
+        fixes = []
+        for old in self.store.records:
+            fixed = self.names.canonical(old)
+            if fixed is not None and fixed != base_name(old):
+                fixes.append((old, fixed))
+        return fixes
+
+    def fix_names(self, force: bool = False) -> list[tuple[str, str]]:
+        """Bossowie z name_fixes() dostają nazwę z listy gry. Bez `force` – raz dla każdej wersji listy
+        wbudowanej (przy wczytaniu gry); `force` – na żądanie (przycisk w oknie „Wyniki”). Dwa wpisy
+        tego samego niepokonanego bossa są scalane, a pokonany dostaje numer, jak przy ręcznej zmianie
+        nazwy. Zwraca pary (stara, nowa). StorageError przy błędzie zapisu."""
+        names = self.names
+        if names is None or not names.builtin_names or not (force or names.needs_check):
+            return []
+        changes = []
+        for old, fixed in self.name_fixes():
+            changes.append((old, self._move_record(old, fixed)))
+            names.aliases[normalize(base_name(old))] = fixed  # ten sam błędny odczyt da od razu nazwę z listy
+        names.fix_learned()
+        if changes:
+            self.store.save()
+            if self.audit is not None:
+                self.audit.bosses_saved(self.store.records, None)
+                self.audit.save()
+        return changes
+
+    def _move_record(self, old: str, name: str) -> str:
+        """Przenosi zapisanego bossa pod nową nazwę razem z historią prób, ostatnimi walkami i rejestrem."""
+        records = self.store.records
+        record, existing = records[old], records.get(name)
+        if existing is not None and existing.status == record.status == STATUS_IN_PROGRESS:
+            existing.deaths += record.deaths
+            existing.total_time_seconds += record.total_time_seconds
+            del records[old]
+        else:
+            if existing is not None:
+                name = _numbered(name, records)
+            self.store.records = {(name if key == old else key): value for key, value in records.items()}
+        if self.audit is not None:
+            self.audit.boss_renamed(old, name)
+        if self.attempts is not None:
+            self.attempts.rename(old, name)
+        if self.recent is not None:
+            self.recent.rename(old, name)
+        if self.current == old:
+            self.current = name
         return name
 
     def manual_add(self) -> None:

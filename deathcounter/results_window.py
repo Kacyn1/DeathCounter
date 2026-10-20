@@ -3,13 +3,15 @@ Dwuklik w bossa rozwija pod nim historię jego prób."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
+    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -86,6 +88,8 @@ class AttemptsView(QWidget):
 class ResultsWindow(QDialog):
     """Tabela bossów; dwuklik w bossa wstawia pod nim wiersz z historią jego prób."""
 
+    fix_names_requested = Signal()  # „Popraw nazwy bossów” – porównanie z listą nazw gry
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
@@ -113,7 +117,16 @@ class ResultsWindow(QDialog):
         layout.addWidget(self.table, 1)
         hint = QLabel("Kliknij dwukrotnie bossa, aby zobaczyć historię jego prób.")
         hint.setStyleSheet("color:#7d828a;")
-        layout.addWidget(hint)
+        self.fix_names_button = QPushButton("Popraw nazwy bossów")
+        self.fix_names_button.setToolTip(
+            "Porównuje nazwy bossów w tabeli z listą nazw tej gry i zamienia podobne\n"
+            "(np. odczytane z błędem) na nazwy z listy. Przed zmianą pokazuje, co się zmieni."
+        )
+        self.fix_names_button.clicked.connect(self.fix_names_requested)
+        footer = QHBoxLayout()
+        footer.addWidget(hint, 1)
+        footer.addWidget(self.fix_names_button)
+        layout.addLayout(footer)
         self.empty = QLabel("Brak bossów – walki pojawią się tu, gdy włączysz „Śledź walkę z bossem”.")
         self.empty.setStyleSheet("color:#9aa0a6;")
         layout.addWidget(self.empty)
@@ -135,6 +148,9 @@ class ResultsWindow(QDialog):
             f" &nbsp;·&nbsp; śmierci przy bossach: {boss_deaths} &nbsp;·&nbsp; czas walk: {format_duration(total_time)}"
         )
         self.empty.setVisible(not rows)
+        # Tylko gry z wbudowaną listą nazw (Dark Souls I–III).
+        self.fix_names_button.setVisible(tracker.names is not None and bool(tracker.names.builtin_names))
+        self.fix_names_button.setEnabled(bool(rows))
         self._rows = rows
         self._expanded &= {r.name for r in rows}
         self._render()

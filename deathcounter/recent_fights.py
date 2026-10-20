@@ -70,6 +70,19 @@ class RecentFights:
                 fight.outcome = outcome
                 self.save()
 
+    def rename(self, old: str, new: str) -> None:
+        """Zmiana nazwy bossa; przy scaleniu z istniejącym zostaje nowsza walka."""
+        if not any(f.name == old for f in self.fights):
+            return
+        fights: list[RecentFight] = []
+        for fight in self.fights:  # od najnowszej
+            if fight.name == old:
+                fight.name = new
+            if not any(f.name == fight.name for f in fights):
+                fights.append(fight)
+        self.fights = fights
+        self.save()
+
     def remove(self, name: str) -> None:
         if any(f.name == name for f in self.fights):
             self.fights = [f for f in self.fights if f.name != name]

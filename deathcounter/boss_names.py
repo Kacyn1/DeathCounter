@@ -8,6 +8,7 @@ poprawiłeś, zostaje zapamiętany jako jej odmiana (alias) – następnym razem
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from difflib import SequenceMatcher
@@ -66,27 +67,34 @@ class BossNames:
         self.aliases: dict[str, str] = {}  # znormalizowany błędny odczyt → nazwa
         self.builtin_names: list[str] = []
         self.builtin_aliases: dict[str, str] = {}
+        self.builtin_version: str | None = None  # skrót listy wbudowanej
+        self.checked: str | None = None          # wersja listy, z którą porównano już zapisane nazwy
 
     def load(self) -> str | None:
         """Wczytuje listę wbudowaną i plik gry; uszkodzony plik pomija (lista zbuduje się od nowa)
         i zwraca ostrzeżenie."""
-        self.names, self.aliases = [], {}
-        self.builtin_names, self.builtin_aliases = [], {}
+        self.names, self.aliases, self.checked = [], {}, None
+        self.builtin_names, self.builtin_aliases, self.builtin_version = [], {}, None
         if self.builtin is not None and self.builtin.exists():
             try:
                 self.builtin_names, self.builtin_aliases = _read(self.builtin)
+                self.builtin_version = hashlib.sha256(self.builtin.read_bytes()).hexdigest()[:12]
             except (OSError, ValueError):
                 pass  # bez listy wbudowanej program i tak działa – uczy się nazw z walk
         if not self.path.exists():
             return None
         try:
             self.names, self.aliases = _read(self.path)
-        except (OSError, ValueError) as exc:
+            checked = json.loads(self.path.read_text(encoding="utf-8-sig")).get("builtin_checked")
+            self.checked = checked if isinstance(checked, str) else None
+        except (OSError, ValueError, AttributeError) as exc:
             return f"Nie można odczytać {self.path.name} ({exc}); lista znanych bossów zacznie się od nowa."
         return None
 
     def save(self) -> None:
         data = {"names": self.names, "aliases": self.aliases}
+        if self.checked:
+            data["builtin_checked"] = self.checked
         atomic_write_text(self.path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
     def match(self, text: str, extra: list[str] = ()) -> str | None:
@@ -101,6 +109,42 @@ class BossNames:
         candidates = {normalize(n): n for n in (*self.builtin_names, *extra, *self.names) if not is_placeholder(n)}
         candidates.update(self.builtin_aliases)
         candidates.update(self.aliases)
+        return self._closest(key, candidates)
+
+    def canonical(self, name: str) -> str | None:
+        """Nazwa z listy wbudowanej najbliższa podanej (np. zapisanej kiedyś z błędem OCR) albo None."""
+        key = normalize(base_name(name))
+        if not key or is_placeholder(name):
+            return None
+        if key in self.builtin_aliases:
+            return self.builtin_aliases[key]
+        candidates = {normalize(n): n for n in self.builtin_names}
+        candidates.update(self.builtin_aliases)
+        return self._closest(key, candidates)
+
+    @property
+    def needs_check(self) -> bool:
+        """Lista wbudowana jest nowa dla tej gry – zapisane nazwy trzeba z nią porównać."""
+        return self.builtin_version is not None and self.checked != self.builtin_version
+
+    def fix_learned(self) -> None:
+        """Zapamiętane nazwy i aliasy zamienia na nazwy z listy wbudowanej, a zapamiętaną błędną nazwę
+        zostawia jako alias – ten sam odczyt OCR da od razu właściwą nazwę. Oznacza listę jako sprawdzoną.
+        StorageError przy błędzie zapisu."""
+        names: list[str] = []
+        for name in self.names:
+            fixed = self.canonical(name) or name
+            if fixed != name:
+                self.aliases[normalize(name)] = fixed
+            if not any(normalize(n) == normalize(fixed) for n in names):
+                names.append(fixed)
+        self.names = names
+        self.aliases = {key: self.canonical(name) or name for key, name in self.aliases.items()
+                        if key != normalize(self.canonical(name) or name)}
+        self.checked = self.builtin_version
+        self.save()
+
+    def _closest(self, key: str, candidates: dict[str, str]) -> str | None:
         best, best_ratio = None, self.min_ratio
         for known, name in candidates.items():
             ratio = SequenceMatcher(None, key, known).ratio()

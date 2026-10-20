@@ -136,6 +136,7 @@ class MainWindow(QMainWindow):
         self._refresh_template_label()
         self._refresh_boss_hint()
         self._set_status(self._idle_status(), self._idle_message())
+        QTimer.singleShot(0, self._report_fixed_names)  # okno najpierw się pokazuje
         self._boss_timer.start()
         self._apply_discord()
 
@@ -477,10 +478,35 @@ class MainWindow(QMainWindow):
         """Okno nie blokuje programu – może zostać otwarte obok w trakcie gry."""
         if self._results is None:
             self._results = ResultsWindow(self)
+            self._results.fix_names_requested.connect(self._fix_boss_names)
         self._refresh_results(force=True)
         self._results.show()
         self._results.raise_()
         self._results.activateWindow()
+
+    def _fix_boss_names(self) -> None:
+        """Przycisk „Popraw nazwy bossów” w oknie „Wyniki”: pokazuje zmiany i po potwierdzeniu je wykonuje."""
+        title = "Popraw nazwy bossów"
+        fixes = self.bosses.name_fixes()
+        if not fixes:
+            QMessageBox.information(self._results, title,
+                                    "Wszystkie nazwy bossów zgadzają się z listą nazw tej gry.")
+            return
+        lines = "\n".join(f"• {old} → {new}" for old, new in fixes)
+        answer = QMessageBox.question(
+            self._results, title,
+            f"Te nazwy zostaną zamienione na nazwy z listy gry:\n\n{lines}\n\n"
+            "Liczba śmierci, czas i historia prób przejdą pod nowe nazwy. Poprawić?")
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self._fixed_names, self._fix_error = self.bosses.fix_names(force=True), None
+        except StorageError as exc:
+            self._fixed_names, self._fix_error = [], str(exc)
+        self._report_fixed_names(dialog=False)
+        self.boss_panel.refresh()
+        self._refresh_overlay()
+        self._refresh_results(force=True)
 
     def _refresh_results(self, force: bool = False) -> None:
         if self._results is not None and (force or self._results.isVisible()):
@@ -540,6 +566,30 @@ class MainWindow(QMainWindow):
         self.bosses = BossTracker(game.boss_store, audit=game.audit, names=game.boss_names, recent=game.recent,
                                   attempts=game.attempts)
         self.bosses.enabled = self.config.bosses.track
+        try:
+            self._fixed_names = self.bosses.fix_names()
+            self._fix_error = None
+        except StorageError as exc:
+            self._fixed_names, self._fix_error = [], str(exc)
+
+    def _report_fixed_names(self, dialog: bool = True) -> None:
+        """Pokazuje, którzy zapisani bossowie dostali nazwy z listy wbudowanej (przy wczytaniu gry
+        albo po przycisku w oknie „Wyniki” – wtedy bez okna, bo zmiany były już pokazane)."""
+        if self._fix_error:
+            self._show_error(f"Nie zapisano poprawionych nazw bossów: {self._fix_error}")
+        if not self._fixed_names:
+            return
+        for old, new in self._fixed_names:
+            self.diag.write(f"BOSS: nazwa „{old}” poprawiona na „{new}” (lista nazw gry)")
+        lines = "\n".join(f"• {old} → {new}" for old, new in self._fixed_names)
+        self.notice_label.setText(f"Poprawiono nazwy bossów: {len(self._fixed_names)}.")
+        if not dialog:
+            return
+        QMessageBox.information(
+            self, "Poprawione nazwy bossów",
+            "Zapisane nazwy bossów porównano z listą nazw tej gry i poprawiono:\n\n"
+            f"{lines}\n\nLiczba śmierci, czas i historia prób przeszły pod nowe nazwy. "
+            "Jeśli któraś zmiana jest zła, popraw tę nazwę ręcznie.")
 
     def _fill_games(self) -> None:
         """Gry wbudowane i dodane przez użytkownika, a na końcu pozycja „+ Dodaj grę…”."""
@@ -611,6 +661,7 @@ class MainWindow(QMainWindow):
                 self.diag.write(f"ZMIANA GRY: {self.config.game_name(game_id)}, śmierci: {self.store.deaths}")
                 for warning in game.warnings:
                     QMessageBox.warning(self, "Death Counter by MK", warning)
+                self._report_fixed_names()
         self._refresh_boss_hint()
         # Wykrywanie wraca, jeśli działało przed zmianą gry albo ma się włączać samo (np. po grze bez wzorców).
         if (restart or self.config.auto_start) and self.templates["death"] is not None:

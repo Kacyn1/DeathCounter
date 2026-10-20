@@ -1,5 +1,11 @@
 # Historia zmian
 
+## 1.9.35
+
+- Przy wczytaniu Dark Souls I, II lub III program porównuje zapisane wcześniej nazwy bossów z listą nazw gry i poprawia te, które są do niej podobne, na przykład błędne odczyty OCR. Poprawiane są wpisy w `bosses.json`, historia prób, lista ostatnich walk, rejestr zmian oraz nazwy w `boss_names.json`. Dwa wpisy tego samego niepokonanego bossa są scalane, a pokonany boss dostaje numer, tak jak przy ręcznej zmianie nazwy. Stara błędna nazwa zostaje zapamiętana jako alias. Program pokazuje listę zmian i zapisuje ją w `diagnostyka.log`.
+- Sprawdzenie odbywa się raz dla każdej wersji listy nazw (znacznik `builtin_checked` w `boss_names.json`), więc nazwa poprawiona później ręcznie nie zostanie zmieniona przy kolejnym uruchomieniu.
+- W oknie „Wyniki” dodano przycisk „Popraw nazwy bossów” (dla Dark Souls I–III). Program porównuje nazwy w tabeli z listą nazw gry, pokazuje, które z nich zmieni, i po potwierdzeniu podmienia je w ten sam sposób co przy wczytaniu gry. Można go użyć w dowolnym momencie, na przykład gdy po sprawdzeniu przy starcie pojawi się nowy błędnie odczytany boss.
+
 ## 1.9.3
 
 - Dodano wbudowane listy polskich nazw bossów dla Dark Souls I (27), II (47) i III (34, z dodatkami). Nazwy pochodzą z polskiej wersji językowej plików gier. Nazwa odczytana przez OCR jest porównywana z listą aktualnie wybranej gry i zastępowana najbardziej podobną nazwą, tak jak dotąd w przypadku nazw zapamiętanych z walk.
