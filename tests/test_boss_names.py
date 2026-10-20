@@ -134,6 +134,11 @@ def test_learn_saves_names_and_aliases(names, tmp_path):
     ("ds2", "Velstadt, Krolewska Tarcza", "Velstadt, Królewska Tarcza"),
     ("ds3", "Tancerka z Mrożnej Dolny", "Tancerka z Mroźnej Doliny"),
     ("ds3", "Midir Mrokozerca", "Midir Mrokożerca"),
+    ("sekiro", "Genichiro, droga Tomo", "Genichiro, droga Tomoe"),
+    ("sekiro", "Wewnetrzny Isshln", "Wewnętrzny Isshin"),
+    ("eldenring", "Margit, Upadly 0men", "Margit, Upadły Omen"),
+    ("eldenring", "Messmer Palovnik", "Messmer Palownik"),  # DLC
+    ("eldenring", "Esgar, Krwawy Duchowy", "Esgar, Krwawy Duchowny"),
 ])
 def test_builtin_names_match_readings_of_selected_game(tmp_path, game, reading, expected):
     names = BossNames(tmp_path / "boss_names.json", builtin_path(game))
@@ -149,7 +154,7 @@ def test_builtin_names_belong_to_their_game(tmp_path):
     assert custom.load() is None and custom.builtin_names == []
 
 
-@pytest.mark.parametrize("game", ["ds1", "ds2", "ds3"])
+@pytest.mark.parametrize("game", ["ds1", "ds2", "ds3", "sekiro", "eldenring"])
 def test_builtin_lists_are_valid(game):
     data = json.loads(builtin_path(game).read_text(encoding="utf-8"))
     assert len(data["names"]) == len(set(data["names"])) > 20

@@ -148,7 +148,7 @@ class ResultsWindow(QDialog):
             f" &nbsp;·&nbsp; śmierci przy bossach: {boss_deaths} &nbsp;·&nbsp; czas walk: {format_duration(total_time)}"
         )
         self.empty.setVisible(not rows)
-        # Tylko gry z wbudowaną listą nazw (Dark Souls I–III).
+        # Tylko gry z wbudowaną listą nazw (Dark Souls I–III, Sekiro, Elden Ring).
         self.fix_names_button.setVisible(tracker.names is not None and bool(tracker.names.builtin_names))
         self.fix_names_button.setEnabled(bool(rows))
         self._rows = rows

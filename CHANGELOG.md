@@ -1,5 +1,10 @@
 # Historia zmian
 
+## 1.9.36
+
+- Dodano wbudowane listy polskich nazw bossów dla Sekiro (50) i Elden Ringa (181, razem z dodatkiem Shadow of the Erdtree), wyciągnięte z polskiej wersji plików gier. Działają tak samo jak listy Dark Souls: odczyt z ekranu dostaje najbardziej podobną nazwę z listy wybranej gry, przy pierwszym wczytaniu gry zapisane nazwy są raz porównywane z listą, a w oknie „Wyniki” dostępny jest przycisk „Popraw nazwy bossów”.
+- Lista Elden Ringa obejmuje bossów głównych, polowych, z lochów i z dodatku oraz bossów-ludzi z paskiem zdrowia, takich jak Esgar, Czempion Fii, Gideon Ofnir czy uczestnicy walki z Ledą. Nie obejmuje kupców ani zwykłych postaci.
+
 ## 1.9.35
 
 - Przy wczytaniu Dark Souls I, II lub III program porównuje zapisane wcześniej nazwy bossów z listą nazw gry i poprawia te, które są do niej podobne, na przykład błędne odczyty OCR. Poprawiane są wpisy w `bosses.json`, historia prób, lista ostatnich walk, rejestr zmian oraz nazwy w `boss_names.json`. Dwa wpisy tego samego niepokonanego bossa są scalane, a pokonany boss dostaje numer, tak jak przy ręcznej zmianie nazwy. Stara błędna nazwa zostaje zapamiętana jako alias. Program pokazuje listę zmian i zapisuje ją w `diagnostyka.log`.
