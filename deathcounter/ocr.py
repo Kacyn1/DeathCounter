@@ -1,4 +1,4 @@
-"""Odczyt nazwy bossa z ekranu: wbudowany OCR Windows (Windows.Media.Ocr), język polski.
+"""Odczyt nazwy bossa z ekranu: wbudowany OCR Windows (Windows.Media.Ocr), pakiet polski albo angielski.
 
 Nazwa jest w grach Souls tuż nad paskiem zdrowia bossa, więc czytamy pas obrazu nad miejscem,
 w którym wykrywanie znalazło wzorzec paska. Napis jest najjaśniejszym elementem pasa: zostawiamy
@@ -17,9 +17,11 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from . import i18n
 from .template import to_gray
+from .i18n import tr
 
-OCR_LANGUAGE = "pl"
+OCR_LANGUAGES = ("pl", "en")  # pakiety OCR Windows, z których korzystamy (najpierw język programu)
 BAND_ABOVE = 0.055     # górna krawędź pasa nad paskiem (ułamek wysokości ekranu)
 BAND_GAP = 0.006       # odstęp od paska – jego górna ramka myli OCR
 BAND_LEFT = 0.35       # nazwa stoi nad lewym końcem paska, a wzorzec bywa wycięty z jego środka
@@ -109,6 +111,13 @@ def vote(readings: list[str], attempts: int) -> NameReading | None:
     return NameReading(name, groups[key] >= max(MIN_AGREEING, attempts * AGREEMENT))
 
 
+def ocr_languages() -> list[str]:
+    """Kolejność prób: język programu, potem drugi. Polski pakiet czyta też angielski tekst, a angielski –
+    polski bez ogonków (porównanie nazw i tak je pomija)."""
+    first = i18n.language()
+    return [first] + [code for code in OCR_LANGUAGES if code != first]
+
+
 class OcrReader:
     """Silnik OCR tworzony raz; metody są blokujące – wywoływać poza wątkiem interfejsu."""
 
@@ -119,13 +128,20 @@ class OcrReader:
             from winrt.windows.media.ocr import OcrEngine
             from winrt.windows.storage.streams import DataWriter
         except ImportError as exc:
-            raise OcrUnavailable(f"brak modułu OCR Windows ({exc})") from exc
-        engine = OcrEngine.try_create_from_language(Language(OCR_LANGUAGE))
+            raise OcrUnavailable(tr("brak modułu OCR Windows ({exc})", exc=exc)) from exc
+        engine = None
+        for code in ocr_languages():
+            engine = OcrEngine.try_create_from_language(Language(code))
+            if engine is not None:
+                break
+        else:
+            engine = OcrEngine.try_create_from_user_profile_languages()
         if engine is None:
             raise OcrUnavailable(
-                "Windows nie ma polskiego pakietu rozpoznawania tekstu (Ustawienia → Czas i język → "
-                "Język i region → Polski → Opcje językowe → Optyczne rozpoznawanie znaków)"
+                tr("Windows nie ma pakietu rozpoznawania tekstu (Ustawienia → Czas i język → "
+                   "Język i region → Polski albo English → Opcje językowe → Optyczne rozpoznawanie znaków)")
             )
+        self.language = str(engine.recognizer_language.language_tag)
         self._engine = engine
         self._bitmap = SoftwareBitmap
         self._format = BitmapPixelFormat.BGRA8

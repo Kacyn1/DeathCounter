@@ -1,5 +1,13 @@
 # Historia zmian
 
+## 1.10.0
+
+- Program ma angielską wersję językową. Język (PL / ENG) wybiera się w oknie „O programie” – lista „Język” z flagami w prawym górnym rogu; po zmianie program uruchamia się ponownie w nowym języku. Przy pierwszym uruchomieniu język dobiera się do języka Windows, a dotychczasowi użytkownicy zostają przy polskim. Przetłumaczony jest cały interfejs, komunikaty i certyfikat PDF.
+- Listy nazw bossów wszystkich pięciu gier mają teraz pary polska–angielska z plików gier. Odczyt nazwy rozpoznaje nazwy w obu językach i podaje je w języku programu, więc język gry nie musi zgadzać się z językiem programu. Po zmianie języka zapisane nazwy bossów są raz tłumaczone razem ze śmierciami, czasem i historią prób.
+- Odczyt nazwy bossa nie wymaga już polskiego pakietu OCR Windows – wystarczy polski albo angielski.
+- Dane w plikach (statusy „W TRAKCIE” / „POKONANO”, dane podpisane w certyfikacie) zostają w dotychczasowej postaci, więc wyniki i certyfikaty z poprzednich wersji działają bez zmian w obu językach.
+- Dodano angielskie README (`README_EN.md`).
+
 ## 1.9.36
 
 - Dodano wbudowane listy polskich nazw bossów dla Sekiro (50) i Elden Ringa (181, razem z dodatkiem Shadow of the Erdtree), wyciągnięte z polskiej wersji plików gier. Działają tak samo jak listy Dark Souls: odczyt z ekranu dostaje najbardziej podobną nazwę z listy wybranej gry, przy pierwszym wczytaniu gry zapisane nazwy są raz porównywane z listą, a w oknie „Wyniki” dostępny jest przycisk „Popraw nazwy bossów”.

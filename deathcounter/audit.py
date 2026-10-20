@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from .storage import StorageError, atomic_write_text
+from .i18n import tr
 
 AUDIT_VERSION = 1
 
@@ -75,17 +76,17 @@ class AuditLog:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8-sig"))
             if not isinstance(data, dict):
-                raise ValueError("oczekiwano obiektu JSON")
+                raise ValueError(tr("oczekiwano obiektu JSON"))
         except (OSError, ValueError):
             self.intact = False
-            return f"Rejestr zmian {self.path.name} jest uszkodzony – wynik tej gry będzie oznaczony jako niepewny."
+            return tr("Rejestr zmian {name} jest uszkodzony – wynik tej gry będzie oznaczony jako niepewny.", name=self.path.name)
         self.game = Changes.from_dict(data.get("game"))
         bosses = data.get("bosses")
         self.bosses = {str(k): Changes.from_dict(v) for k, v in bosses.items()} if isinstance(bosses, dict) else {}
         self.intact = data.get("intact") is True
         if self.key is not None and data.get("mac") != self._mac():
             self.intact = False
-            return f"Rejestr zmian {self.path.name} został zmieniony poza programem – wynik tej gry będzie oznaczony jako niepewny."
+            return tr("Rejestr zmian {name} został zmieniony poza programem – wynik tej gry będzie oznaczony jako niepewny.", name=self.path.name)
         return None
 
     def save(self) -> None:
@@ -192,5 +193,5 @@ def open_audit(path: Path, key: bytes | None, deaths: int, records: dict) -> tup
     try:
         audit.save()
     except StorageError as exc:
-        warning = f"Nie można zapisać rejestru zmian: {exc}"
+        warning = tr("Nie można zapisać rejestru zmian: {exc}", exc=exc)
     return audit, warning

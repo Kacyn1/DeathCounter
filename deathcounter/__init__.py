@@ -1,3 +1,3 @@
 """Death Counter by MK – automatyczny licznik śmierci w grach z napisem po śmierci (np. „YOU DIED”)."""
 
-__version__ = "1.9.36"
+__version__ = "1.10.0"

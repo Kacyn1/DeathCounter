@@ -15,6 +15,8 @@ import time
 import uuid
 from typing import BinaryIO, Callable
 
+from .i18n import tr
+
 OP_HANDSHAKE, OP_FRAME, OP_CLOSE = 0, 1, 2
 PIPE_PATTERN = r"\\.\pipe\discord-ipc-{}"
 RECONNECT_SECONDS = 15.0
@@ -41,7 +43,7 @@ def _read_exact(pipe: BinaryIO, size: int) -> bytes:
     while len(data) < size:
         chunk = pipe.read(size - len(data))
         if not chunk:
-            raise DiscordError("Discord zamknął połączenie.")
+            raise DiscordError(tr("Discord zamknął połączenie."))
         data += chunk
     return data
 
@@ -52,13 +54,13 @@ def open_pipe() -> BinaryIO:
             return open(PIPE_PATTERN.format(number), "r+b", buffering=0)
         except OSError:
             continue
-    raise DiscordError("Discord nie jest uruchomiony.")
+    raise DiscordError(tr("Discord nie jest uruchomiony."))
 
 
 def build_activity(game: str, deaths: int, started_at: int) -> dict:
     return {
         "details": game,
-        "state": f"Śmierci: {deaths}",
+        "state": tr("Śmierci: {deaths}", deaths=deaths),
         "timestamps": {"start": started_at},
         "assets": {"large_image": "logo", "large_text": "Death Counter by MK"},
     }
@@ -83,25 +85,25 @@ class DiscordClient:
             op, data = read_frame(pipe)
         except (OSError, DiscordError, ValueError) as exc:
             pipe.close()
-            raise DiscordError(f"Nie udało się połączyć z Discordem: {exc}") from exc
+            raise DiscordError(tr("Nie udało się połączyć z Discordem: {exc}", exc=exc)) from exc
         if op == OP_CLOSE or data.get("evt") == "ERROR":
             pipe.close()
-            raise DiscordError(f"Discord odrzucił połączenie: {data.get('message') or data.get('data')}")
+            raise DiscordError(tr("Discord odrzucił połączenie: {value}", value=data.get('message') or data.get('data')))
         self._pipe = pipe
 
     def set_activity(self, activity: dict | None) -> None:
         if self._pipe is None:
-            raise DiscordError("Brak połączenia z Discordem.")
+            raise DiscordError(tr("Brak połączenia z Discordem."))
         payload = {"cmd": "SET_ACTIVITY", "args": {"pid": os.getpid(), "activity": activity}, "nonce": str(uuid.uuid4())}
         try:
             self._pipe.write(encode(OP_FRAME, payload))
             op, data = read_frame(self._pipe)
         except (OSError, DiscordError, ValueError) as exc:
             self.close()
-            raise DiscordError(f"Połączenie z Discordem zostało przerwane: {exc}") from exc
+            raise DiscordError(tr("Połączenie z Discordem zostało przerwane: {exc}", exc=exc)) from exc
         if op == OP_CLOSE or data.get("evt") == "ERROR":
             self.close()
-            raise DiscordError(f"Discord odrzucił status: {data.get('data', {}).get('message', data)}")
+            raise DiscordError(tr("Discord odrzucił status: {get}", get=data.get('data', {}).get('message', data)))
 
     def close(self) -> None:
         if self._pipe is not None:
@@ -147,7 +149,7 @@ class DiscordPresence:
             if not self._client.connected and not stopping:
                 try:
                     self._client.connect()
-                    self._on_state("połączono z Discordem")
+                    self._on_state(tr("połączono z Discordem"))
                     with self._lock:
                         self._dirty = True  # po (ponownym) połączeniu status trzeba wysłać od nowa
                 except DiscordError as exc:
@@ -164,7 +166,7 @@ class DiscordPresence:
                     last_update = time.monotonic()
                     with self._lock:
                         self._dirty = self._wanted != activity
-                    self._on_state("status ustawiony" if activity else "status wyczyszczony")
+                    self._on_state(tr("status ustawiony") if activity else tr("status wyczyszczony"))
                 except DiscordError as exc:
                     self._on_state(str(exc))
                 continue

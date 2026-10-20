@@ -15,8 +15,10 @@ from .config import GAMES, data_dir, legacy_data_present, load_config, migrate_l
 from .game_data import open_game
 from .icon import app_icon
 from .main_window import INSTANCE_SERVER, MainWindow
-from .updater import AFTER_UPDATE_ARG
+from .updater import AFTER_UPDATE_ARG, RESTART_ARG
+from . import i18n
 from .storage import StorageError
+from .i18n import tr
 
 
 def _dark_palette() -> QPalette:
@@ -41,7 +43,7 @@ def _dark_palette() -> QPalette:
 def _install_excepthook() -> None:
     def hook(exc_type, exc, tb):
         details = "".join(traceback.format_exception(exc_type, exc, tb))
-        box = QMessageBox(QMessageBox.Icon.Critical, "Death Counter by MK – błąd", f"Wystąpił nieoczekiwany błąd:\n{exc}")
+        box = QMessageBox(QMessageBox.Icon.Critical, tr("Death Counter by MK – błąd"), tr("Wystąpił nieoczekiwany błąd:\n{exc}", exc=exc))
         box.setDetailedText(details)
         box.exec()
 
@@ -77,9 +79,9 @@ def _ask_legacy_game(default: str) -> str:
     ids = list(GAMES)
     name, ok = QInputDialog.getItem(
         None,
-        "Death Counter by MK – wybór gry",
-        "Program zapisuje teraz licznik śmierci, bossów i kalibrację osobno dla każdej gry.\n"
-        "Do której gry należą dotychczasowe dane?",
+        tr("Death Counter by MK – wybór gry"),
+        tr("Program zapisuje teraz licznik śmierci, bossów i kalibrację osobno dla każdej gry.\n"
+        "Do której gry należą dotychczasowe dane?"),
         [GAMES[g] for g in ids],
         ids.index(default) if default in ids else 0,
         False,
@@ -96,25 +98,27 @@ def main() -> int:
     app.setPalette(_dark_palette())
     _install_excepthook()
 
-    # Po aktualizacji nowa wersja czeka, aż stara się zamknie i zwolni blokadę.
+    # Po aktualizacji (albo zmianie języka) nowa kopia czeka, aż stara się zamknie i zwolni blokadę.
     after_update = AFTER_UPDATE_ARG in sys.argv
+    restarted = after_update or RESTART_ARG in sys.argv
     lock = QLockFile(QDir.temp().filePath("death-counter.lock"))
-    if not lock.tryLock(30000 if after_update else 100):
-        if not after_update and _wake_running():
+    if not lock.tryLock(30000 if restarted else 100):
+        if not restarted and _wake_running():
             return 0  # ponowne kliknięcie ikony – działające okno wychodzi na wierzch
-        QMessageBox.warning(None, "Death Counter by MK", "Program jest już uruchomiony.")
+        QMessageBox.warning(None, "Death Counter by MK", tr("Program jest już uruchomiony."))
         return 1
 
     try:
         base = data_dir()
         config, config_warning = load_config(base / "config.json")
+        i18n.set_language(config.language)
         if legacy_data_present(base):
             config.game = _ask_legacy_game(config.game)
             migrate_legacy(base, config.game)
             save_config(base / "config.json", config)
         game = open_game(base, config.game)
     except StorageError as exc:
-        QMessageBox.critical(None, "Death Counter by MK", f"Nie można przygotować pliku wyniku.\n\n{exc}")
+        QMessageBox.critical(None, "Death Counter by MK", tr("Nie można przygotować pliku wyniku.\n\n{exc}", exc=exc))
         return 1
 
     warnings = ([config_warning] if config_warning else []) + game.warnings

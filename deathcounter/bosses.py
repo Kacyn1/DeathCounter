@@ -24,6 +24,7 @@ from .boss_names import BossNames, base_name, is_placeholder, same_boss
 from .ocr import normalize
 from .recent_fights import RecentFights
 from .storage import StorageError, atomic_write_text
+from .i18n import tr, N_
 
 Clock = Callable[[], float]
 
@@ -39,10 +40,10 @@ ABANDON_SECONDS = 15.0        # pasek zniknął i przez tyle sekund nie było ś
 
 
 class BossState(Enum):
-    WAITING = "Oczekiwanie"
-    FIGHT = "Walka"
-    DEATH = "Śmierć"
-    DEFEATED = "Boss pokonany"
+    WAITING = N_("Oczekiwanie")
+    FIGHT = N_("Walka")
+    DEATH = N_("Śmierć")
+    DEFEATED = N_("Boss pokonany")
 
 
 @dataclass
@@ -107,7 +108,7 @@ class BossStore:
         try:
             raw = self.path.read_text(encoding="utf-8-sig")
         except OSError as exc:
-            raise StorageError(f"Nie można odczytać pliku {self.path.name}: {exc}") from exc
+            raise StorageError(tr("Nie można odczytać pliku {name}: {exc}", name=self.path.name, exc=exc)) from exc
         try:
             self.records = _parse_bosses(raw)
         except ValueError as exc:
@@ -116,11 +117,10 @@ class BossStore:
                 os.replace(self.path, backup)
             except OSError as move_exc:
                 raise StorageError(
-                    f"Plik {self.path.name} jest uszkodzony ({exc}) i nie można go odłożyć: {move_exc}"
+                    tr("Plik {name} jest uszkodzony ({exc}) i nie można go odłożyć: {move_exc}", name=self.path.name, exc=exc, move_exc=move_exc)
                 ) from move_exc
             self.warning = (
-                f"Plik {self.path.name} był uszkodzony ({exc}). Jego kopię zapisano jako "
-                f"{backup.name}, a lista bossów zaczyna się od nowa."
+                tr("Plik {name} był uszkodzony ({exc}). Jego kopię zapisano jako {name2}, a lista bossów zaczyna się od nowa.", name=self.path.name, exc=exc, name2=backup.name)
             )
 
     def save(self) -> None:
@@ -278,7 +278,7 @@ class BossTracker:
         elif self.state is BossState.WAITING and self._recently(self._bar_lost_at):
             self.state = BossState.DEATH
         elif self.state is BossState.DEFEATED and self._recently(self._victory_at, SIMULTANEOUS_SECONDS):
-            self.uncertain = "Śmierć i komunikat zwycięstwa prawie jednocześnie – zatwierdź wynik."
+            self.uncertain = tr("Śmierć i komunikat zwycięstwa prawie jednocześnie – zatwierdź wynik.")
         else:
             return False
         self._death_at = now
@@ -295,7 +295,7 @@ class BossTracker:
         if self.state is BossState.FIGHT:
             self._pause(BossState.DEFEATED)
         elif self.state is BossState.DEATH:
-            self.uncertain = "Komunikat zwycięstwa po śmierci – zatwierdź wynik albo kontynuuj walkę."
+            self.uncertain = tr("Komunikat zwycięstwa po śmierci – zatwierdź wynik albo kontynuuj walkę.")
         elif not (self.state is BossState.WAITING and (self._recently(self._bar_lost_at) or self.uncertain)):
             return
         self.state = BossState.DEFEATED
@@ -307,7 +307,7 @@ class BossTracker:
         """Utrata obrazu w trakcie walki: timer staje, wynik wymaga potwierdzenia."""
         if self.state is BossState.FIGHT:
             self._pause(BossState.WAITING)
-            self.uncertain = "Utracono obraz w trakcie walki – kontynuuj walkę albo zatwierdź wynik."
+            self.uncertain = tr("Utracono obraz w trakcie walki – kontynuuj walkę albo zatwierdź wynik.")
             self._save()
 
     def tick(self) -> FightEnd | None:
@@ -624,8 +624,8 @@ def overlay_text(deaths: int, boss: BossView | None) -> str:
     """Wspólny tekst nakładki-okna i RTSS. Po zwycięstwie zostaje sam ogólny licznik."""
     lines = [f"DEATHS: {deaths}"]
     if boss is not None and boss.state is not BossState.DEFEATED:
-        lines.append(f"{boss.name} — deaths: {boss.deaths}")
-        lines.append(f"Czas: {format_duration(boss.seconds)}")
+        lines.append(tr("{name} — deaths: {deaths}", name=boss.name, deaths=boss.deaths))
+        lines.append(tr("Czas: {seconds}", seconds=format_duration(boss.seconds)))
     return "\n".join(lines)
 
 
@@ -640,24 +640,24 @@ def _parse_bosses(raw: str) -> dict[str, BossRecord]:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError("niepoprawny JSON") from exc
+        raise ValueError(tr("niepoprawny JSON")) from exc
     if not isinstance(data, dict):
-        raise ValueError("oczekiwano obiektu JSON")
+        raise ValueError(tr("oczekiwano obiektu JSON"))
     records = {}
     for name, entry in data.items():
         if not isinstance(entry, dict):
-            raise ValueError(f"wpis „{name}” nie jest obiektem")
+            raise ValueError(tr("wpis „{name}” nie jest obiektem", name=name))
         deaths, seconds, status = entry.get("deaths"), entry.get("total_time_seconds"), entry.get("status")
         if isinstance(deaths, bool) or not isinstance(deaths, int) or deaths < 0:
-            raise ValueError(f"„{name}”: pole \"deaths\" nie jest liczbą nieujemną")
+            raise ValueError(tr('„{name}”: pole "deaths" nie jest liczbą nieujemną', name=name))
         if (
             isinstance(seconds, bool)
             or not isinstance(seconds, (int, float))
             or not math.isfinite(seconds)
             or seconds < 0
         ):
-            raise ValueError(f"„{name}”: pole \"total_time_seconds\" nie jest liczbą nieujemną")
+            raise ValueError(tr('„{name}”: pole "total_time_seconds" nie jest liczbą nieujemną', name=name))
         if status not in STATUSES:
-            raise ValueError(f"„{name}”: nieznany status {status!r}")
+            raise ValueError(tr("„{name}”: nieznany status {status!r}", name=name, status=status))
         records[name] = BossRecord(deaths, float(seconds), status)
     return records

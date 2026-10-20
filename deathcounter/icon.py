@@ -172,6 +172,35 @@ def app_icon() -> QIcon:
     return icon
 
 
+def flag(code: str, width: int = 30, height: int = 20) -> QPixmap:
+    """Flaga języka na liście „Język”: „pl” – Polska, „en” – Wielka Brytania. Rysowana (Windows nie pokazuje
+    emoji flag)."""
+    image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    p = QPainter(image)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    w, h = float(width), float(height)
+    if code == "pl":
+        p.fillRect(QRectF(0, 0, w, h / 2), QColor(255, 255, 255))
+        p.fillRect(QRectF(0, h / 2, w, h / 2), QColor(220, 20, 60))
+    else:
+        blue, red, white = QColor(1, 33, 105), QColor(200, 16, 46), QColor(255, 255, 255)
+        p.fillRect(QRectF(0, 0, w, h), blue)
+        for color, thickness in ((white, h * 0.3), (red, h * 0.1)):  # przekątne
+            p.setPen(QPen(color, thickness))
+            p.drawLine(QPointF(0, 0), QPointF(w, h))
+            p.drawLine(QPointF(0, h), QPointF(w, 0))
+        p.fillRect(QRectF(w * 0.4, 0, w * 0.2, h), white)  # krzyż
+        p.fillRect(QRectF(0, h * 0.35, w, h * 0.3), white)
+        p.fillRect(QRectF(w * 0.45, 0, w * 0.1, h), red)
+        p.fillRect(QRectF(0, h * 0.4, w, h * 0.2), red)
+    p.setPen(QPen(QColor(0, 0, 0, 90), 1))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawRect(QRectF(0.5, 0.5, w - 1, h - 1))
+    p.end()
+    return QPixmap.fromImage(image)
+
+
 def write_ico(path: Path) -> None:
     """Plik .ico z obrazami PNG we wszystkich rozmiarach (format obsługiwany od Windows Vista)."""
     images = []

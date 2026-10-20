@@ -6,6 +6,8 @@ import ctypes
 from ctypes import wintypes
 from pathlib import Path
 
+from .i18n import tr
+
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
 GWL_EXSTYLE = -20
@@ -101,7 +103,7 @@ def send_to_recycle_bin(paths) -> None:
     op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI
     code = shell32.SHFileOperationW(ctypes.byref(op))
     if code != 0 or op.fAnyOperationsAborted:
-        raise OSError(f"Nie udało się przenieść do Kosza (kod {code:#x}). Sprawdź, czy pliki nie są otwarte.")
+        raise OSError(tr("Nie udało się przenieść do Kosza (kod {code:#x}). Sprawdź, czy pliki nie są otwarte.", code=code))
 
 
 WM_SETICON = 0x0080

@@ -19,12 +19,14 @@ from pathlib import Path
 from .bosses import STATUS_DEFEATED, format_duration
 from .signing import matches, verification_code
 from .storage import StorageError
+from .i18n import N_, tr
 
 APP_NAME = "Death Counter by MK"
 CERT_VERSION = 2  # 2: dane o ręcznych korektach i zmianach poza programem
 MAX_BOSSES_ON_CERTIFICATE = 6
 APPENDIX_ROWS_PER_PAGE = 22
 _XMP_PATTERN = re.compile(rb"<dcmk:payload>([A-Za-z0-9+/=]+)</dcmk:payload>\s*<dcmk:code>([A-Z0-9-]*)</dcmk:code>")
+GAME_COUNTER = N_("Licznik ogólny")  # nazwa wiersza licznika gry w danych certyfikatu (zapisana po polsku)
 
 
 @dataclass
@@ -70,7 +72,7 @@ class Adjustments:
     bosses: list[CounterChanges] = None
 
     def __post_init__(self) -> None:
-        self.game = self.game or CounterChanges("Licznik ogólny")
+        self.game = self.game or CounterChanges(GAME_COUNTER)
         self.bosses = self.bosses or []
 
     @property
@@ -85,7 +87,7 @@ class Adjustments:
                                   round(c.untracked_seconds))
 
         bosses = [convert(name, c) for name, c in audit.bosses.items()]
-        return cls(audit.intact, convert("Licznik ogólny", audit.game), [b for b in bosses if b.changed])
+        return cls(audit.intact, convert(GAME_COUNTER, audit.game), [b for b in bosses if b.changed])
 
     def to_dict(self) -> dict:
         return {"intact": self.intact, "game": self.game.to_list(), "bosses": [b.to_list() for b in self.bosses]}
@@ -99,22 +101,22 @@ class Adjustments:
         """Krótkie opisy zmian (certyfikat, okno weryfikacji); pusta lista – bez ręcznych zmian."""
         lines = []
         if not self.intact:
-            lines.append("rejestr zmian został naruszony – wynik niewiarygodny")
+            lines.append(tr("rejestr zmian został naruszony – wynik niewiarygodny"))
         g = self.game
         if g.manual_added or g.manual_removed:
-            lines.append(f"ręczne korekty śmierci: +{g.manual_added} / −{g.manual_removed}")
+            lines.append(tr("ręczne korekty śmierci: +{manual_added} / −{manual_removed}", manual_added=g.manual_added, manual_removed=g.manual_removed))
         if g.external_deaths:
-            lines.append(f"licznik zmieniony poza programem: {g.external_deaths:+d}")
+            lines.append(tr("licznik zmieniony poza programem: {deaths:+d}", deaths=g.external_deaths))
         if g.external_status:
-            lines.append("lista bossów zmieniona poza programem")
+            lines.append(tr("lista bossów zmieniona poza programem"))
         if g.untracked_deaths:
-            lines.append(f"{g.untracked_deaths} śmierci bez historii zmian")
+            lines.append(tr("{untracked_deaths} śmierci bez historii zmian", untracked_deaths=g.untracked_deaths))
         manual = sum(b.manual_added + b.manual_removed for b in self.bosses)
         external = [b for b in self.bosses if b.external_deaths or b.external_seconds or b.external_status]
         if manual:
-            lines.append(f"ręczne korekty śmierci przy bossach: {manual}")
+            lines.append(tr("ręczne korekty śmierci przy bossach: {manual}", manual=manual))
         if external:
-            lines.append(f"bossowie zmienieni poza programem: {len(external)}")
+            lines.append(tr("bossowie zmienieni poza programem: {count}", count=len(external)))
         return lines
 
 
@@ -188,7 +190,7 @@ def verify_pdf(path: Path, key: bytes | None) -> Verification:
     try:
         raw = Path(path).read_bytes()
     except OSError as exc:
-        raise StorageError(f"Nie można odczytać pliku {Path(path).name}: {exc}") from exc
+        raise StorageError(tr("Nie można odczytać pliku {name}: {exc}", name=Path(path).name, exc=exc)) from exc
     match = _XMP_PATTERN.search(raw)
     if match is None:
         return Verification(Verdict.NOT_CERTIFICATE)
@@ -222,13 +224,13 @@ def write_certificate(path: Path, data: CertificateData, key: bytes | None) -> s
     writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
     writer.setPageOrientation(QPageLayout.Orientation.Landscape)
     writer.setPageMargins(QMarginsF(0, 0, 0, 0), QPageLayout.Unit.Millimeter)
-    writer.setTitle(f"Certyfikat – {data.game}")
+    writer.setTitle(tr("Certyfikat – {game}", game=data.game))
     writer.setCreator(APP_NAME)
     writer.setDocumentXmpMetadata(QByteArray(_xmp(payload, code)))
 
     painter = QPainter(writer)
     if not painter.isActive():
-        raise StorageError(f"Nie można zapisać pliku {path.name} (sprawdź, czy nie jest otwarty w innym programie).")
+        raise StorageError(tr("Nie można zapisać pliku {name} (sprawdź, czy nie jest otwarty w innym programie).", name=path.name))
     page = _Page(painter, writer.width(), writer.height())
     page.certificate(data, code)
     limit = _bosses_on_certificate(data)
@@ -244,7 +246,7 @@ def write_certificate(path: Path, data: CertificateData, key: bytes | None) -> s
     painter.end()
     del writer  # zamyka plik
     if not path.exists() or path.stat().st_size == 0:
-        raise StorageError(f"Nie udało się zapisać pliku {path.name}.")
+        raise StorageError(tr("Nie udało się zapisać pliku {name}.", name=path.name))
     return code
 
 
@@ -374,7 +376,7 @@ class _Page:
 
     def watermark(self, data: CertificateData, code: str) -> None:
         """Mikrotekst w kolorze prawie identycznym z tłem – niewidoczny gołym okiem, widoczny po powiększeniu."""
-        mark = f"{APP_NAME} · {code or 'NIEPODPISANY'} · {data.game} · {data.player or '-'} · śmierci {data.deaths} · "
+        mark = tr("{APP_NAME} · {value} · {game} · {value2} · śmierci {deaths} · ", APP_NAME=APP_NAME, value=code or tr('NIEPODPISANY'), game=data.game, value2=data.player or '-', deaths=data.deaths)
         self.p.save()
         self.p.setFont(self._font("Arial", 1.3))
         self.p.setPen(self._color(self.RED, 7))
@@ -388,15 +390,15 @@ class _Page:
     def footer(self, data: CertificateData, code: str) -> None:
         y = 172
         self.line(32, y, 92, y)
-        self.text(32, y + 1, 60, 6, "DATA WYSTAWIENIA", size=2.6, color=self.MUTED, spacing=12)
+        self.text(32, y + 1, 60, 6, tr("DATA WYSTAWIENIA"), size=2.6, color=self.MUTED, spacing=12)
         self.text(32, y + 6, 60, 6, data.issued.strftime("%d.%m.%Y, %H:%M"), size=3.8, bold=True)
         self.line(self.w - 92, y, self.w - 32, y)
-        self.text(self.w - 92, y + 1, 60, 6, "KOD WERYFIKACYJNY", size=2.6, color=self.MUTED, spacing=12)
-        self.text(self.w - 92, y + 6, 60, 6, code or "brak – wersja bez podpisu", family="Consolas",
+        self.text(self.w - 92, y + 1, 60, 6, tr("KOD WERYFIKACYJNY"), size=2.6, color=self.MUTED, spacing=12)
+        self.text(self.w - 92, y + 6, 60, 6, code or tr("brak – wersja bez podpisu"), family="Consolas",
                   size=3.8, bold=True, color=self.RED if code else self.MUTED)
         self.seal(self.w / 2, 177)
         self.text(20, 192, self.w - 40, 5,
-                  f"Autentyczność sprawdzisz w programie {APP_NAME}: przycisk „Sprawdź certyfikat…”.",
+                  tr("Autentyczność sprawdzisz w programie {APP_NAME}: przycisk „Sprawdź certyfikat…”.", APP_NAME=APP_NAME),
                   size=2.4, color=self.MUTED)
 
     def seal(self, cx, cy) -> None:
@@ -419,20 +421,20 @@ class _Page:
         self.background(data, code)
         self.logo(self.w / 2, 30, 20)
         self.text(0, 41, self.w, 6, APP_NAME.upper(), size=3.0, bold=True, color=self.MUTED, spacing=25)
-        self.text(0, 47, self.w, 18, "CERTYFIKAT", family="Georgia", size=15, bold=True, spacing=8)
+        self.text(0, 47, self.w, 18, tr("CERTYFIKAT"), family="Georgia", size=15, bold=True, spacing=8)
         self.line(self.w / 2 - 45, 66, self.w / 2 + 45, 66)
         if data.player:
-            self.text(0, 69, self.w, 7, "Niniejszym poświadcza się zmagania gracza", family="Georgia", size=4.2,
+            self.text(0, 69, self.w, 7, tr("Niniejszym poświadcza się zmagania gracza"), family="Georgia", size=4.2,
                       italic=True, color=self.MUTED)
             self.text(30, 76, self.w - 60, 13, data.player, family="Georgia", size=9, bold=True, italic=True)
-            self.text(0, 89, self.w, 6, "w grze", family="Georgia", size=4.2, italic=True, color=self.MUTED)
+            self.text(0, 89, self.w, 6, tr("w grze"), family="Georgia", size=4.2, italic=True, color=self.MUTED)
         else:
-            self.text(0, 76, self.w, 13, "Niniejszym poświadcza się zmagania w grze", family="Georgia", size=5.5,
+            self.text(0, 76, self.w, 13, tr("Niniejszym poświadcza się zmagania w grze"), family="Georgia", size=5.5,
                       italic=True, color=self.MUTED)
         self.text(30, 95, self.w - 60, 13, data.game, size=8.5, bold=True, color=self.RED)
         self.stats(data, 111)
         if data.adjusted:
-            notice = "Uwaga – wynik zawiera zmiany: " + "; ".join(data.adjustments.summary()) +                      ". Szczegóły w załączniku „Korekty”."
+            notice = tr("Uwaga – wynik zawiera zmiany: ") + "; ".join(data.adjustments.summary()) +                      tr(". Szczegóły w załączniku „Korekty”.")
             box = self._rect(30, 131.5, self.w - 60, 9.5)
             self.p.fillRect(box, self._color((250, 228, 228)))
             self.p.setPen(self._color(self.RED))
@@ -448,10 +450,10 @@ class _Page:
         boss_deaths = sum(b.deaths for b in data.bosses)
         boss_time = sum(b.seconds for b in data.defeated)
         items = [
-            (str(data.deaths), "ŚMIERCI ŁĄCZNIE"),
-            (str(len(data.defeated)), "POKONANI BOSSOWIE"),
-            (str(boss_deaths), "ŚMIERCI PRZY BOSSACH"),
-            (format_duration(boss_time), "CZAS POKONANIA BOSSÓW"),
+            (str(data.deaths), tr("ŚMIERCI ŁĄCZNIE")),
+            (str(len(data.defeated)), tr("POKONANI BOSSOWIE")),
+            (str(boss_deaths), tr("ŚMIERCI PRZY BOSSACH")),
+            (format_duration(boss_time), tr("CZAS POKONANIA BOSSÓW")),
         ]
         width, gap = 50, 6
         x = (self.w - (len(items) * width + (len(items) - 1) * gap)) / 2
@@ -465,7 +467,7 @@ class _Page:
     def boss_list(self, data: CertificateData, y: float) -> None:
         defeated = data.defeated
         if not defeated:
-            self.text(0, y + 4, self.w, 8, "Pierwszy boss wciąż czeka na pokonanie.", family="Georgia",
+            self.text(0, y + 4, self.w, 8, tr("Pierwszy boss wciąż czeka na pokonanie."), family="Georgia",
                       size=4, italic=True, color=self.MUTED)
             return
         shown = defeated[:_bosses_on_certificate(data)]
@@ -475,7 +477,7 @@ class _Page:
         total_w = columns * col_w + (columns - 1) * 10
         x0 = (self.w - total_w) / 2
         rest = len(defeated) - len(shown)
-        header = "POKONANI BOSSOWIE" + (f"  ({len(shown)} z {len(defeated)} – pełna lista w załączniku)" if rest else "")
+        header = tr("POKONANI BOSSOWIE") + (tr("  ({count_shown} z {count_defeated} – pełna lista w załączniku)", count_shown=len(shown), count_defeated=len(defeated)) if rest else "")
         self.text(0, y, self.w, 5, header, size=2.8, bold=True, color=self.MUTED, spacing=15)
         for i, boss in enumerate(shown):
             col, row = divmod(i, per_column)
@@ -488,12 +490,12 @@ class _Page:
     def appendix(self, data: CertificateData, code: str, rows: list[BossRow], start: int) -> None:
         self.background(data, code)
         self.logo(30, 27, 13)
-        self.text(40, 20, 150, 8, "ZAŁĄCZNIK DO CERTYFIKATU", size=3.2, bold=True, color=self.MUTED,
+        self.text(40, 20, 150, 8, tr("ZAŁĄCZNIK DO CERTYFIKATU"), size=3.2, bold=True, color=self.MUTED,
                   align="left", spacing=15)
-        self.text(40, 27, 200, 9, f"{data.game} – lista bossów", family="Georgia", size=6, bold=True, align="left")
+        self.text(40, 27, 200, 9, tr("{game} – lista bossów", game=data.game), family="Georgia", size=6, bold=True, align="left")
         x, w, y = 30, self.w - 60, 42
-        headers = (("#", 10, "left"), ("Boss", w - 105, "left"), ("Status", 35, "left"),
-                   ("Śmierci", 25, "right"), ("Czas walki", 35, "right"))
+        headers = (("#", 10, "left"), (tr("Boss"), w - 105, "left"), (tr("Status"), 35, "left"),
+                   (tr("Śmierci"), 25, "right"), (tr("Czas walki"), 35, "right"))
         self.p.fillRect(self._rect(x, y, w, 7), self._color(self.RED))
         cx = x + 2
         for title, cw, align in headers:
@@ -503,14 +505,14 @@ class _Page:
             ry = y + 7 + i * 5.6
             if i % 2:
                 self.p.fillRect(self._rect(x, ry, w, 5.6), self._color((243, 236, 224)))
-            values = (str(start + i + 1), boss.name, "pokonany" if boss.defeated else "w trakcie",
+            values = (str(start + i + 1), boss.name, tr("pokonany") if boss.defeated else tr("w trakcie"),
                       str(boss.deaths), format_duration(boss.seconds))
             cx = x + 2
             for (title, cw, align), value in zip(headers, values):
                 self.text(cx, ry, cw - 4, 5.6, value, size=2.9, align=align,
-                          color=self.RED if title == "Status" and boss.defeated else self.INK)
+                          color=self.RED if title == tr("Status") and boss.defeated else self.INK)
                 cx += cw
-        self.text(0, 191, self.w, 5, f"Kod weryfikacyjny: {code or 'brak – wersja bez podpisu'}",
+        self.text(0, 191, self.w, 5, tr("Kod weryfikacyjny: {value}", value=code or tr('brak – wersja bez podpisu')),
                   family="Consolas", size=2.6, color=self.MUTED)
 
     def adjustments(self, data: CertificateData, code: str, rows: list[CounterChanges]) -> None:
@@ -518,20 +520,20 @@ class _Page:
         adj = data.adjustments
         self.background(data, code)
         self.logo(30, 27, 13)
-        self.text(40, 20, 150, 8, "ZAŁĄCZNIK DO CERTYFIKATU", size=3.2, bold=True, color=self.MUTED,
+        self.text(40, 20, 150, 8, tr("ZAŁĄCZNIK DO CERTYFIKATU"), size=3.2, bold=True, color=self.MUTED,
                   align="left", spacing=15)
-        self.text(40, 27, 220, 9, f"{data.game} – korekty i zmiany", family="Georgia", size=6, bold=True,
+        self.text(40, 27, 220, 9, tr("{game} – korekty i zmiany", game=data.game), family="Georgia", size=6, bold=True,
                   align="left")
         y = 40
         if not adj.intact:
             self.p.fillRect(self._rect(30, y, self.w - 60, 8), self._color((250, 225, 225)))
-            self.text(32, y, self.w - 64, 8, "Rejestr zmian został zmieniony poza programem albo uszkodzony – "
-                      "wyniku nie da się potwierdzić.", size=3.1, bold=True, color=self.RED, align="left")
+            self.text(32, y, self.w - 64, 8, tr("Rejestr zmian został zmieniony poza programem albo uszkodzony – "
+                      "wyniku nie da się potwierdzić."), size=3.1, bold=True, color=self.RED, align="left")
             y += 11
         x, w = 30, self.w - 60
-        headers = (("Licznik", w - 175, "left"), ("Dodane ręcznie", 32, "right"), ("Odjęte ręcznie", 32, "right"),
-                   ("Śmierci poza programem", 40, "right"), ("Czas poza programem", 36, "right"),
-                   ("Bez historii", 35, "right"))
+        headers = ((tr("Licznik"), w - 175, "left"), (tr("Dodane ręcznie"), 32, "right"), (tr("Odjęte ręcznie"), 32, "right"),
+                   (tr("Śmierci poza programem"), 40, "right"), (tr("Czas poza programem"), 36, "right"),
+                   (tr("Bez historii"), 35, "right"))
         self.p.fillRect(self._rect(x, y, w, 7), self._color(self.RED))
         cx = x + 2
         for title, cw, align in headers:
@@ -541,8 +543,9 @@ class _Page:
             ry = y + 7 + i * 5.6
             if i % 2:
                 self.p.fillRect(self._rect(x, ry, w, 5.6), self._color((243, 236, 224)))
-            name = row.name + (" (status zmieniony)" if row.external_status and row.name != "Licznik ogólny"
-                               else " (lista bossów zmieniona)" if row.external_status else "")
+            shown_name = tr(row.name) if row.name == GAME_COUNTER else row.name
+            name = shown_name + (tr(" (status zmieniony)") if row.external_status and row.name != GAME_COUNTER
+                               else tr(" (lista bossów zmieniona)") if row.external_status else "")
             untracked = str(row.untracked_deaths) if row.untracked_deaths else "–"
             if row.untracked_seconds:
                 untracked += f" · {format_duration(row.untracked_seconds)}"
@@ -552,11 +555,11 @@ class _Page:
             cx = x + 2
             for (title, cw, align), value in zip(headers, values):
                 self.text(cx, ry, cw - 4, 5.6, value, size=2.9, align=align,
-                          color=self.INK if value == "–" or title == "Licznik" else self.RED)
+                          color=self.INK if value == "–" or title == tr("Licznik") else self.RED)
                 cx += cw
-        notes = ("„Dodane / odjęte ręcznie” – przyciski i skróty +1/−1 oraz reset w programie. „Poza programem” – "
+        notes = (tr("„Dodane / odjęte ręcznie” – przyciski i skróty +1/−1 oraz reset w programie. „Poza programem” – "
                  "zmiana plików z wynikami (np. w Notatniku). „Bez historii” – wyniki sprzed rejestru zmian "
-                 "albo po jego usunięciu.")
+                 "albo po jego usunięciu."))
         self.text(30, 180, self.w - 60, 8, notes, size=2.5, italic=True, color=self.MUTED, fit=False)
-        self.text(0, 191, self.w, 5, f"Kod weryfikacyjny: {code or 'brak – wersja bez podpisu'}",
+        self.text(0, 191, self.w, 5, tr("Kod weryfikacyjny: {value}", value=code or tr('brak – wersja bez podpisu')),
                   family="Consolas", size=2.6, color=self.MUTED)

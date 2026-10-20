@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .storage import atomic_write_text
+from .i18n import tr, N_
 
 DEATH = "death"
 MANUAL_DEATH = "manual_death"   # ręczne +1 w trakcie walki (przeoczona śmierć)
@@ -25,13 +26,13 @@ IN_PROGRESS = "in_progress"     # trwająca próba (tylko w pamięci, nie w plik
 OUTCOMES = (DEATH, MANUAL_DEATH, VICTORY, ABANDONED, STOPPED, CANCELLED)
 
 LABELS = {
-    DEATH: "Śmierć",
-    MANUAL_DEATH: "Śmierć (ręcznie)",
-    VICTORY: "Zwycięstwo",
-    ABANDONED: "Przerwano (opuszczono arenę)",
-    STOPPED: "Przerwano (zatrzymano wykrywanie)",
-    CANCELLED: "Cofnięto (−1)",
-    IN_PROGRESS: "W toku",
+    DEATH: N_("Śmierć"),
+    MANUAL_DEATH: N_("Śmierć (ręcznie)"),
+    VICTORY: N_("Zwycięstwo"),
+    ABANDONED: N_("Przerwano (opuszczono arenę)"),
+    STOPPED: N_("Przerwano (zatrzymano wykrywanie)"),
+    CANCELLED: N_("Cofnięto (−1)"),
+    IN_PROGRESS: N_("W toku"),
 }
 
 
@@ -54,7 +55,7 @@ class AttemptLog:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8-sig"))
         except (OSError, ValueError) as exc:
-            return f"Nie można odczytać {self.path.name} ({exc}); historia prób zacznie się od nowa."
+            return tr("Nie można odczytać {name} ({exc}); historia prób zacznie się od nowa.", name=self.path.name, exc=exc)
         if isinstance(data, dict):
             for name, entries in data.items():
                 if not isinstance(name, str) or not isinstance(entries, list):
@@ -105,7 +106,7 @@ class AttemptLog:
 def format_when(timestamp: float) -> str:
     """„dziś 19:42” albo „18.10 21:05”."""
     moment = datetime.fromtimestamp(timestamp)
-    return f"dziś {moment:%H:%M}" if moment.date() == datetime.now().date() else f"{moment:%d.%m %H:%M}"
+    return tr("dziś {moment:%H:%M}", moment=moment) if moment.date() == datetime.now().date() else f"{moment:%d.%m %H:%M}"
 
 
 def summary(attempts: list[Attempt]) -> str:
@@ -113,11 +114,11 @@ def summary(attempts: list[Attempt]) -> str:
     from .bosses import format_duration
 
     if not attempts:
-        return "Brak zapisanych prób – historia prób zbiera się od wersji 1.8.0."
+        return tr("Brak zapisanych prób – historia prób zbiera się od wersji 1.8.0.")
     times = [a.seconds for a in attempts]
-    parts = [f"Próby: {len(attempts)}", f"średnio {format_duration(sum(times) / len(times))}",
-             f"najdłuższa {format_duration(max(times))}"]
+    parts = [tr("Próby: {count_attempts}", count_attempts=len(attempts)), tr("średnio {time}", time=format_duration(sum(times) / len(times))),
+             tr("najdłuższa {time}", time=format_duration(max(times)))]
     won = next((i for i, a in enumerate(attempts, 1) if a.outcome == VICTORY), None)
     if won is not None:
-        parts.append(f"pokonany w {won}. próbie")
+        parts.append(tr("pokonany w {won}. próbie", won=won))
     return " · ".join(parts)

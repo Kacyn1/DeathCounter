@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .config import CaptureSettings
+from .i18n import tr
 
 
 class CaptureError(Exception):
@@ -25,8 +26,8 @@ class OutputInfo:
 
     @property
     def label(self) -> str:
-        primary = " (główny)" if self.primary else ""
-        return f"Monitor {self.output_index + 1}: {self.width}×{self.height}{primary}"
+        primary = tr(" (główny)") if self.primary else ""
+        return tr("Monitor {value}: {width}×{height}{primary}", value=self.output_index + 1, width=self.width, height=self.height, primary=primary)
 
 
 def _dxcam():
@@ -35,7 +36,7 @@ def _dxcam():
     try:
         import dxcam
     except Exception as exc:  # noqa: BLE001 - każdy błąd biblioteki pokazujemy użytkownikowi
-        raise CaptureError(f"Nie można załadować biblioteki DXCam: {exc}") from exc
+        raise CaptureError(tr("Nie można załadować biblioteki DXCam: {exc}", exc=exc)) from exc
     return dxcam
 
 
@@ -66,13 +67,13 @@ class DxcamSource:
                 output_color="BGR",
             )
         except Exception as exc:  # noqa: BLE001
-            raise CaptureError(f"Nie można uruchomić przechwytywania obrazu: {exc}") from exc
+            raise CaptureError(tr("Nie można uruchomić przechwytywania obrazu: {exc}", exc=exc)) from exc
         if self._camera is None:
-            raise CaptureError("DXCam nie zwrócił źródła obrazu dla wybranego monitora.")
+            raise CaptureError(tr("DXCam nie zwrócił źródła obrazu dla wybranego monitora."))
 
     def grab(self) -> np.ndarray | None:
         if self._camera is None:
-            raise CaptureError("Przechwytywanie nie jest uruchomione.")
+            raise CaptureError(tr("Przechwytywanie nie jest uruchomione."))
         return self._camera.grab()
 
     def close(self) -> None:
@@ -97,4 +98,4 @@ def grab_single_frame(settings: CaptureSettings, timeout: float = 2.0) -> np.nda
             time.sleep(0.03)
     finally:
         source.close()
-    raise CaptureError("Brak obrazu: nie udało się pobrać klatki z wybranego monitora.")
+    raise CaptureError(tr("Brak obrazu: nie udało się pobrać klatki z wybranego monitora."))

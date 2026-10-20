@@ -18,6 +18,7 @@ from .capture import DxcamSource
 from .config import BossSettings, CaptureSettings, DetectorSettings
 from .detector import BarEvent, CaptureHealth, DetectionSession
 from .template import DeathTemplate
+from .i18n import tr, N_
 
 RETRY_SECONDS = 3.0
 NAME_SAMPLES = 3            # tyle klatek z nazwą bossa trafia do OCR po pojawieniu się paska
@@ -27,11 +28,11 @@ SNAPSHOT_TIMEOUT = 2.0
 
 
 class DetectorStatus(Enum):
-    ACTIVE = "aktywny"
-    STOPPED = "zatrzymany"
-    NO_IMAGE = "brak obrazu"
-    NO_TEMPLATE = "brak wzorca"
-    ERROR = "błąd"
+    ACTIVE = N_("aktywny")
+    STOPPED = N_("zatrzymany")
+    NO_IMAGE = N_("brak obrazu")
+    NO_TEMPLATE = N_("brak wzorca")
+    ERROR = N_("błąd")
 
 
 class RtssSetupWorker(QThread):
@@ -50,26 +51,26 @@ class RtssSetupWorker(QThread):
         except rtss_setup.RtssSetupError as exc:
             self.done.emit(False, str(exc))
         except Exception as exc:  # noqa: BLE001 - błąd ma trafić do okna, nie do konsoli
-            self.done.emit(False, f"Nieoczekiwany błąd przy uruchamianiu RTSS: {exc}")
+            self.done.emit(False, tr("Nieoczekiwany błąd przy uruchamianiu RTSS: {exc}", exc=exc))
 
     def _setup(self) -> str:
         path = rtss_setup.find_rtss()
         if path is None:
             if not self._install:
-                raise rtss_setup.RtssSetupError("RTSS nie jest zainstalowany.")
-            self.progress.emit("Instalowanie RTSS (winget)… potwierdź okno uprawnień administratora.")
+                raise rtss_setup.RtssSetupError(tr("RTSS nie jest zainstalowany."))
+            self.progress.emit(tr("Instalowanie RTSS (winget)… potwierdź okno uprawnień administratora."))
             rtss_setup.install_with_winget()
             path = rtss_setup.find_rtss()
         if rtss_setup.is_running():
-            return "RTSS już działa."
+            return tr("RTSS już działa.")
         if not rtss_setup.task_exists():
             self.progress.emit(
-                "Potwierdź jednorazowo okno uprawnień – potem RTSS będzie startował z licznikiem bez pytania."
+                tr("Potwierdź jednorazowo okno uprawnień – potem RTSS będzie startował z licznikiem bez pytania.")
             )
             rtss_setup.create_start_task(path)
-        self.progress.emit("Uruchamianie RTSS…")
+        self.progress.emit(tr("Uruchamianie RTSS…"))
         rtss_setup.start_rtss(path)
-        return "RTSS uruchomiony."
+        return tr("RTSS uruchomiony.")
 
 
 class UpdateCheckWorker(QThread):
@@ -178,7 +179,7 @@ class DetectionWorker(QThread):
         try:
             self._loop()
         except Exception as exc:  # noqa: BLE001 - błąd ma trafić do okna, nie do konsoli
-            self._set_status(DetectorStatus.ERROR, f"Nieoczekiwany błąd detektora: {exc}")
+            self._set_status(DetectorStatus.ERROR, tr("Nieoczekiwany błąd detektora: {exc}", exc=exc))
             self._deliver_snapshot(None)
 
     def _loop(self) -> None:
@@ -210,12 +211,12 @@ class DetectionWorker(QThread):
                             source.open()
                             session.capture_restarted()
                             last_frame = None
-                            self._set_status(DetectorStatus.ACTIVE, "Przechwytywanie uruchomione.")
+                            self._set_status(DetectorStatus.ACTIVE, tr("Przechwytywanie uruchomione."))
                         except Exception as exc:  # noqa: BLE001
                             source.close()
                             source = None
                             retry_at = started + RETRY_SECONDS
-                            self._set_status(DetectorStatus.ERROR, f"{exc} Ponowna próba za kilka sekund.")
+                            self._set_status(DetectorStatus.ERROR, tr("{exc} Ponowna próba za kilka sekund.", exc=exc))
                     if source is None:
                         self._deliver_snapshot(None)
                         self._stop.wait(self._detector.sample_interval_ms / 1000)
@@ -229,7 +230,7 @@ class DetectionWorker(QThread):
                     retry_at = started + RETRY_SECONDS
                     if session.capture_failed():
                         self.boss_event.emit(FRAMES_LOST)
-                    self._set_status(DetectorStatus.ERROR, f"Błąd przechwytywania obrazu: {exc}")
+                    self._set_status(DetectorStatus.ERROR, tr("Błąd przechwytywania obrazu: {exc}", exc=exc))
                     continue
 
                 if frame is not None:
@@ -240,17 +241,16 @@ class DetectionWorker(QThread):
                 check = result.check
                 if check.resolution_changed and check.resolution:
                     w, h = check.resolution
-                    self.notice.emit(f"Rozdzielczość obrazu zmieniła się na {w}×{h}; wzorzec został przeskalowany.")
+                    self.notice.emit(tr("Rozdzielczość obrazu zmieniła się na {w}×{h}; wzorzec został przeskalowany.", w=w, h=h))
                 if check.health is CaptureHealth.NO_FRAMES:
                     self._set_status(
                         DetectorStatus.NO_IMAGE,
-                        f"Brak nowych klatek od {int(check.stalled_for)} s. "
-                        "Sprawdź, czy gra działa na wybranym monitorze.",
+                        tr("Brak nowych klatek od {int} s. Sprawdź, czy gra działa na wybranym monitorze.", int=int(check.stalled_for)),
                     )
                 elif check.health is CaptureHealth.FROZEN:
-                    self._set_status(DetectorStatus.NO_IMAGE, f"Obraz zamrożony od {int(check.stalled_for)} s.")
+                    self._set_status(DetectorStatus.NO_IMAGE, tr("Obraz zamrożony od {int} s.", int=int(check.stalled_for)))
                 else:
-                    self._set_status(DetectorStatus.ACTIVE, "Wykrywanie działa.")
+                    self._set_status(DetectorStatus.ACTIVE, tr("Wykrywanie działa."))
 
                 if result.frames_lost:
                     self.boss_event.emit(FRAMES_LOST)
@@ -303,14 +303,14 @@ class DetectionWorker(QThread):
             reader = ocr.OcrReader()
         except ocr.OcrUnavailable as exc:
             self._ocr_failed = True
-            self.notice.emit(f"Odczyt nazwy bossa niedostępny: {exc}.")
+            self.notice.emit(tr("Odczyt nazwy bossa niedostępny: {exc}.", exc=exc))
             return
         while (bands := jobs.get()) is not None:
             try:
                 reading = reader.read_name(bands)
                 self.boss_name.emit(reading.name if reading else "", bool(reading and reading.confident))
             except Exception as exc:  # noqa: BLE001 - błąd OCR nie może zatrzymać wykrywania
-                self.notice.emit(f"Błąd odczytu nazwy bossa: {exc}")
+                self.notice.emit(tr("Błąd odczytu nazwy bossa: {exc}", exc=exc))
 
     def _apply_pending(self, session: DetectionSession) -> bool:
         with self._lock:

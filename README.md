@@ -1,5 +1,7 @@
 # Death Counter by MK
 
+*English version: [README_EN.md](README_EN.md).*
+
 Lokalna aplikacja Windows, która automatycznie liczy śmierci w grach wyświetlających po śmierci charakterystyczny napis, np. „NIE ŻYJESZ” / „YOU DIED” w serii Dark Souls, Elden Ring czy Sekiro. Program rozpoznaje ten napis na obrazie gry na podstawie wzorca z kalibracji. Działa offline i nie ingeruje w pliki ani pamięć gry.
 
 ## Pobranie i uruchomienie
@@ -32,6 +34,12 @@ Program raz dziennie sprawdza na GitHubie, czy jest nowsza wersja. Wysyła wtedy
 Nic nie instaluje się bez kliknięcia „Aktualizuj”. Stara wersja zostaje na chwilę jako `DeathCounter.old.exe` i znika przy kolejnym starcie. W oknie **O programie** można sprawdzić aktualizacje od razu albo wyłączyć codzienne sprawdzanie. W wersji uruchomionej ze źródeł przycisk „Aktualizuj” jest nieaktywny, bo tam aktualizuje się przez `git pull`.
 
 Program działa w jednej kopii. Ponowne kliknięcie ikony, gdy jest już otwarty, wyciąga jego okno na wierzch i sprawdza, czy jest aktualizacja.
+
+## Język programu
+
+Program działa po polsku albo po angielsku. Język zmienisz w oknie **O programie** → lista **Język** (PL / ENG) w prawym górnym rogu. Wybór zapisuje się w `config.json` (`language`), a program uruchamia się ponownie w nowym języku. Przy pierwszym uruchomieniu język dobiera się do języka Windows.
+
+Język dotyczy całego interfejsu, certyfikatu PDF i nazw bossów. Po zmianie języka program raz tłumaczy zapisane nazwy bossów na nazwy z listy gry w nowym języku (np. „Margit, Upadły Omen” → „Margit, the Fell Omen”), razem ze śmierciami, czasem i historią prób. Język gry nie musi zgadzać się z językiem programu, bo odczyt nazwy rozpoznaje nazwy z obu języków.
 
 ## Wybór gry
 
@@ -112,7 +120,11 @@ Próba trwa od pojawienia się paska do śmierci, zwycięstwa albo przerwania. P
 
 ### Odczyt nazwy bossa
 
-Gdy opcja **„Odczytuj nazwę bossa z ekranu”** jest włączona (domyślnie tak), program chwilę po pojawieniu się paska czyta nazwę wypisaną nad nim. Używa wbudowanego w Windows rozpoznawania tekstu (OCR) w języku polskim. Działa to bez internetu i niczego nie wysyła. Potrzebny jest polski pakiet OCR Windows. Zwykle jest zainstalowany razem z polskim językiem, a jeśli go brak, program napisze, gdzie go dodać.
+Gdy opcja **„Odczytuj nazwę bossa z ekranu”** jest włączona (domyślnie tak), program chwilę po pojawieniu się paska czyta nazwę wypisaną nad nim. Używa wbudowanego w Windows rozpoznawania tekstu (OCR), z polskim albo angielskim pakietem językowym – tym, który jest zainstalowany (najpierw w języku programu). Działa to bez internetu i niczego nie wysyła. Jeśli w Windows nie ma żadnego z tych pakietów, program napisze, gdzie go dodać.
+
+- **Wbudowane listy nazw.** Dla Dark Souls I–III, Sekiro i Elden Ringa (z dodatkami) program ma listę nazw bossów z plików gier, w parach polska–angielska (`deathcounter/data/boss_names/`). Odczyt dostaje najbardziej podobną nazwę z listy wybranej gry, w języku programu – także wtedy, gdy gra jest w innym języku. Kilku nazw polska wersja Dark Souls I nie tłumaczy; na liście mają polskie odpowiedniki („Demon Mędrzec Ognia”, „Wiatraczek”, „Nito, Władca Grobów”, „Seath Bezłuski”), a tekst z gry jest rozpoznawany.
+- **Podobieństwo nazwy bossa** (sekcja „Wykrywanie”, domyślnie 0,60) określa, jak bardzo odczyt może różnić się od znanej nazwy. Niżej – więcej poprawionych błędów OCR, ale boss spoza listy łatwiej dostaje cudzą nazwę.
+- **Poprawianie zapisanych nazw.** Przy pierwszym wczytaniu gry z nową listą (albo po zmianie języka) program raz porównuje zapisane nazwy bossów z listą i poprawia podobne, a potem pokazuje, co zmienił. To samo robi na żądanie przycisk **Popraw nazwy bossów** w oknie „Wyniki” – najpierw pokazuje zmiany i czeka na potwierdzenie.
 
 - Program uczy się nazw. Nazwa zatwierdzona przyciskiem „Zapisz wynik” albo wpisana ręcznie trafia do `boss_names.json` w folderze gry. Kolejne odczyty są dopasowywane do znanych nazw, więc pomyłka OCR w jednej literze nie tworzy nowego bossa.
 - Jeśli poprawisz źle odczytaną nazwę, program zapamięta ten błędny odczyt. Przy następnej walce od razu da poprawną nazwę.
@@ -213,7 +225,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/recent_fights.py` | ostatnie walki w panelu (`recent_fights.json`) |
 | `deathcounter/collapsible.py` | zwijane sekcje okna („Nakładka”, „Wykrywanie”) |
 | `deathcounter/ocr.py` | odczyt nazwy bossa (OCR Windows) |
-| `deathcounter/boss_names.py` | znane nazwy bossów gry i dopasowanie odczytu (`boss_names.json`) |
+| `deathcounter/boss_names.py` | znane nazwy bossów gry i dopasowanie odczytu (`boss_names.json`, listy z `data/boss_names/`) |
+| `deathcounter/i18n.py`, `deathcounter/lang_en.py` | język interfejsu: `tr("polski tekst")` i tłumaczenie angielskie |
 | `deathcounter/report.py` | certyfikat PDF (QPdfWriter), weryfikacja |
 | `deathcounter/audit.py` | rejestr ręcznych korekt i zmian poza programem (`audit.json`) |
 | `deathcounter/diagnostics.py` | plik diagnostyczny `diagnostyka.log` |

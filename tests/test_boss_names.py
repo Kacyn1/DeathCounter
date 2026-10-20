@@ -157,8 +157,45 @@ def test_builtin_names_belong_to_their_game(tmp_path):
 @pytest.mark.parametrize("game", ["ds1", "ds2", "ds3", "sekiro", "eldenring"])
 def test_builtin_lists_are_valid(game):
     data = json.loads(builtin_path(game).read_text(encoding="utf-8"))
-    assert len(data["names"]) == len(set(data["names"])) > 20
-    assert all(key == ocr.normalize(key) and name in data["names"] for key, name in data["aliases"].items())
+    pairs = [(b["pl"], b["en"]) for b in data["bosses"]]
+    assert len(pairs) == len(set(pairs)) > 20
+    assert all(pl.strip() == pl and en.strip() == en and pl and en for pl, en in pairs)
+    polish = {pl for pl, _ in pairs}
+    assert all(key == ocr.normalize(key) and name in polish for key, name in data["aliases"].items())
+
+
+@pytest.mark.parametrize("game, reading, expected", [
+    ("ds1", "Asylum Dernon", "Asylum Demon"),
+    ("ds1", "Demon z Azylu", "Asylum Demon"),  # polska gra, angielski program
+    ("ds1", "Gravelord Nito", "Gravelord Nito"),
+    ("ds2", "Skorpionica Najka", "Scorpioness Najka"),
+    ("ds3", "Darkeater Midlr", "Darkeater Midir"),
+    ("sekiro", "Genichiro, droga Tomoe", "Genichiro, Way of Tomoe"),
+    ("eldenring", "Margit, the Fel1 Omen", "Margit, the Fell Omen"),
+    ("eldenring", "Łza naśladowcy", "Mimic Tear"),
+])
+def test_english_names_match_readings_in_both_languages(tmp_path, game, reading, expected):
+    names = BossNames(tmp_path / "boss_names.json", builtin_path(game), language="en")
+    assert names.load() is None
+    assert names.match(reading) == expected
+
+
+def test_polish_list_recognizes_english_game_text(tmp_path):
+    names = BossNames(tmp_path / "boss_names.json", builtin_path("eldenring"), language="pl")
+    names.load()
+    assert names.match("Margit, the Fell Omen") == "Margit, Upadły Omen"
+    assert names.match("Stray Mimic Tear") == "Łza naśladowcy"
+
+
+def test_language_change_translates_saved_names(tmp_path):
+    tracker = _saved_game(tmp_path, "ds1", {"Demon z Azylu": _entry(3), "Wiatraczek": _entry(1, status="POKONANO")})
+    assert tracker.fix_names() == []  # polska lista – nic do poprawy
+    english = _open_saved(tmp_path, "ds1", language="en")
+    assert sorted(english.fix_names()) == [("Demon z Azylu", "Asylum Demon"), ("Wiatraczek", "Pinwheel")]
+    assert records(english) == {"Asylum Demon": (3, 60, "W TRAKCIE"), "Pinwheel": (1, 60, "POKONANO")}
+    assert english.names.match("Demon z Azylu") == "Asylum Demon"
+    polish = _open_saved(tmp_path, "ds1", language="pl")
+    assert sorted(polish.fix_names()) == [("Asylum Demon", "Demon z Azylu"), ("Pinwheel", "Wiatraczek")]
 
 
 def test_min_ratio_decides_how_bad_reading_still_matches(tmp_path):
@@ -360,10 +397,10 @@ def _saved_game(tmp_path, game, bosses, learned=None, recent=(), attempts=None):
     return _open_saved(tmp_path, game)
 
 
-def _open_saved(tmp_path, game):
+def _open_saved(tmp_path, game, language="pl"):
     store = BossStore(tmp_path / "bosses.json")
     store.load()
-    names = BossNames(tmp_path / "boss_names.json", builtin_path(game))
+    names = BossNames(tmp_path / "boss_names.json", builtin_path(game), language=language)
     names.load()
     recent = RecentFights(tmp_path / "recent_fights.json")
     recent.load()

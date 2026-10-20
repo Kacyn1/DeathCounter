@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import hotkeys
 from .storage import StorageError, atomic_write_text
+from .i18n import DEFAULT_LANGUAGE, LANGUAGES, tr
 
 APP_DIR_NAME = "DeathCounter"
 LEGACY_APP_DIR_NAME = "DS2DeathCounter"
@@ -211,6 +212,7 @@ class AppConfig:
     player_name: str = ""  # nick gracza na certyfikacie
     custom_games: dict[str, str] = field(default_factory=dict)  # gry dodane przez użytkownika: id → nazwa
     auto_start: bool = False
+    language: str = DEFAULT_LANGUAGE  # język interfejsu i nazw bossów (i18n.LANGUAGES)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -225,11 +227,11 @@ class AppConfig:
         """Dodaje grę użytkownika i zwraca jej id (nazwa folderu). ValueError z opisem, gdy nazwa się nie nadaje."""
         name = " ".join(name.split())
         if not name:
-            raise ValueError("Podaj nazwę gry.")
+            raise ValueError(tr("Podaj nazwę gry."))
         if len(name) > GAME_NAME_MAX:
-            raise ValueError(f"Nazwa gry może mieć najwyżej {GAME_NAME_MAX} znaków.")
+            raise ValueError(tr("Nazwa gry może mieć najwyżej {GAME_NAME_MAX} znaków.", GAME_NAME_MAX=GAME_NAME_MAX))
         if any(existing.casefold() == name.casefold() for existing in self.all_games().values()):
-            raise ValueError(f"Gra „{name}” jest już na liście.")
+            raise ValueError(tr("Gra „{name}” jest już na liście.", name=name))
         base = _slug(name) or "gra"
         game_id, number = base, 2
         while game_id in self.all_games():
@@ -323,17 +325,27 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text).strip("-")[:40].strip("-")
 
 
+def system_language() -> str:
+    """„pl” przy polskim Windows, w innym przypadku „en”."""
+    try:
+        import ctypes
+        return "pl" if ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF == 0x15 else "en"
+    except (AttributeError, OSError):
+        return DEFAULT_LANGUAGE
+
+
 def load_config(path: Path) -> tuple[AppConfig, str | None]:
     """Zwraca konfigurację i ewentualne ostrzeżenie. Błędne wartości zastępuje domyślnymi."""
     config = AppConfig()
     if not path.exists():
+        config.language = system_language()  # pierwsze uruchomienie: język Windows
         return config, None
     try:
         data = json.loads(path.read_text(encoding="utf-8-sig"))
         if not isinstance(data, dict):
-            raise ValueError("oczekiwano obiektu JSON")
+            raise ValueError(tr("oczekiwano obiektu JSON"))
     except (OSError, ValueError) as exc:
-        return config, f"Nie można odczytać {path.name} ({exc}). Użyto ustawień domyślnych."
+        return config, tr("Nie można odczytać {name} ({exc}). Użyto ustawień domyślnych.", name=path.name, exc=exc)
 
     _fill(config.detector, data.get("detector"))
     _fill(config.capture, data.get("capture"))
@@ -362,6 +374,8 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
         config.player_name = " ".join(data["player_name"].split())[:GAME_NAME_MAX]
     if isinstance(data.get("auto_start"), bool):
         config.auto_start = data["auto_start"]
+    if data.get("language") in LANGUAGES:
+        config.language = data["language"]
     for part in (config.detector, config.capture, config.overlay, config.bosses, config.discord, config.hotkeys,
                  config.update):
         part.sanitize()
@@ -378,7 +392,7 @@ def load_calibration(path: Path) -> tuple[Calibration, str | None]:
     try:
         data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError) as exc:
-        return Calibration(), f"Nie można odczytać {path.name} ({exc}). Wykonaj kalibrację ponownie."
+        return Calibration(), tr("Nie można odczytać {name} ({exc}). Wykonaj kalibrację ponownie.", name=path.name, exc=exc)
     return Calibration.from_dict(data), None
 
 
@@ -423,7 +437,7 @@ def migrate_legacy(base: Path, game: str) -> None:
             if source.exists() and not (paths.game_dir / name).exists():
                 os.replace(source, paths.game_dir / name)
     except OSError as exc:
-        raise StorageError(f"Nie można przenieść danych do folderu gry {paths.game_dir}: {exc}") from exc
+        raise StorageError(tr("Nie można przenieść danych do folderu gry {game_dir}: {exc}", game_dir=paths.game_dir, exc=exc)) from exc
 
 
 def _fill(target: object, data: object) -> None:
@@ -493,5 +507,5 @@ def data_dir() -> Path:
     try:
         fallback.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise StorageError(f"Brak folderu z prawem zapisu na dane programu: {exc}") from exc
+        raise StorageError(tr("Brak folderu z prawem zapisu na dane programu: {exc}", exc=exc)) from exc
     return fallback

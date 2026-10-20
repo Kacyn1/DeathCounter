@@ -29,4 +29,7 @@ w formie pisemnej.
 - Przed wysłaniem zmian uruchom testy: `.\.venv\Scripts\python.exe -m pytest -q`.
 - Zachowaj styl istniejącego kodu: komentarze i komunikaty po polsku, logika bez Qt tam, gdzie się da
   (łatwiej ją testować).
+- Każdy tekst widoczny dla użytkownika opakuj w `tr("…")` (zmienne części jako pola: `tr("Śmierci: {n}", n=5)`),
+  a stałe na poziomie modułu w `N_("…")`, i dopisz tłumaczenie do `deathcounter/lang_en.py`. Test
+  `tests/test_i18n.py` wskaże teksty bez tłumaczenia.
 - Nie dołączaj pliku `deathcounter/_signing_key.py` ani danych z folderu `games/`.

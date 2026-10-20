@@ -7,6 +7,8 @@ import os
 import time
 from pathlib import Path
 
+from .i18n import tr
+
 
 class StorageError(Exception):
     """Błąd odczytu lub zapisu pliku z danymi."""
@@ -34,7 +36,7 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
                     raise
                 time.sleep(0.05)
     except OSError as exc:
-        raise StorageError(f"Nie można zapisać pliku {path.name}: {exc}") from exc
+        raise StorageError(tr("Nie można zapisać pliku {name}: {exc}", name=path.name, exc=exc)) from exc
     finally:
         try:
             tmp.unlink(missing_ok=True)
@@ -76,7 +78,7 @@ class DeathStore:
         try:
             raw = self.path.read_text(encoding="utf-8-sig")
         except OSError as exc:
-            raise StorageError(f"Nie można odczytać pliku {self.path.name}: {exc}") from exc
+            raise StorageError(tr("Nie można odczytać pliku {name}: {exc}", name=self.path.name, exc=exc)) from exc
         try:
             self._deaths = _parse_deaths(raw)
         except ValueError as exc:
@@ -85,11 +87,10 @@ class DeathStore:
                 os.replace(self.path, backup)
             except OSError as move_exc:
                 raise StorageError(
-                    f"Plik {self.path.name} jest uszkodzony ({exc}) i nie można go odłożyć: {move_exc}"
+                    tr("Plik {name} jest uszkodzony ({exc}) i nie można go odłożyć: {move_exc}", name=self.path.name, exc=exc, move_exc=move_exc)
                 ) from move_exc
             self.warning = (
-                f"Plik {self.path.name} był uszkodzony ({exc}). Jego kopię zapisano jako "
-                f"{backup.name}, a licznik zaczyna od 0."
+                tr("Plik {name} był uszkodzony ({exc}). Jego kopię zapisano jako {name2}, a licznik zaczyna od 0.", name=self.path.name, exc=exc, name2=backup.name)
             )
             self._deaths = 0
             self._save()
@@ -123,12 +124,12 @@ def _parse_deaths(raw: str) -> int:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError("niepoprawny JSON") from exc
+        raise ValueError(tr("niepoprawny JSON")) from exc
     if not isinstance(data, dict) or "deaths" not in data:
-        raise ValueError('brak pola "deaths"')
+        raise ValueError(tr('brak pola "deaths"'))
     value = data["deaths"]
     if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError('pole "deaths" nie jest liczbą całkowitą')
+        raise ValueError(tr('pole "deaths" nie jest liczbą całkowitą'))
     if value < 0:
-        raise ValueError('pole "deaths" jest ujemne')
+        raise ValueError(tr('pole "deaths" jest ujemne'))
     return value

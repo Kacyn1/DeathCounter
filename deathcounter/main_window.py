@@ -9,8 +9,8 @@ from pathlib import Path
 from datetime import datetime
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QFont, QIcon
 from PySide6.QtNetwork import QLocalServer
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -40,7 +40,7 @@ from .collapsible import CollapsibleBox
 from .bosses import BossState, BossTracker, format_duration, overlay_text
 from .calibration import CalibrationDialog, SavedCalibration
 from .hotkey_dialog import HotkeyDialog
-from .icon import render as render_icon
+from .icon import flag, render as render_icon
 from .capture import CaptureError, grab_single_frame, list_outputs
 from .config import DEFAULT_GAME, AppConfig, save_calibration, save_config
 from .game_data import GameData, counter_files, open_game
@@ -55,6 +55,7 @@ from .signing import load_key
 from .rtss import RtssOsd, RtssState
 from .storage import StorageError
 from .template import DeathTemplate, load_source_image, save_source_image
+from .i18n import LANGUAGES, N_, tr
 from . import rtss_setup
 from .worker import (
     BOSS_BAR_LOST,
@@ -79,9 +80,9 @@ ADD_GAME = "__add_game__"  # pozycja „+ Dodaj grę…” na liście gier
 RTSS_REFRESH_MS = 2000
 BOSS_REFRESH_MS = 1000
 OVERLAY_MODE_LABELS = {
-    "both": "Okno + RTSS",
-    "window": "Okno na wierzchu",
-    "rtss": "Tylko RTSS (pełny ekran)",
+    "both": N_("Okno + RTSS"),
+    "window": N_("Okno na wierzchu"),
+    "rtss": N_("Tylko RTSS (pełny ekran)"),
 }
 
 STATUS_COLORS = {
@@ -154,26 +155,26 @@ class MainWindow(QMainWindow):
         self.game_combo = QComboBox()
         self._fill_games()
         self.game_combo.setToolTip(
-            "Każda gra ma własny licznik śmierci, bossów i kalibrację.\n"
-            "„+ Dodaj grę…” tworzy nowy licznik dla gry spoza listy."
+            tr("Każda gra ma własny licznik śmierci, bossów i kalibrację.\n"
+            "„+ Dodaj grę…” tworzy nowy licznik dla gry spoza listy.")
         )
         self.game_combo.setMinimumWidth(260)
         self.game_combo.currentIndexChanged.connect(self._on_game_selected)
-        self.delete_counter_button = QPushButton("Usuń licznik")
+        self.delete_counter_button = QPushButton(tr("Usuń licznik"))
         self.delete_counter_button.setToolTip(
-            "Gra dodana przez Ciebie znika z listy razem z licznikiem, bossami i kalibracją.\n"
-            "Przy grze wbudowanej usuwa licznik śmierci i bossów, a kalibracja zostaje. Pliki trafiają do Kosza."
+            tr("Gra dodana przez Ciebie znika z listy razem z licznikiem, bossami i kalibracją.\n"
+            "Przy grze wbudowanej usuwa licznik śmierci i bossów, a kalibracja zostaje. Pliki trafiają do Kosza.")
         )
         self.delete_counter_button.clicked.connect(self.confirm_delete_counter)
         game_row = QHBoxLayout()
         game_row.addStretch(1)
-        game_row.addWidget(QLabel("Gra:"))
+        game_row.addWidget(QLabel(tr("Gra:")))
         game_row.addWidget(self.game_combo)
         game_row.addWidget(self.delete_counter_button)
         game_row.addStretch(1)
         root.addLayout(game_row)
 
-        title = QLabel("ŚMIERCI")
+        title = QLabel(tr("ŚMIERCI"))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet("color:#b9a77f; letter-spacing:8px; font-weight:bold; font-size:20pt;")
         self.count_label = QLabel("0")
@@ -191,7 +192,7 @@ class MainWindow(QMainWindow):
         root.addWidget(self.error_banner)
         root.addWidget(self._build_update_banner())
 
-        status_box = QGroupBox("Stan")
+        status_box = QGroupBox(tr("Stan"))
         status_form = QFormLayout(status_box)
         self.status_label = QLabel()
         self.status_label.setStyleSheet("padding:2px 8px; border-radius:4px; color:white; font-weight:bold;")
@@ -207,26 +208,26 @@ class MainWindow(QMainWindow):
         status_row = QHBoxLayout()
         status_row.addWidget(self.status_label)
         status_row.addWidget(self.status_message, 1)
-        status_form.addRow("Wykrywanie:", status_row)
-        status_form.addRow("Obraz:", self.image_label)
-        status_form.addRow("Dopasowanie:", self.score_label)
-        status_form.addRow("Boss:", self.boss_score_label)
-        status_form.addRow("Wzorce:", self.template_label)
+        status_form.addRow(tr("Wykrywanie:"), status_row)
+        status_form.addRow(tr("Obraz:"), self.image_label)
+        status_form.addRow(tr("Dopasowanie:"), self.score_label)
+        status_form.addRow(tr("Boss:"), self.boss_score_label)
+        status_form.addRow(tr("Wzorce:"), self.template_label)
         status_form.addRow("", self.notice_label)
         root.addWidget(status_box)
 
         controls = QGridLayout()
-        self.start_button = QPushButton("Start")
+        self.start_button = QPushButton(tr("Start"))
         self.start_button.clicked.connect(self.toggle_detection)
         self.overlay_button = QPushButton()
         self.overlay_button.clicked.connect(self.toggle_overlay)
-        self.plus_button = QPushButton("Dodaj +1")
+        self.plus_button = QPushButton(tr("Dodaj +1"))
         self.plus_button.clicked.connect(self._manual_plus)
-        self.minus_button = QPushButton("Cofnij -1")
+        self.minus_button = QPushButton(tr("Cofnij -1"))
         self.minus_button.clicked.connect(self._manual_minus)
-        self.reset_button = QPushButton("Reset")
+        self.reset_button = QPushButton(tr("Reset"))
         self.reset_button.clicked.connect(self.confirm_reset)
-        self.calibrate_button = QPushButton("Kalibracja…")
+        self.calibrate_button = QPushButton(tr("Kalibracja…"))
         self.calibrate_button.clicked.connect(lambda: self.open_calibration())
         for button in (self.start_button, self.overlay_button):
             button.setMinimumHeight(36)
@@ -258,24 +259,25 @@ class MainWindow(QMainWindow):
         footer.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         footer.setWordWrap(True)
         self._refresh_footer()
-        self.report_button = QPushButton("Certyfikat PDF…")
+        self.report_button = QPushButton(tr("Certyfikat PDF…"))
         self.report_button.setToolTip(
-            "Certyfikat wybranej gry: śmierci, pokonani bossowie i ich czasy, z kodem weryfikacyjnym."
+            tr("Certyfikat wybranej gry: śmierci, pokonani bossowie i ich czasy, z kodem weryfikacyjnym.")
         )
         self.report_button.clicked.connect(self.generate_report)
-        self.verify_button = QPushButton("Sprawdź certyfikat…")
-        self.verify_button.setToolTip("Sprawdza, czy plik PDF jest prawdziwym, niezmienionym certyfikatem.")
+        self.verify_button = QPushButton(tr("Sprawdź certyfikat…"))
+        self.verify_button.setToolTip(tr("Sprawdza, czy plik PDF jest prawdziwym, niezmienionym certyfikatem."))
         self.verify_button.clicked.connect(self.verify_certificate)
         footer_row = QHBoxLayout()
         footer_row.addWidget(footer, 1)
         footer_row.addWidget(self.report_button)
         footer_row.addWidget(self.verify_button)
-        hotkeys_button = QPushButton("Skróty…")
-        hotkeys_button.setToolTip("Zmiana skrótów klawiszowych działających w grze.")
+        hotkeys_button = QPushButton(tr("Skróty…"))
+        hotkeys_button.setToolTip(tr("Zmiana skrótów klawiszowych działających w grze."))
         hotkeys_button.clicked.connect(self.open_hotkeys)
         footer_row.addWidget(hotkeys_button)
-        about_button = QPushButton("O programie")
-        about_button.clicked.connect(lambda: legal.show_about(self, self._build_about_updates()))
+        about_button = QPushButton(tr("O programie"))
+        about_button.clicked.connect(
+            lambda: legal.show_about(self, self._build_about_updates(), self._build_about_language()))
         footer_row.addWidget(about_button)
         root.addLayout(footer_row)
 
@@ -297,17 +299,18 @@ class MainWindow(QMainWindow):
             self.resize(self.width(), self.minimumSizeHint().height())
 
     def _build_overlay_box(self) -> QGroupBox:
-        box, form = self._collapsible("Nakładka", "overlay_collapsed")
+        box, form = self._collapsible(tr("Nakładka"), "overlay_collapsed")
         s = self.config.overlay
         self.overlay_mode = QComboBox()
         for mode, label in OVERLAY_MODE_LABELS.items():
+            label = tr(label)
             self.overlay_mode.addItem(label, mode)
         self.overlay_mode.setCurrentIndex(max(0, self.overlay_mode.findData(s.mode)))
         self.overlay_mode.setToolTip(
-            "Okno na wierzchu działa w trybie okienkowym, a w pełnym ekranie tylko wtedy, gdy Windows\n"
+            tr("Okno na wierzchu działa w trybie okienkowym, a w pełnym ekranie tylko wtedy, gdy Windows\n"
             "stosuje optymalizacje pełnego ekranu. RTSS (RivaTuner Statistics Server) wyświetla licznik\n"
             "także w ekskluzywnym pełnym ekranie – musi być uruchomiony, a jego OSD włączone.\n"
-            "Pozycję i wielkość tekstu RTSS ustawia się w samym RTSS."
+            "Pozycję i wielkość tekstu RTSS ustawia się w samym RTSS.")
         )
         self.overlay_mode.currentIndexChanged.connect(self._on_overlay_settings)
         self.rtss_label = QLabel()
@@ -316,88 +319,88 @@ class MainWindow(QMainWindow):
         self.overlay_x = _spin(-20000, 20000, s.x, " px")
         self.overlay_y = _spin(-20000, 20000, s.y, " px")
         self.overlay_size = _spin(10, 200, s.font_size, " px")
-        self.overlay_hide = QCheckBox("Niewidoczna dla nagrywania/OBS")
+        self.overlay_hide = QCheckBox(tr("Niewidoczna dla nagrywania/OBS"))
         self.overlay_hide.setChecked(s.hide_from_capture)
         self.overlay_hide.setToolTip(
-            "Nakładka będzie widoczna tylko na monitorze, a nie na zrzutach i w programach do nagrywania."
+            tr("Nakładka będzie widoczna tylko na monitorze, a nie na zrzutach i w programach do nagrywania.")
         )
         for widget in (self.overlay_x, self.overlay_y, self.overlay_size):
             widget.valueChanged.connect(self._on_overlay_settings)
         self.overlay_hide.toggled.connect(self._on_overlay_settings)
-        form.addRow("Tryb:", self.overlay_mode)
+        form.addRow(tr("Tryb:"), self.overlay_mode)
         form.addRow("RTSS:", self.rtss_label)
-        self.rtss_autostart = QCheckBox("Uruchamiaj RTSS razem z licznikiem")
+        self.rtss_autostart = QCheckBox(tr("Uruchamiaj RTSS razem z licznikiem"))
         self.rtss_autostart.setChecked(self.config.rtss.auto_start)
         self.rtss_autostart.toggled.connect(self._on_rtss_autostart)
-        self.rtss_install_button = QPushButton("Zainstaluj RTSS…")
+        self.rtss_install_button = QPushButton(tr("Zainstaluj RTSS…"))
         self.rtss_install_button.clicked.connect(lambda: self._start_rtss_setup(install=True))
         self.rtss_install_button.setVisible(rtss_setup.find_rtss() is None)
         form.addRow(self.rtss_autostart)
         form.addRow(self.rtss_install_button)
-        form.addRow("Pozycja X:", self.overlay_x)
-        form.addRow("Pozycja Y:", self.overlay_y)
-        form.addRow("Wielkość tekstu:", self.overlay_size)
+        form.addRow(tr("Pozycja X:"), self.overlay_x)
+        form.addRow(tr("Pozycja Y:"), self.overlay_y)
+        form.addRow(tr("Wielkość tekstu:"), self.overlay_size)
         form.addRow(self.overlay_hide)
-        self.discord_check = QCheckBox("Status na Discordzie")
-        self.discord_check.setToolTip("Pokazuje w Twoim statusie na Discordzie grę i liczbę śmierci.")
+        self.discord_check = QCheckBox(tr("Status na Discordzie"))
+        self.discord_check.setToolTip(tr("Pokazuje w Twoim statusie na Discordzie grę i liczbę śmierci."))
         self.discord_check.setChecked(self.config.discord.enabled)
         self.discord_check.toggled.connect(self._on_discord_toggled)
         self.discord_label = QLabel()
         self.discord_label.setWordWrap(True)
         self.discord_label.setStyleSheet("color:#9aa0a6;")
         form.addRow(self.discord_check)
-        form.addRow("Discord:", self.discord_label)
+        form.addRow(tr("Discord:"), self.discord_label)
         return box
 
     def _build_detector_box(self) -> QGroupBox:
-        box, form = self._collapsible("Wykrywanie", "detector_collapsed")
+        box, form = self._collapsible(tr("Wykrywanie"), "detector_collapsed")
         d = self.config.detector
         self.monitor_combo = QComboBox()
         self._fill_monitors()
         self.monitor_combo.currentIndexChanged.connect(self._on_detector_settings)
         self.threshold_spin = _threshold_spin(d.threshold)
         self.threshold_spin.setToolTip(
-            "Minimalne dopasowanie obrazu do wzorca napisu śmierci, przy którym napis uznajemy za widoczny.\n"
-            "Ten sam próg dotyczy komunikatu zwycięstwa – oba to duże napisy na środku ekranu."
+            tr("Minimalne dopasowanie obrazu do wzorca napisu śmierci, przy którym napis uznajemy za widoczny.\n"
+            "Ten sam próg dotyczy komunikatu zwycięstwa – oba to duże napisy na środku ekranu.")
         )
         self.bar_threshold_spin = _threshold_spin(self.config.bosses.bar_threshold)
         self.bar_threshold_spin.setToolTip(
-            "Minimalne dopasowanie obrazu do wzorca paska zdrowia bossa, przy którym walka się zaczyna."
+            tr("Minimalne dopasowanie obrazu do wzorca paska zdrowia bossa, przy którym walka się zaczyna.")
         )
         self.name_ratio_spin = _threshold_spin(self.config.bosses.name_match_ratio)
         self.name_ratio_spin.setRange(0.30, 1.00)
         self.name_ratio_spin.setToolTip(
-            "Minimalne podobieństwo nazwy odczytanej z ekranu do znanej nazwy bossa wybranej gry.\n"
+            tr("Minimalne podobieństwo nazwy odczytanej z ekranu do znanej nazwy bossa wybranej gry.\n"
             "Odczyt dostaje najbardziej podobną nazwę z listy, jeśli podobieństwo jest co najmniej takie.\n"
             "Niżej – więcej poprawionych błędów OCR, ale boss spoza listy łatwiej dostanie cudzą nazwę.\n"
-            "1,00 – tylko nazwy odczytane bez błędu."
+            "1,00 – tylko nazwy odczytane bez błędu.")
         )
-        self.confirm_spin = _spin(1, 50, d.confirm_samples, " próbek")
-        self.confirm_spin.setToolTip("Tyle kolejnych próbek (co ok. 0,1 s) musi zawierać napis, by zliczyć śmierć.")
+        self.confirm_spin = _spin(1, 50, d.confirm_samples, tr(" próbek"))
+        self.confirm_spin.setToolTip(tr("Tyle kolejnych próbek (co ok. 0,1 s) musi zawierać napis, by zliczyć śmierć."))
         self.rearm_spin = QDoubleSpinBox()
         self.rearm_spin.setRange(0.5, 60.0)
         self.rearm_spin.setSingleStep(0.5)
         self.rearm_spin.setSuffix(" s")
         self.rearm_spin.setValue(d.rearm_seconds)
-        self.rearm_spin.setToolTip("Tyle sekund bez napisu, zanim detektor będzie gotowy na kolejną śmierć.")
+        self.rearm_spin.setToolTip(tr("Tyle sekund bez napisu, zanim detektor będzie gotowy na kolejną śmierć."))
         for widget in (self.threshold_spin, self.bar_threshold_spin, self.name_ratio_spin, self.confirm_spin,
                        self.rearm_spin):
             widget.valueChanged.connect(self._on_detector_settings)
-        self.autostart_check = QCheckBox("Włączaj wykrywanie przy starcie")
+        self.autostart_check = QCheckBox(tr("Włączaj wykrywanie przy starcie"))
         self.autostart_check.setChecked(self.config.auto_start)
         self.autostart_check.toggled.connect(self._on_autostart)
-        form.addRow("Monitor:", self.monitor_combo)
-        form.addRow("Próg śmierci i zwycięstwa:", self.threshold_spin)
-        form.addRow("Próg paska bossa:", self.bar_threshold_spin)
-        form.addRow("Podobieństwo nazwy bossa:", self.name_ratio_spin)
-        form.addRow("Potwierdzenie:", self.confirm_spin)
-        form.addRow("Ponowne uzbrojenie:", self.rearm_spin)
+        form.addRow(tr("Monitor:"), self.monitor_combo)
+        form.addRow(tr("Próg śmierci i zwycięstwa:"), self.threshold_spin)
+        form.addRow(tr("Próg paska bossa:"), self.bar_threshold_spin)
+        form.addRow(tr("Podobieństwo nazwy bossa:"), self.name_ratio_spin)
+        form.addRow(tr("Potwierdzenie:"), self.confirm_spin)
+        form.addRow(tr("Ponowne uzbrojenie:"), self.rearm_spin)
         form.addRow(self.autostart_check)
         return box
 
     def _fill_monitors(self) -> None:
         capture = self.config.capture
-        self.monitor_combo.addItem("Główny monitor", None)
+        self.monitor_combo.addItem(tr("Główny monitor"), None)
         try:
             outputs = list_outputs()
         except CaptureError as exc:
@@ -417,9 +420,9 @@ class MainWindow(QMainWindow):
         try:
             operation()
         except StorageError as exc:
-            self._show_error(f"Nie zapisano wyniku: {exc} Kolejna zmiana ponowi zapis.")
+            self._show_error(tr("Nie zapisano wyniku: {exc} Kolejna zmiana ponowi zapis.", exc=exc))
             if manual:
-                QMessageBox.critical(self, "Błąd zapisu", str(exc))
+                QMessageBox.critical(self, tr("Błąd zapisu"), str(exc))
         else:
             self._clear_error()
             if self.audit is not None:
@@ -427,7 +430,7 @@ class MainWindow(QMainWindow):
                 try:
                     self.audit.save()
                 except StorageError as exc:
-                    self._show_error(f"Nie zapisano rejestru zmian: {exc}")
+                    self._show_error(tr("Nie zapisano rejestru zmian: {exc}", exc=exc))
         if boss_event is not None:
             self._boss_event(boss_event)
         self._refresh_count()
@@ -453,7 +456,7 @@ class MainWindow(QMainWindow):
         try:
             event()
         except StorageError as exc:
-            self._show_error(f"Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.")
+            self._show_error(tr("Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.", exc=exc))
         self.boss_panel.refresh()
 
     def _on_boss_tick(self) -> None:
@@ -461,12 +464,12 @@ class MainWindow(QMainWindow):
         try:
             ended = self.bosses.tick()
         except StorageError as exc:
-            self._show_error(f"Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.")
+            self._show_error(tr("Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.", exc=exc))
         self.boss_panel.refresh()
         if ended is not None:
             saved = ended.view
-            what = "Walka przerwana (opuszczono arenę)" if ended.abandoned else "Automatycznie zapisany"
-            text = f"{what}: {saved.name} – śmierci: {saved.deaths}, czas: {format_duration(saved.seconds)}"
+            what = tr("Walka przerwana (opuszczono arenę)") if ended.abandoned else tr("Automatycznie zapisany")
+            text = tr("{what}: {name} – śmierci: {deaths}, czas: {seconds}", what=what, name=saved.name, deaths=saved.deaths, seconds=format_duration(saved.seconds))
             self.boss_panel.set_note(text)
             self.notice_label.setText(text)
             self.diag.write(f"BOSS: {text}")
@@ -486,17 +489,16 @@ class MainWindow(QMainWindow):
 
     def _fix_boss_names(self) -> None:
         """Przycisk „Popraw nazwy bossów” w oknie „Wyniki”: pokazuje zmiany i po potwierdzeniu je wykonuje."""
-        title = "Popraw nazwy bossów"
+        title = tr("Popraw nazwy bossów")
         fixes = self.bosses.name_fixes()
         if not fixes:
             QMessageBox.information(self._results, title,
-                                    "Wszystkie nazwy bossów zgadzają się z listą nazw tej gry.")
+                                    tr("Wszystkie nazwy bossów zgadzają się z listą nazw tej gry."))
             return
         lines = "\n".join(f"• {old} → {new}" for old, new in fixes)
         answer = QMessageBox.question(
             self._results, title,
-            f"Te nazwy zostaną zamienione na nazwy z listy gry:\n\n{lines}\n\n"
-            "Liczba śmierci, czas i historia prób przejdą pod nowe nazwy. Poprawić?")
+            tr("Te nazwy zostaną zamienione na nazwy z listy gry:\n\n{lines}\n\nLiczba śmierci, czas i historia prób przejdą pod nowe nazwy. Poprawić?", lines=lines))
         if answer != QMessageBox.StandardButton.Yes:
             return
         try:
@@ -545,7 +547,7 @@ class MainWindow(QMainWindow):
         try:
             name = self.bosses.boss_identified(reading, confident)
         except StorageError as exc:
-            self._show_error(f"Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.")
+            self._show_error(tr("Nie zapisano danych bossa: {exc} Kolejna zmiana ponowi zapis.", exc=exc))
             name = self.bosses.current
         self.diag.write(f"BOSS: odczyt nazwy „{reading}” ({'pewny' if confident else 'niepewny'})"
                         + (f", {before} → {name}" if name else ", bez zmian")
@@ -576,20 +578,18 @@ class MainWindow(QMainWindow):
         """Pokazuje, którzy zapisani bossowie dostali nazwy z listy wbudowanej (przy wczytaniu gry
         albo po przycisku w oknie „Wyniki” – wtedy bez okna, bo zmiany były już pokazane)."""
         if self._fix_error:
-            self._show_error(f"Nie zapisano poprawionych nazw bossów: {self._fix_error}")
+            self._show_error(tr("Nie zapisano poprawionych nazw bossów: {fix_error}", fix_error=self._fix_error))
         if not self._fixed_names:
             return
         for old, new in self._fixed_names:
             self.diag.write(f"BOSS: nazwa „{old}” poprawiona na „{new}” (lista nazw gry)")
         lines = "\n".join(f"• {old} → {new}" for old, new in self._fixed_names)
-        self.notice_label.setText(f"Poprawiono nazwy bossów: {len(self._fixed_names)}.")
+        self.notice_label.setText(tr("Poprawiono nazwy bossów: {count__fixed_names}.", count__fixed_names=len(self._fixed_names)))
         if not dialog:
             return
         QMessageBox.information(
-            self, "Poprawione nazwy bossów",
-            "Zapisane nazwy bossów porównano z listą nazw tej gry i poprawiono:\n\n"
-            f"{lines}\n\nLiczba śmierci, czas i historia prób przeszły pod nowe nazwy. "
-            "Jeśli któraś zmiana jest zła, popraw tę nazwę ręcznie.")
+            self, tr("Poprawione nazwy bossów"),
+            tr("Zapisane nazwy bossów porównano z listą nazw tej gry i poprawiono:\n\n{lines}\n\nLiczba śmierci, czas i historia prób przeszły pod nowe nazwy. Jeśli któraś zmiana jest zła, popraw tę nazwę ręcznie.", lines=lines))
 
     def _fill_games(self) -> None:
         """Gry wbudowane i dodane przez użytkownika, a na końcu pozycja „+ Dodaj grę…”."""
@@ -599,7 +599,7 @@ class MainWindow(QMainWindow):
         for game_id, name in self.config.all_games().items():
             combo.addItem(name, game_id)
         combo.insertSeparator(combo.count())
-        combo.addItem("+ Dodaj grę…", ADD_GAME)
+        combo.addItem(tr("+ Dodaj grę…"), ADD_GAME)
         combo.setCurrentIndex(max(0, combo.findData(self._pending_game or self.paths.game)))
         combo.blockSignals(False)
 
@@ -607,14 +607,14 @@ class MainWindow(QMainWindow):
         # Lista wraca do bieżącej gry; nowa gra zostanie wybrana dopiero po podaniu nazwy.
         self._fill_games()
         name, ok = QInputDialog.getText(
-            self, "Dodaj grę", "Nazwa gry (np. Lies of P):\nGra dostanie własny licznik śmierci, bossów i kalibrację."
+            self, tr("Dodaj grę"), tr("Nazwa gry (np. Lies of P):\nGra dostanie własny licznik śmierci, bossów i kalibrację.")
         )
         if not ok:
             return
         try:
             game_id = self.config.add_game(name)
         except ValueError as exc:
-            QMessageBox.warning(self, "Dodaj grę", str(exc))
+            QMessageBox.warning(self, tr("Dodaj grę"), str(exc))
             return
         self._save_config()
         self._fill_games()
@@ -642,7 +642,7 @@ class MainWindow(QMainWindow):
             try:
                 game = open_game(self.paths.base, game_id)
             except StorageError as exc:
-                QMessageBox.critical(self, "Zmiana gry", f"Nie można wczytać danych gry.\n\n{exc}")
+                QMessageBox.critical(self, tr("Zmiana gry"), tr("Nie można wczytać danych gry.\n\n{exc}", exc=exc))
                 self.game_combo.blockSignals(True)
                 self.game_combo.setCurrentIndex(max(0, self.game_combo.findData(self.paths.game)))
                 self.game_combo.blockSignals(False)
@@ -657,7 +657,7 @@ class MainWindow(QMainWindow):
                 self._refresh_template_label()
                 self._refresh_footer()
                 self._set_status(self._idle_status(), self._idle_message())
-                self.notice_label.setText(f"Wybrano grę: {self.config.game_name(game_id)}.")
+                self.notice_label.setText(tr("Wybrano grę: {game_name}.", game_name=self.config.game_name(game_id)))
                 self.diag.write(f"ZMIANA GRY: {self.config.game_name(game_id)}, śmierci: {self.store.deaths}")
                 for warning in game.warnings:
                     QMessageBox.warning(self, "Death Counter by MK", warning)
@@ -673,16 +673,15 @@ class MainWindow(QMainWindow):
         custom = game_id in self.config.custom_games
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle("Usuń licznik")
-        box.setText(f"Czy na pewno chcesz usunąć licznik {name}?")
+        box.setWindowTitle(tr("Usuń licznik"))
+        box.setText(tr("Czy na pewno chcesz usunąć licznik {name}?", name=name))
         box.setInformativeText(
-            "Gra zniknie z listy, a jej licznik śmierci, bossowie i kalibracja trafią do Kosza."
+            tr("Gra zniknie z listy, a jej licznik śmierci, bossowie i kalibracja trafią do Kosza.")
             if custom
-            else f"Licznik śmierci ({self.store.deaths}) i lista bossów trafią do Kosza. "
-                 "Gra zostaje na liście, a jej kalibracja się nie zmienia."
+            else tr("Licznik śmierci ({deaths}) i lista bossów trafią do Kosza. Gra zostaje na liście, a jej kalibracja się nie zmienia.", deaths=self.store.deaths)
         )
-        yes = box.addButton("Tak", QMessageBox.ButtonRole.YesRole)
-        no = box.addButton("Nie", QMessageBox.ButtonRole.NoRole)
+        yes = box.addButton(tr("Tak"), QMessageBox.ButtonRole.YesRole)
+        no = box.addButton(tr("Nie"), QMessageBox.ButtonRole.NoRole)
         box.setDefaultButton(no)
         box.exec()
         if box.clickedButton() is not yes:
@@ -709,27 +708,27 @@ class MainWindow(QMainWindow):
                 winapi.send_to_recycle_bin(counter_files(old_paths))
                 self._switch_game(game_id, restart=False, reload=True)
         except OSError as exc:
-            QMessageBox.critical(self, "Usuń licznik", f"Nie udało się usunąć licznika {name}.\n\n{exc}")
+            QMessageBox.critical(self, tr("Usuń licznik"), tr("Nie udało się usunąć licznika {name}.\n\n{exc}", name=name, exc=exc))
             return
         finally:
             if restart and self.worker is None and self.templates["death"] is not None:
                 self.start_detection()
-        self.notice_label.setText(f"Usunięto licznik {name} (pliki są w Koszu).")
+        self.notice_label.setText(tr("Usunięto licznik {name} (pliki są w Koszu).", name=name))
 
     def _refresh_footer(self) -> None:
-        self.footer_label.setText(f"Dane gry: {self.paths.game_dir}")
+        self.footer_label.setText(tr("Dane gry: {game_dir}", game_dir=self.paths.game_dir))
 
     def generate_report(self) -> None:
         player, ok = QInputDialog.getText(
-            self, "Certyfikat PDF", "Nick gracza na certyfikacie (możesz zostawić puste):", text=self.config.player_name
+            self, tr("Certyfikat PDF"), tr("Nick gracza na certyfikacie (możesz zostawić puste):"), text=self.config.player_name
         )
         if not ok:
             return
         self.config.player_name = " ".join(player.split())[:60]
         self._save_timer.start()
         now = datetime.now()
-        default = self.paths.base / f"DeathCounter_certyfikat_{self.paths.game}_{now:%Y-%m-%d}.pdf"
-        path, _ = QFileDialog.getSaveFileName(self, "Zapisz certyfikat PDF", str(default), "Dokument PDF (*.pdf)")
+        default = self.paths.base / tr("DeathCounter_certyfikat_{game}_{now:%Y-%m-%d}.pdf", game=self.paths.game, now=now)
+        path, _ = QFileDialog.getSaveFileName(self, tr("Zapisz certyfikat PDF"), str(default), tr("Dokument PDF (*.pdf)"))
         if not path:
             return
         if not path.lower().endswith(".pdf"):
@@ -741,64 +740,62 @@ class MainWindow(QMainWindow):
         try:
             code = write_certificate(path, data, load_key())
         except (StorageError, OSError) as exc:
-            QMessageBox.critical(self, "Certyfikat PDF", f"Nie udało się zapisać certyfikatu.\n\n{exc}")
+            QMessageBox.critical(self, tr("Certyfikat PDF"), tr("Nie udało się zapisać certyfikatu.\n\n{exc}", exc=exc))
             return
-        signed = f" (kod {code})" if code else " – bez podpisu: ta wersja programu nie ma klucza"
-        self.notice_label.setText(f"Zapisano certyfikat{signed}: {path}")
+        signed = f" (kod {code})" if code else tr(" – bez podpisu: ta wersja programu nie ma klucza")
+        self.notice_label.setText(tr("Zapisano certyfikat{signed}: {path}", signed=signed, path=path))
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
     def verify_certificate(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Sprawdź certyfikat", str(self.paths.base), "Dokument PDF (*.pdf)")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Sprawdź certyfikat"), str(self.paths.base), tr("Dokument PDF (*.pdf)"))
         if not path:
             return
         try:
             result = verify_pdf(path, load_key())
         except StorageError as exc:
-            QMessageBox.critical(self, "Sprawdź certyfikat", str(exc))
+            QMessageBox.critical(self, tr("Sprawdź certyfikat"), str(exc))
             return
         title, icon = {
-            Verdict.VALID: ("Certyfikat jest prawdziwy", QMessageBox.Icon.Information),
-            Verdict.INVALID: ("Certyfikat został zmieniony albo podrobiony", QMessageBox.Icon.Critical),
-            Verdict.UNSIGNED: ("Certyfikat bez podpisu", QMessageBox.Icon.Warning),
-            Verdict.NO_KEY: ("Nie można sprawdzić podpisu", QMessageBox.Icon.Warning),
-            Verdict.NOT_CERTIFICATE: ("To nie jest certyfikat Death Counter by MK", QMessageBox.Icon.Warning),
+            Verdict.VALID: (tr("Certyfikat jest prawdziwy"), QMessageBox.Icon.Information),
+            Verdict.INVALID: (tr("Certyfikat został zmieniony albo podrobiony"), QMessageBox.Icon.Critical),
+            Verdict.UNSIGNED: (tr("Certyfikat bez podpisu"), QMessageBox.Icon.Warning),
+            Verdict.NO_KEY: (tr("Nie można sprawdzić podpisu"), QMessageBox.Icon.Warning),
+            Verdict.NOT_CERTIFICATE: (tr("To nie jest certyfikat Death Counter by MK"), QMessageBox.Icon.Warning),
         }[result.verdict]
         details = {
-            Verdict.VALID: "Dane i kod weryfikacyjny zgadzają się z podpisem. Sprawdź, czy poniższe dane są takie "
-                           "same jak na certyfikacie – tylko te zostały podpisane.",
-            Verdict.INVALID: "Dane zapisane w pliku nie pasują do kodu weryfikacyjnego.",
-            Verdict.UNSIGNED: "Certyfikat wystawiła wersja programu bez klucza podpisu (uruchomiona ze źródeł).",
-            Verdict.NO_KEY: "Ta wersja programu nie ma klucza podpisu. Użyj oficjalnego DeathCounter.exe.",
-            Verdict.NOT_CERTIFICATE: "Plik nie zawiera danych certyfikatu (to inny PDF albo zapisany ponownie "
-                                     "w innym programie).",
+            Verdict.VALID: tr("Dane i kod weryfikacyjny zgadzają się z podpisem. Sprawdź, czy poniższe dane są takie "
+                           "same jak na certyfikacie – tylko te zostały podpisane."),
+            Verdict.INVALID: tr("Dane zapisane w pliku nie pasują do kodu weryfikacyjnego."),
+            Verdict.UNSIGNED: tr("Certyfikat wystawiła wersja programu bez klucza podpisu (uruchomiona ze źródeł)."),
+            Verdict.NO_KEY: tr("Ta wersja programu nie ma klucza podpisu. Użyj oficjalnego DeathCounter.exe."),
+            Verdict.NOT_CERTIFICATE: tr("Plik nie zawiera danych certyfikatu (to inny PDF albo zapisany ponownie "
+                                     "w innym programie)."),
         }[result.verdict]
-        box = QMessageBox(icon, "Sprawdź certyfikat", title, parent=self)
+        box = QMessageBox(icon, tr("Sprawdź certyfikat"), title, parent=self)
         text = details
         if result.data is not None and result.verdict is not Verdict.INVALID:
             d = result.data
-            bosses = "\n".join(f"   • {b.name}: {b.deaths} śmierci, {format_duration(b.seconds)}"
-                               + ("" if b.defeated else " (w trakcie)") for b in d.bosses) or "   brak"
+            bosses = "\n".join(tr("   • {name}: {deaths} śmierci, {seconds}", name=b.name, deaths=b.deaths, seconds=format_duration(b.seconds))
+                               + ("" if b.defeated else tr(" (w trakcie)")) for b in d.bosses) or tr("   brak")
             if d.adjustments is None:
-                changes = "brak danych (certyfikat sprzed rejestru zmian)"
+                changes = tr("brak danych (certyfikat sprzed rejestru zmian)")
             else:
-                changes = "; ".join(d.adjustments.summary()) or "bez ręcznych zmian"
-            text += (f"\n\nGra: {d.game}\nGracz: {d.player or '–'}\nŚmierci: {d.deaths}\n"
-                     f"Wystawiono: {d.issued:%d.%m.%Y, %H:%M}\nKod: {result.code or '–'}\n"
-                     f"Korekty: {changes}\nBossowie:\n{bosses}")
+                changes = "; ".join(d.adjustments.summary()) or tr("bez ręcznych zmian")
+            text += (tr("\n\nGra: {game}\nGracz: {value}\nŚmierci: {deaths}\nWystawiono: {issued:%d.%m.%Y, %H:%M}\nKod: {value2}\nKorekty: {changes}\nBossowie:\n{bosses}", game=d.game, value=d.player or '–', deaths=d.deaths, issued=d.issued, value2=result.code or '–', changes=changes, bosses=bosses))
         box.setInformativeText(text)
         box.exec()
 
     def _refresh_boss_hint(self) -> None:
         # Bez wzorca zwycięstwa nie da się odróżnić wygranej od opuszczenia areny.
         self.bosses.abandon_enabled = self.templates["victory"] is not None
-        missing = [label for kind, label in (("boss_bar", "pasek bossa"), ("victory", "komunikat zwycięstwa"))
+        missing = [label for kind, label in (("boss_bar", tr("pasek bossa")), ("victory", tr("komunikat zwycięstwa")))
                    if self.templates[kind] is None]
         if missing:
-            hint = f"Brak wzorca: {', '.join(missing)}. Kliknij „Kalibracja walki…”, aby walka startowała sama."
+            hint = tr("Brak wzorca: {join}. Kliknij „Kalibracja walki…”, aby walka startowała sama.", join=', '.join(missing))
         elif self.worker is None:
-            hint = "Wykrywanie jest wyłączone – kliknij Start, aby walka była rozpoznawana."
+            hint = tr("Wykrywanie jest wyłączone – kliknij Start, aby walka była rozpoznawana.")
         else:
-            hint = "Walka zacznie się sama, gdy na ekranie pojawi się pasek zdrowia bossa."
+            hint = tr("Walka zacznie się sama, gdy na ekranie pojawi się pasek zdrowia bossa.")
         self.boss_panel.set_hint(hint)
 
     def _refresh_overlay(self) -> None:
@@ -819,7 +816,7 @@ class MainWindow(QMainWindow):
         d = self.config.discord
         if d.enabled and d.effective_client_id:
             if self.discord is None:
-                self._discord_state = "łączenie z Discordem…"
+                self._discord_state = tr("łączenie z Discordem…")
                 self.discord = DiscordPresence(d.effective_client_id, self._set_discord_state)
             self._update_discord()
         elif self.discord is not None:
@@ -838,9 +835,9 @@ class MainWindow(QMainWindow):
     def _refresh_discord_label(self) -> None:
         d = self.config.discord
         if not d.enabled:
-            text = "wyłączony"
+            text = tr("wyłączony")
         elif not d.effective_client_id:
-            text = "brak ID aplikacji Discord (patrz README)"
+            text = tr("brak ID aplikacji Discord (patrz README)")
         else:
             text = self._discord_state
         if self.discord_label.text() != text:
@@ -849,8 +846,8 @@ class MainWindow(QMainWindow):
     def confirm_reset(self) -> None:
         answer = QMessageBox.question(
             self,
-            "Reset licznika",
-            f"Czy na pewno wyzerować licznik? Obecna wartość ({self.store.deaths}) zostanie utracona.",
+            tr("Reset licznika"),
+            tr("Czy na pewno wyzerować licznik? Obecna wartość ({deaths}) zostanie utracona.", deaths=self.store.deaths),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -877,7 +874,7 @@ class MainWindow(QMainWindow):
         if self.worker is not None:
             return
         if self.templates["death"] is None:
-            self._set_status(DetectorStatus.NO_TEMPLATE, "Najpierw wykonaj kalibrację (przycisk „Kalibracja…”).")
+            self._set_status(DetectorStatus.NO_TEMPLATE, tr("Najpierw wykonaj kalibrację (przycisk „Kalibracja…”)."))
             return
         worker = DetectionWorker(self.templates, self.config.detector, self.config.capture, self.config.bosses)
         worker.death_detected.connect(self._on_death_detected)
@@ -894,15 +891,15 @@ class MainWindow(QMainWindow):
                         f"paska {self.config.bosses.bar_threshold:.2f}, wzorce: "
                         + ", ".join(k for k, v in self.templates.items() if v is not None) + ")")
         self._stop_requested = False
-        self.start_button.setText("Stop")
-        self._set_status(DetectorStatus.ACTIVE, "Uruchamianie przechwytywania…")
+        self.start_button.setText(tr("Stop"))
+        self._set_status(DetectorStatus.ACTIVE, tr("Uruchamianie przechwytywania…"))
         worker.start()
         self._refresh_boss_hint()
 
     def stop_detection(self) -> None:
         if self.worker is not None:
             self.start_button.setEnabled(False)
-            self.start_button.setText("Zatrzymywanie…")
+            self.start_button.setText(tr("Zatrzymywanie…"))
             self._stop_requested = True
             self.worker.request_stop()
 
@@ -911,9 +908,9 @@ class MainWindow(QMainWindow):
         if worker is not None:
             worker.deleteLater()
         self.diag.write("STOP wykrywania")
-        self._flush_frame_callbacks(None, "Wykrywanie zostało zatrzymane przed pobraniem obrazu.")
+        self._flush_frame_callbacks(None, tr("Wykrywanie zostało zatrzymane przed pobraniem obrazu."))
         self.start_button.setEnabled(True)
-        self.start_button.setText("Start")
+        self.start_button.setText(tr("Start"))
         self.score_label.setText("–")
         self.boss_score_label.setText("–")
         # Bez wykrywania nikt nie zgłosi śmierci ani zniknięcia paska – timer walki staje.
@@ -939,25 +936,25 @@ class MainWindow(QMainWindow):
             w, h = check.resolution
             state = {
                 CaptureHealth.OK: "OK",
-                CaptureHealth.NO_FRAMES: "brak nowych klatek",
-                CaptureHealth.FROZEN: "zamrożony",
+                CaptureHealth.NO_FRAMES: tr("brak nowych klatek"),
+                CaptureHealth.FROZEN: tr("zamrożony"),
             }[check.health]
             self.image_label.setText(f"{w}×{h}, {state}")
         else:
-            self.image_label.setText("brak klatek")
+            self.image_label.setText(tr("brak klatek"))
         if result.score is None:
             self.score_label.setText("–")
         else:
-            armed = "gotowy" if result.armed else "czeka na zniknięcie napisu"
+            armed = "gotowy" if result.armed else tr("czeka na zniknięcie napisu")
             self.score_label.setText(
-                f"{result.score:.2f} (próg {self.config.detector.threshold:.2f}) – detektor {armed}"
+                tr("{score:.2f} (próg {threshold:.2f}) – detektor {armed}", score=result.score, threshold=self.config.detector.threshold, armed=armed)
             )
         parts = []
         if result.bar_score is not None:
             bar = "widoczny" if result.bar_visible else "niewidoczny"
             parts.append(f"pasek {result.bar_score:.2f}/{self.config.bosses.bar_threshold:.2f} ({bar})")
         if result.victory_score is not None:
-            parts.append(f"zwycięstwo {result.victory_score:.2f}/{self.config.detector.threshold:.2f}")
+            parts.append(tr("zwycięstwo {victory_score:.2f}/{threshold:.2f}", victory_score=result.victory_score, threshold=self.config.detector.threshold))
         self.boss_score_label.setText(", ".join(parts) or "–")
         self.diag.sample(result, self.config.detector.threshold, self.config.bosses.bar_threshold,
                          self.bosses.state.value)
@@ -966,7 +963,7 @@ class MainWindow(QMainWindow):
         self._status = status
         if hasattr(self, "diag"):
             self.diag.status(f"{status.value} – {message}")
-        self.status_label.setText(status.value.upper())
+        self.status_label.setText(tr(status.value).upper())
         self.status_label.setStyleSheet(
             f"padding:2px 8px; border-radius:4px; color:white; font-weight:bold; background:{STATUS_COLORS[status]};"
         )
@@ -977,8 +974,8 @@ class MainWindow(QMainWindow):
 
     def _idle_message(self) -> str:
         if self.templates["death"] is None:
-            return "Brak wzorca – wykonaj kalibrację, aby włączyć wykrywanie."
-        return "Wykrywanie wyłączone. Kliknij Start."
+            return tr("Brak wzorca – wykonaj kalibrację, aby włączyć wykrywanie.")
+        return tr("Wykrywanie wyłączone. Kliknij Start.")
 
     def _on_detector_settings(self) -> None:
         d = self.config.detector
@@ -1014,19 +1011,19 @@ class MainWindow(QMainWindow):
         else:
             self._rtss_timer.stop()
             self.rtss.clear()
-            self.rtss_label.setText("nieużywany" if s.mode == "window" else "nakładka wyłączona")
-        self.overlay_button.setText("Nakładka: Wyłącz" if s.enabled else "Nakładka: Włącz")
+            self.rtss_label.setText(tr("nieużywany") if s.mode == "window" else tr("nakładka wyłączona"))
+        self.overlay_button.setText(tr("Nakładka: Wyłącz") if s.enabled else tr("Nakładka: Włącz"))
 
     def _update_rtss(self) -> None:
         if not self._rtss_timer.isActive():
             return
         state = self.rtss.show(self.overlay.text)
         if state is RtssState.SHOWN:
-            self.rtss_label.setText("licznik przekazany do RTSS")
+            self.rtss_label.setText(tr("licznik przekazany do RTSS"))
         elif state is RtssState.NOT_RUNNING:
-            self.rtss_label.setText("RTSS nie jest uruchomiony – licznik pojawi się, gdy go włączysz")
+            self.rtss_label.setText(tr("RTSS nie jest uruchomiony – licznik pojawi się, gdy go włączysz"))
         else:
-            self.rtss_label.setText(state.value)
+            self.rtss_label.setText(tr(state.value))
 
     def _on_overlay_settings(self) -> None:
         s = self.config.overlay
@@ -1057,7 +1054,7 @@ class MainWindow(QMainWindow):
             callback(frame, None)
 
     def _on_snapshot(self, frame) -> None:
-        self._flush_frame_callbacks(frame, None if frame is not None else "Brak obrazu z wybranego monitora.")
+        self._flush_frame_callbacks(frame, None if frame is not None else tr("Brak obrazu z wybranego monitora."))
 
     def _flush_frame_callbacks(self, frame, error) -> None:
         callbacks, self._frame_callbacks = self._frame_callbacks, []
@@ -1107,7 +1104,7 @@ class MainWindow(QMainWindow):
             save_source_image(self.paths.source_path(kind), frame)
         except StorageError as exc:
             # Wzorzec działa także bez podglądu – zgłaszamy, ale nie przerywamy.
-            self.notice_label.setText(f"Wzorzec zapisany, ale bez zrzutu do podglądu: {exc}")
+            self.notice_label.setText(tr("Wzorzec zapisany, ale bez zrzutu do podglądu: {exc}", exc=exc))
         self.templates[kind] = template
         self._refresh_template_label()
         self._refresh_boss_hint()
@@ -1118,8 +1115,8 @@ class MainWindow(QMainWindow):
         return None
 
     def _refresh_template_label(self) -> None:
-        names = (("death", "śmierć"), ("boss_bar", "pasek bossa"), ("victory", "zwycięstwo"))
-        parts = [f"{label}: {'✓' if self.templates[kind] is not None else 'brak'}" for kind, label in names]
+        names = (("death", tr("śmierć")), ("boss_bar", tr("pasek bossa")), ("victory", tr("zwycięstwo")))
+        parts = [tr("{label}: {value}", label=label, value='✓' if self.templates[kind] is not None else tr('brak')) for kind, label in names]
         self.template_label.setText(", ".join(parts))
 
     def _on_hotkey(self, action: str) -> None:
@@ -1137,10 +1134,10 @@ class MainWindow(QMainWindow):
         winsound.MessageBeep(winsound.MB_ICONASTERISK if off else winsound.MB_OK)
 
     def _on_hotkey_frame(self, frame, error) -> None:
-        text = self._hotkey_text("snapshot") or "skrótu"
+        text = self._hotkey_text("snapshot") or tr("skrótu")
         if frame is None:
             winsound.MessageBeep(winsound.MB_ICONHAND)
-            self.notice_label.setText(f"Zrzut ze skrótu {text} nieudany: {error}")
+            self.notice_label.setText(tr("Zrzut ze skrótu {text} nieudany: {error}", text=text, error=error))
             return
         winsound.MessageBeep(winsound.MB_OK)
         self._hotkey_frame = frame
@@ -1148,7 +1145,7 @@ class MainWindow(QMainWindow):
             self._calibration.set_frame(frame)
         else:
             self.notice_label.setText(
-                f"Zapamiętano zrzut ekranu ({text}). Otwórz „Kalibracja…”, aby zaznaczyć napis."
+                tr("Zapamiętano zrzut ekranu ({text}). Otwórz „Kalibracja…”, aby zaznaczyć napis.", text=text)
             )
 
     # --------------------------------------------------------------- skróty
@@ -1171,7 +1168,7 @@ class MainWindow(QMainWindow):
             else:
                 failed.append(hotkeys.display(text))
         if failed:
-            self.notice_label.setText(f"Skróty zajęte przez inny program albo system: {', '.join(failed)}.")
+            self.notice_label.setText(tr("Skróty zajęte przez inny program albo system: {join}.", join=', '.join(failed)))
         self._refresh_hotkey_tooltips()
 
     def _unregister_hotkeys(self) -> None:
@@ -1183,7 +1180,7 @@ class MainWindow(QMainWindow):
         for button, action in ((self.plus_button, "plus"), (self.minus_button, "minus"),
                                (self.overlay_button, "overlay")):
             text = self._hotkey_text(action)
-            button.setToolTip(f"Skrót w grze: {text}" if text else "")
+            button.setToolTip(tr("Skrót w grze: {text}", text=text) if text else "")
 
     def open_hotkeys(self) -> None:
         # Na czas zmiany skróty są wyrejestrowane – inaczej naciśnięcie obecnego skrótu nie dotarłoby do pola.
@@ -1193,7 +1190,7 @@ class MainWindow(QMainWindow):
             if dialog.exec() and dialog.result_settings is not None:
                 self.config.hotkeys = dialog.result_settings
                 self._save_timer.start()
-                self.notice_label.setText("Zapisano skróty klawiszowe.")
+                self.notice_label.setText(tr("Zapisano skróty klawiszowe."))
         finally:
             self._register_hotkeys()
 
@@ -1239,10 +1236,10 @@ class MainWindow(QMainWindow):
         answer = QMessageBox.question(
             self,
             "RivaTuner Statistics Server",
-            "Do wyświetlania licznika nad grą w pełnym ekranie potrzebny jest darmowy program "
+            tr("Do wyświetlania licznika nad grą w pełnym ekranie potrzebny jest darmowy program "
             "RivaTuner Statistics Server (RTSS).\n\n"
             "Zainstalować go teraz? Instalacja pobierze oficjalną paczkę Guru3D przez winget, "
-            "a Windows poprosi o zgodę administratora.",
+            "a Windows poprosi o zgodę administratora."),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
@@ -1250,7 +1247,7 @@ class MainWindow(QMainWindow):
             self._start_rtss_setup(install=True)
         else:
             r.install_declined = True
-            self.notice_label.setText("RTSS możesz zainstalować później przyciskiem „Zainstaluj RTSS…”.")
+            self.notice_label.setText(tr("RTSS możesz zainstalować później przyciskiem „Zainstaluj RTSS…”."))
             self._save_timer.start()
 
     def _start_rtss_setup(self, install: bool) -> None:
@@ -1297,12 +1294,12 @@ class MainWindow(QMainWindow):
         self.update_progress = QProgressBar()
         self.update_progress.setMaximumWidth(160)
         self.update_progress.hide()
-        self.update_notes_button = QPushButton("Co nowego")
+        self.update_notes_button = QPushButton(tr("Co nowego"))
         self.update_notes_button.clicked.connect(self._open_release_page)
-        self.update_button = QPushButton("Aktualizuj")
+        self.update_button = QPushButton(tr("Aktualizuj"))
         self.update_button.clicked.connect(self.start_update)
-        self.update_later_button = QPushButton("Później")
-        self.update_later_button.setToolTip("Ukrywa pasek do następnego uruchomienia programu.")
+        self.update_later_button = QPushButton(tr("Później"))
+        self.update_later_button.setToolTip(tr("Ukrywa pasek do następnego uruchomienia programu."))
         self.update_later_button.clicked.connect(banner.hide)
         row.addWidget(self.update_label, 1)
         row.addWidget(self.update_progress)
@@ -1316,7 +1313,7 @@ class MainWindow(QMainWindow):
         self._update_check: UpdateCheckWorker | None = None
         self._update_download: UpdateDownloadWorker | None = None
         self._update_after_check = False   # „Aktualizuj” przed sprawdzeniem – pobieranie po sprawdzeniu
-        self._restart_exe: Path | None = None
+        self._relaunch: str | None = None  # po zamknięciu uruchom program ponownie z tym argumentem
         self._about_update_label: QLabel | None = None
         self._instance_server = QLocalServer(self)
         QLocalServer.removeServer(INSTANCE_SERVER)
@@ -1327,7 +1324,7 @@ class MainWindow(QMainWindow):
             updater.cleanup(exe)
             QTimer.singleShot(15000, lambda: updater.cleanup(exe))  # stara wersja mogła jeszcze się zamykać
         if after_update:
-            self.notice_label.setText(f"Zaktualizowano do wersji {__version__}.")
+            self.notice_label.setText(tr("Zaktualizowano do wersji {version}.", version=__version__))
             self.diag.write(f"AKTUALIZACJA: uruchomiono wersję {__version__}")
         if updater.is_newer(self.config.update.latest):
             self._show_update_banner(self.config.update.latest)
@@ -1355,7 +1352,7 @@ class MainWindow(QMainWindow):
     def check_updates(self, manual: bool) -> None:
         if self._update_check is not None:
             return
-        self._set_about_update_status("Sprawdzanie…")
+        self._set_about_update_status(tr("Sprawdzanie…"))
         worker = UpdateCheckWorker(self)
         worker.done.connect(lambda release, error: self._on_update_checked(release, error, manual))
         self._update_check = worker
@@ -1377,7 +1374,7 @@ class MainWindow(QMainWindow):
         u.last_check, u.latest = time.time(), release.version
         self._save_timer.start()
         if not updater.is_newer(release.version):
-            text = f"Masz najnowszą wersję ({__version__})."
+            text = tr("Masz najnowszą wersję ({version}).", version=__version__)
             self._set_about_update_status(text)
             if manual:
                 self.notice_label.setText(text)
@@ -1386,18 +1383,18 @@ class MainWindow(QMainWindow):
             return
         self._release = release
         self.diag.write(f"AKTUALIZACJA: dostępna wersja {release.version}")
-        self._set_about_update_status(f"Dostępna wersja {release.version}.")
+        self._set_about_update_status(tr("Dostępna wersja {version}.", version=release.version))
         self._show_update_banner(release.version)
         if self._update_after_check:
             self._update_after_check = False
             self.start_update()
 
     def _show_update_banner(self, version: str) -> None:
-        self.update_label.setText(f"Dostępna nowa wersja <b>{version}</b> (masz {__version__}).")
+        self.update_label.setText(tr("Dostępna nowa wersja <b>{version}</b> (masz {version2}).", version=version, version2=__version__))
         source = updater.running_exe() is None
         self.update_button.setEnabled(not source)
-        self.update_button.setToolTip("Program uruchomiony ze źródeł – zaktualizuj go poleceniem git pull."
-                                      if source else "Pobiera nową wersję, podmienia program i uruchamia go ponownie.")
+        self.update_button.setToolTip(tr("Program uruchomiony ze źródeł – zaktualizuj go poleceniem git pull.")
+                                      if source else tr("Pobiera nową wersję, podmienia program i uruchamia go ponownie."))
         self.update_progress.hide()
         self.update_banner.show()
 
@@ -1416,8 +1413,8 @@ class MainWindow(QMainWindow):
             return
         if self.bosses.current is not None and self.bosses.state is not BossState.WAITING:
             answer = QMessageBox.question(
-                self, "Aktualizacja",
-                "Trwa walka z bossem. Program zapisze jej czas i uruchomi się ponownie w nowej wersji. Kontynuować?",
+                self, tr("Aktualizacja"),
+                tr("Trwa walka z bossem. Program zapisze jej czas i uruchomi się ponownie w nowej wersji. Kontynuować?"),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
             if answer != QMessageBox.StandardButton.Yes:
                 return
@@ -1427,7 +1424,7 @@ class MainWindow(QMainWindow):
         self._update_download = worker
         for button in (self.update_button, self.update_later_button):
             button.setEnabled(False)
-        self.update_label.setText(f"Pobieranie wersji {self._release.version}…")
+        self.update_label.setText(tr("Pobieranie wersji {version}…", version=self._release.version))
         self.update_progress.setRange(0, 0)
         self.update_progress.show()
         self.diag.write(f"AKTUALIZACJA: pobieranie {self._release.version}")
@@ -1452,24 +1449,57 @@ class MainWindow(QMainWindow):
         if error:
             self.diag.write(f"AKTUALIZACJA: {error}")
             self.update_progress.hide()
-            self.update_label.setText(f"Aktualizacja nieudana: {error}")
+            self.update_label.setText(tr("Aktualizacja nieudana: {error}", error=error))
             for button in (self.update_button, self.update_later_button):
                 button.setEnabled(True)
             return
         self.diag.write(f"AKTUALIZACJA: zainstalowano {self._release.version}, ponowne uruchomienie")
-        self.update_label.setText(f"Uruchamianie wersji {self._release.version}…")
-        self._restart_exe = exe
+        self.update_label.setText(tr("Uruchamianie wersji {version}…", version=self._release.version))
+        self._relaunch = updater.AFTER_UPDATE_ARG
+        self.close()
+
+    def _build_about_language(self) -> QWidget:
+        """Lista „Język” w oknie „O programie”: zmiana zapisuje się i program uruchamia się ponownie."""
+        box = QWidget()
+        row = QHBoxLayout(box)
+        row.setContentsMargins(0, 0, 0, 0)
+        combo = QComboBox()
+        combo.setIconSize(QSize(24, 16))
+        for code, label in LANGUAGES.items():
+            combo.addItem(QIcon(flag(code, 24, 16)), label, code)
+        combo.setCurrentIndex(max(0, combo.findData(self.config.language)))
+        combo.setToolTip(tr("Język programu i nazw bossów. Zmiana uruchamia program ponownie."))
+        combo.currentIndexChanged.connect(lambda _: self._change_language(combo.currentData(), box))
+        row.addWidget(QLabel(tr("Język:")))
+        row.addWidget(combo)
+        return box
+
+    def _change_language(self, code: str, about: QWidget) -> None:
+        if code == self.config.language:
+            return
+        self.config.language = code
+        self._save_config()
+        self.diag.write(f"JĘZYK: {code}, ponowne uruchomienie")
+        answer = QMessageBox.question(
+            about.window(), "Death Counter by MK",
+            # w obu językach – program wciąż działa w poprzednim
+            "Program uruchomi się ponownie w wybranym języku. Uruchomić teraz?\n\n"
+            "The program will restart in the selected language. Restart now?")
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        about.window().accept()
+        self._relaunch = updater.RESTART_ARG
         self.close()
 
     def _build_about_updates(self) -> QWidget:
         box = QWidget()
         row = QHBoxLayout(box)
         row.setContentsMargins(0, 0, 0, 0)
-        auto = QCheckBox("Sprawdzaj aktualizacje raz dziennie")
+        auto = QCheckBox(tr("Sprawdzaj aktualizacje raz dziennie"))
         auto.setChecked(self.config.update.check)
-        auto.setToolTip("Program raz na dobę pyta GitHuba o najnowsze wydanie. Niczego nie instaluje bez Twojej zgody.")
+        auto.setToolTip(tr("Program raz na dobę pyta GitHuba o najnowsze wydanie. Niczego nie instaluje bez Twojej zgody."))
         auto.toggled.connect(self._on_auto_update_check)
-        check = QPushButton("Sprawdź aktualizacje")
+        check = QPushButton(tr("Sprawdź aktualizacje"))
         check.clicked.connect(lambda: self.check_updates(manual=True))
         self._about_update_label = QLabel()
         self._about_update_label.setStyleSheet("color:#9aa0a6;")
@@ -1493,7 +1523,7 @@ class MainWindow(QMainWindow):
         if self._rtss_setup is not None:
             # Nie przerywamy instalacji RTSS w połowie – okno zamknie się po jej zakończeniu.
             self._closing = True
-            self.notice_label.setText("Kończenie konfiguracji RTSS – program zamknie się za chwilę.")
+            self.notice_label.setText(tr("Kończenie konfiguracji RTSS – program zamknie się za chwilę."))
             event.ignore()
             return
         if self.worker is not None:
@@ -1520,14 +1550,14 @@ class MainWindow(QMainWindow):
                 thread.wait(TIMEOUT_MS_ON_CLOSE)
         self._instance_server.close()
         super().closeEvent(event)
-        if self._restart_exe is not None:
-            updater.restart(self._restart_exe)
+        if self._relaunch is not None:
+            updater.restart(updater.running_exe(), self._relaunch)
 
     def _save_config(self) -> None:
         try:
             save_config(self.paths.config, self.config)
         except StorageError as exc:
-            self._show_error(f"Nie zapisano ustawień: {exc}")
+            self._show_error(tr("Nie zapisano ustawień: {exc}", exc=exc))
 
     def _show_error(self, message: str) -> None:
         self.error_banner.setText(message)

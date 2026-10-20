@@ -17,24 +17,25 @@ from PySide6.QtWidgets import (
 
 from . import hotkeys
 from .config import HotkeySettings
+from .i18n import tr, N_
 
 LABELS = {
-    "snapshot": "Zrzut do kalibracji:",
-    "plus": "Dodaj +1:",
-    "minus": "Cofnij −1:",
-    "overlay": "Nakładka włącz/wyłącz:",
+    "snapshot": N_("Zrzut do kalibracji:"),
+    "plus": N_("Dodaj +1:"),
+    "minus": N_("Cofnij −1:"),
+    "overlay": N_("Nakładka włącz/wyłącz:"),
 }
 
 
 class HotkeyDialog(QDialog):
     def __init__(self, parent, settings: HotkeySettings):
         super().__init__(parent)
-        self.setWindowTitle("Skróty klawiszowe")
+        self.setWindowTitle(tr("Skróty klawiszowe"))
         self.result_settings: HotkeySettings | None = None
         layout = QVBoxLayout(self)
         info = QLabel(
-            "Skróty działają globalnie – także w grze na pełnym ekranie. Kliknij pole i naciśnij nową "
-            "kombinację klawiszy; przycisk ✕ w polu wyłącza skrót."
+            tr("Skróty działają globalnie – także w grze na pełnym ekranie. Kliknij pole i naciśnij nową "
+            "kombinację klawiszy; przycisk ✕ w polu wyłącza skrót.")
         )
         info.setWordWrap(True)
         layout.addWidget(info)
@@ -48,7 +49,7 @@ class HotkeyDialog(QDialog):
             edit.setKeySequence(_sequence(getattr(settings, f.name)))
             edit.keySequenceChanged.connect(self._validate)
             self.edits[f.name] = edit
-            form.addRow(LABELS[f.name], edit)
+            form.addRow(tr(LABELS[f.name]), edit)
         layout.addLayout(form)
 
         self.error_label = QLabel()
@@ -57,7 +58,7 @@ class HotkeyDialog(QDialog):
         layout.addWidget(self.error_label)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        defaults = QPushButton("Przywróć domyślne")
+        defaults = QPushButton(tr("Przywróć domyślne"))
         defaults.clicked.connect(self._restore_defaults)
         buttons.addButton(defaults, QDialogButtonBox.ButtonRole.ResetRole)
         buttons.accepted.connect(self._accept)
@@ -79,13 +80,13 @@ class HotkeyDialog(QDialog):
                 try:
                     hotkey = hotkeys.parse(text)
                 except ValueError as exc:
-                    errors.append(f"{LABELS[name][:-1]}: {exc}")
+                    errors.append(f"{tr(LABELS[name])[:-1]}: {exc}")
                     text = ""
                 else:
                     text = hotkey.text
                     key = (hotkey.modifiers, hotkey.vk)
                     if key in used:
-                        errors.append(f"{hotkeys.display(text)} jest już przypisany do „{LABELS[used[key]][:-1]}”.")
+                        errors.append(tr("{display} jest już przypisany do „{item}”.", display=hotkeys.display(text), item=tr(LABELS[used[key]])[:-1]))
                     used.setdefault(key, name)
             setattr(settings, name, text)
         return settings, errors

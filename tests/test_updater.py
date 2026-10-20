@@ -110,3 +110,23 @@ def test_running_from_source_has_no_exe():
 def test_release_dataclass_defaults():
     release = Release("1.9.0", "", None, 0, "")
     assert release.download_url is None
+
+
+def test_relaunch_command_for_exe_and_sources(monkeypatch, tmp_path):
+    exe = tmp_path / "DeathCounter.exe"
+    monkeypatch.setattr(updater, "running_exe", lambda: exe)
+    assert updater.relaunch_command() == [str(exe)]
+    monkeypatch.setattr(updater, "running_exe", lambda: None)
+    monkeypatch.setattr(updater.sys, "executable", "python.exe")
+    monkeypatch.setattr(updater.sys, "argv", [str(tmp_path / "DeathCounter.pyw")])
+    assert updater.relaunch_command() == ["python.exe", str((tmp_path / "DeathCounter.pyw").resolve())]
+    monkeypatch.setattr(updater.sys, "argv", [str(tmp_path / "__main__.py")])
+    assert updater.relaunch_command() == ["python.exe", "-m", "deathcounter"]
+
+
+def test_restart_passes_argument(monkeypatch, tmp_path):
+    started = []
+    monkeypatch.setattr(updater.subprocess, "Popen", lambda command, **kwargs: started.append((command, kwargs["cwd"])))
+    monkeypatch.setattr(updater, "relaunch_command", lambda: [str(tmp_path / "DeathCounter.exe")])
+    updater.restart(None, updater.RESTART_ARG)
+    assert started == [([str(tmp_path / "DeathCounter.exe"), "--restart"], str(tmp_path))]

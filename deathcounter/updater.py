@@ -20,12 +20,14 @@ from pathlib import Path
 from typing import Callable
 
 from . import __version__
+from .i18n import tr
 
 LATEST_URL = "https://api.github.com/repos/Kacyn1/DeathCounter/releases/latest"
 ASSET_NAME = "DeathCounter.exe"
 CHECK_INTERVAL = 24 * 3600  # automatyczne sprawdzanie raz dziennie
 TIMEOUT = 15
 AFTER_UPDATE_ARG = "--after-update"  # nowa wersja czeka, aż stara zwolni blokadę drugiej kopii
+RESTART_ARG = "--restart"            # ponowne uruchomienie (np. po zmianie języka) – też czeka na blokadę
 
 
 class UpdateError(RuntimeError):
@@ -60,7 +62,7 @@ def due(last_check: float, now: float) -> bool:
 def release_from_json(data: dict) -> Release:
     version = str(data.get("tag_name", "")).lstrip("v")
     if not parse_version(version):
-        raise UpdateError(f"Nieczytelny numer wersji w wydaniu: {data.get('tag_name')!r}.")
+        raise UpdateError(tr("Nieczytelny numer wersji w wydaniu: {get!r}.", get=data.get('tag_name')))
     asset = next((a for a in data.get("assets", []) if a.get("name") == ASSET_NAME), None)
     digest = str(asset.get("digest") or "") if asset else ""
     if asset and digest.startswith("sha256:"):
@@ -78,14 +80,14 @@ def fetch_latest(opener: Callable = urllib.request.urlopen) -> Release:
     except UpdateError:
         raise
     except (OSError, ValueError, KeyError) as exc:
-        raise UpdateError(f"Nie udało się sprawdzić aktualizacji: {exc}") from exc
+        raise UpdateError(tr("Nie udało się sprawdzić aktualizacji: {exc}", exc=exc)) from exc
 
 
 def download(release: Release, dest: Path, progress: Callable[[int, int], None] | None = None,
              opener: Callable = urllib.request.urlopen, cancelled: Callable[[], bool] = lambda: False) -> Path:
     """Pobiera exe do `dest` i sprawdza sumę SHA-256. Przy błędzie plik częściowy jest usuwany."""
     if release.download_url is None:
-        raise UpdateError("To wydanie nie ma pliku DeathCounter.exe z sumą kontrolną – pobierz je ręcznie.")
+        raise UpdateError(tr("To wydanie nie ma pliku DeathCounter.exe z sumą kontrolną – pobierz je ręcznie."))
     part = dest.with_name(dest.name + ".part")
     digest = hashlib.sha256()
     done = 0
@@ -94,20 +96,20 @@ def download(release: Release, dest: Path, progress: Callable[[int, int], None] 
         with opener(request, timeout=TIMEOUT) as response, open(part, "wb") as out:
             while chunk := response.read(256 * 1024):
                 if cancelled():
-                    raise UpdateError("Pobieranie przerwane.")
+                    raise UpdateError(tr("Pobieranie przerwane."))
                 out.write(chunk)
                 digest.update(chunk)
                 done += len(chunk)
                 if progress is not None:
                     progress(done, release.size)
         if release.size and done != release.size:
-            raise UpdateError(f"Pobrano {done} z {release.size} bajtów – połączenie zostało przerwane.")
+            raise UpdateError(tr("Pobrano {done} z {size} bajtów – połączenie zostało przerwane.", done=done, size=release.size))
         if digest.hexdigest() != release.sha256:
-            raise UpdateError("Suma kontrolna pobranego pliku się nie zgadza – plik jest uszkodzony albo podmieniony.")
+            raise UpdateError(tr("Suma kontrolna pobranego pliku się nie zgadza – plik jest uszkodzony albo podmieniony."))
         os.replace(part, dest)
         return dest
     except OSError as exc:
-        raise UpdateError(f"Nie udało się pobrać aktualizacji: {exc}") from exc
+        raise UpdateError(tr("Nie udało się pobrać aktualizacji: {exc}", exc=exc)) from exc
     finally:
         part.unlink(missing_ok=True)
 
@@ -123,12 +125,12 @@ def install(new_exe: Path, exe: Path) -> None:
         old.unlink(missing_ok=True)
         os.replace(exe, old)
     except OSError as exc:
-        raise UpdateError(f"Nie można podmienić {exe.name}: {exc}") from exc
+        raise UpdateError(tr("Nie można podmienić {name}: {exc}", name=exe.name, exc=exc)) from exc
     try:
         os.replace(new_exe, exe)
     except OSError as exc:
         os.replace(old, exe)  # przywrócenie działającej wersji
-        raise UpdateError(f"Nie można zapisać nowej wersji: {exc}") from exc
+        raise UpdateError(tr("Nie można zapisać nowej wersji: {exc}", exc=exc)) from exc
 
 
 def cleanup(exe: Path) -> None:
@@ -145,9 +147,22 @@ def running_exe() -> Path | None:
     return Path(sys.executable).resolve() if getattr(sys, "frozen", False) else None
 
 
-def restart(exe: Path) -> None:
-    """Uruchamia nową wersję jako niezależny proces. PYINSTALLER_RESET_ENVIRONMENT – nowy exe nie może
-    korzystać z folderu tymczasowego bieżącego procesu (jednoplikowy exe sam się w nim rozpakowuje)."""
+def relaunch_command() -> list[str]:
+    """Polecenie uruchamiające program jeszcze raz: exe albo Python ze źródłami."""
+    exe = running_exe()
+    if exe is not None:
+        return [str(exe)]
+    script = Path(sys.argv[0]).resolve()
+    if script.name == "__main__.py":
+        return [sys.executable, "-m", "deathcounter"]
+    return [sys.executable, str(script)]
+
+
+def restart(exe: Path | None = None, arg: str = AFTER_UPDATE_ARG) -> None:
+    """Uruchamia program (nową wersję albo ten sam) jako niezależny proces. PYINSTALLER_RESET_ENVIRONMENT – nowy
+    exe nie może korzystać z folderu tymczasowego bieżącego procesu (jednoplikowy exe sam się w nim rozpakowuje)."""
+    command = [str(exe)] if exe is not None else relaunch_command()
     env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
     flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen([str(exe), AFTER_UPDATE_ARG], cwd=str(exe.parent), env=env, creationflags=flags, close_fds=True)
+    cwd = Path(command[0]).parent if len(command) == 1 else Path.cwd()  # exe – jego folder; źródła – bieżący
+    subprocess.Popen(command + [arg], cwd=str(cwd), env=env, creationflags=flags, close_fds=True)

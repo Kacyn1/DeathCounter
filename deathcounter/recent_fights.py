@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Callable
 
 from .storage import atomic_write_text
+from .i18n import tr
 
 IN_PROGRESS = "w trakcie"
 ABANDONED = "przerwano"   # pasek zniknął bez śmierci i bez zwycięstwa – gracz opuścił arenę
@@ -41,7 +42,7 @@ class RecentFights:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8-sig"))
         except (OSError, ValueError) as exc:
-            return f"Nie można odczytać {self.path.name} ({exc}); lista ostatnich walk zacznie się od nowa."
+            return tr("Nie można odczytać {name} ({exc}); lista ostatnich walk zacznie się od nowa.", name=self.path.name, exc=exc)
         if isinstance(data, list):
             for entry in data:
                 if (isinstance(entry, dict) and isinstance(entry.get("name"), str)

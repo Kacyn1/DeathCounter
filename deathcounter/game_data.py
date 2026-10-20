@@ -14,8 +14,9 @@ from .config import TEMPLATE_FIELDS, AppPaths, Calibration, load_calibration
 from .storage import DeathStore, StorageError
 from .signing import load_key
 from .template import DeathTemplate, TemplateError
+from .i18n import tr, N_
 
-TEMPLATE_LABELS = {"death": "napisu śmierci", "boss_bar": "paska bossa", "victory": "komunikatu zwycięstwa"}
+TEMPLATE_LABELS = {"death": N_("napisu śmierci"), "boss_bar": N_("paska bossa"), "victory": N_("komunikatu zwycięstwa")}
 
 
 @dataclass
@@ -49,7 +50,7 @@ def open_game(base: Path, game: str) -> GameData:
     try:
         paths.game_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise StorageError(f"Nie można utworzyć folderu gry {paths.game_dir}: {exc}") from exc
+        raise StorageError(tr("Nie można utworzyć folderu gry {game_dir}: {exc}", game_dir=paths.game_dir, exc=exc)) from exc
     store = DeathStore(paths.deaths)
     store.load()
     boss_store = BossStore(paths.bosses)
@@ -74,5 +75,5 @@ def open_game(base: Path, game: str) -> GameData:
             try:
                 templates[kind] = DeathTemplate.load(paths.template_path(kind), info)
             except TemplateError as exc:
-                warnings.append(f"Nie można wczytać wzorca {TEMPLATE_LABELS[kind]}: {exc} Wykonaj kalibrację ponownie.")
+                warnings.append(tr("Nie można wczytać wzorca {item}: {exc} Wykonaj kalibrację ponownie.", item=tr(TEMPLATE_LABELS[kind]), exc=exc))
     return GameData(paths, store, boss_store, calibration, templates, audit, boss_names, recent, attempts, warnings)

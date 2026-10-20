@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .i18n import tr
+
 MOD_ALT = 0x0001
 MOD_CONTROL = 0x0002
 MOD_SHIFT = 0x0004
@@ -42,13 +44,13 @@ def parse(text: str) -> Hotkey:
     """„Ctrl+Alt+F9” → Hotkey. ValueError z opisem, gdy skrótu nie da się użyć jako globalnego."""
     text = text.strip()
     if not text:
-        raise ValueError("Skrót jest pusty.")
+        raise ValueError(tr("Skrót jest pusty."))
     # „+” jako klawisz („Ctrl++”) nie jest obsługiwany – ostatni element to zawsze klawisz.
     *mods, key = text.split("+")
     modifiers = 0
     for mod in mods:
         if mod not in MODIFIERS and mod != "Num":
-            raise ValueError(f"Nieznany modyfikator „{mod}” w skrócie {text}.")
+            raise ValueError(tr("Nieznany modyfikator „{mod}” w skrócie {text}.", mod=mod, text=text))
         modifiers |= MODIFIERS.get(mod, 0)
     keypad = "Num" in mods  # Qt oznacza klawisze bloku numerycznego „Num+”
     if keypad and key in NUMPAD:
@@ -56,9 +58,9 @@ def parse(text: str) -> Hotkey:
     elif key in KEYS and not keypad:
         vk = KEYS[key]
     else:
-        raise ValueError(f"Klawisz „{key or '+'}” nie może być skrótem globalnym.")
+        raise ValueError(tr("Klawisz „{value}” nie może być skrótem globalnym.", value=key or '+'))
     if not keypad and key in _TYPING_KEYS and not modifiers & (MOD_CONTROL | MOD_ALT | MOD_WIN):
-        raise ValueError(f"Skrót {text} blokowałby pisanie – dodaj Ctrl, Alt albo Win.")
+        raise ValueError(tr("Skrót {text} blokowałby pisanie – dodaj Ctrl, Alt albo Win.", text=text))
     ordered = "+".join([m for m in (*MODIFIERS, "Num") if m in mods] + [key])
     return Hotkey(modifiers, vk, ordered)
 

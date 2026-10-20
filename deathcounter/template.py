@@ -10,6 +10,7 @@ import numpy as np
 
 from .config import TemplateInfo
 from .storage import StorageError, atomic_write_bytes
+from .i18n import tr
 
 MIN_WIDTH = 24
 MIN_HEIGHT = 8
@@ -34,10 +35,10 @@ def read_image(path: Path) -> np.ndarray:
     try:
         data = np.fromfile(str(path), dtype=np.uint8)
     except OSError as exc:
-        raise TemplateError(f"Nie można odczytać pliku {Path(path).name}: {exc}") from exc
+        raise TemplateError(tr("Nie można odczytać pliku {name}: {exc}", name=Path(path).name, exc=exc)) from exc
     image = cv2.imdecode(data, cv2.IMREAD_COLOR) if data.size else None
     if image is None:
-        raise TemplateError(f"Plik {Path(path).name} nie jest obsługiwanym obrazem.")
+        raise TemplateError(tr("Plik {name} nie jest obsługiwanym obrazem.", name=Path(path).name))
     return image
 
 
@@ -47,7 +48,7 @@ def save_source_image(path: Path, frame: np.ndarray) -> None:
         frame = frame[:, :, :3]
     ok, encoded = cv2.imencode(".jpg", np.ascontiguousarray(frame), [cv2.IMWRITE_JPEG_QUALITY, 92])
     if not ok:
-        raise StorageError("Nie można zakodować zrzutu kalibracji.")
+        raise StorageError(tr("Nie można zakodować zrzutu kalibracji."))
     atomic_write_bytes(Path(path), encoded.tobytes())
 
 
@@ -68,7 +69,7 @@ class DeathTemplate:
         image = to_gray(image)
         x, y, w, h = roi
         if image.shape != (h, w):
-            raise TemplateError("Rozmiar obrazu wzorca nie zgadza się z zapisanym obszarem.")
+            raise TemplateError(tr("Rozmiar obrazu wzorca nie zgadza się z zapisanym obszarem."))
         self.image = np.ascontiguousarray(image)
         self.roi = (int(x), int(y), int(w), int(h))
         self.reference_size = (int(reference_size[0]), int(reference_size[1]))
@@ -83,27 +84,26 @@ class DeathTemplate:
         x1, y1 = min(width, x + w), min(height, y + h)
         if x1 - x0 < MIN_WIDTH or y1 - y0 < MIN_HEIGHT:
             raise TemplateError(
-                f"Zaznaczony obszar jest za mały (minimum {MIN_WIDTH}×{MIN_HEIGHT} px). "
-                "Zaznacz cały napis lub cały fragment ramki paska."
+                tr("Zaznaczony obszar jest za mały (minimum {MIN_WIDTH}×{MIN_HEIGHT} px). Zaznacz cały napis lub cały fragment ramki paska.", MIN_WIDTH=MIN_WIDTH, MIN_HEIGHT=MIN_HEIGHT)
             )
         crop = to_gray(frame[y0:y1, x0:x1]).copy()
         if float(crop.std()) < MIN_CONTRAST:
             raise TemplateError(
-                "Zaznaczony obszar jest prawie jednolity. Zaznacz napis lub ramkę paska, a nie samo tło."
+                tr("Zaznaczony obszar jest prawie jednolity. Zaznacz napis lub ramkę paska, a nie samo tło.")
             )
         return cls(crop, (x0, y0, x1 - x0, y1 - y0), (width, height))
 
     @classmethod
     def load(cls, path: Path, info: TemplateInfo) -> "DeathTemplate":
         if not Path(path).exists():
-            raise TemplateError(f"Brak pliku wzorca {Path(path).name}. Wykonaj kalibrację.")
+            raise TemplateError(tr("Brak pliku wzorca {name}. Wykonaj kalibrację.", name=Path(path).name))
         image = read_image(path)
         return cls(image, tuple(info.roi), tuple(info.reference_size))
 
     def save(self, path: Path) -> TemplateInfo:
         ok, encoded = cv2.imencode(".png", self.image)
         if not ok:
-            raise StorageError("Nie można zakodować obrazu wzorca.")
+            raise StorageError(tr("Nie można zakodować obrazu wzorca."))
         atomic_write_bytes(Path(path), encoded.tobytes())
         return TemplateInfo(list(self.roi), list(self.reference_size))
 

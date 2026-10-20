@@ -22,9 +22,10 @@ from . import attempts as attempt_log
 from .attempts import format_when, summary
 from .bosses import BossTracker, format_duration
 from .report import rows_from_records
+from .i18n import tr, N_
 
-COLUMNS = ("Boss", "Status", "Śmierci", "Czas")
-ATTEMPT_COLUMNS = ("Nr", "Początek", "Czas", "Wynik")
+COLUMNS = ("Boss", N_("Status"), N_("Śmierci"), N_("Czas"))
+ATTEMPT_COLUMNS = (N_("Nr"), N_("Początek"), N_("Czas"), N_("Wynik"))
 VISIBLE_ATTEMPTS = 15  # wysokość listy prób; dalsze przewija się
 DEFEATED_COLOR = QColor("#2f9e5b")
 CURRENT_COLOR = QColor("#b8860b")
@@ -50,7 +51,7 @@ class AttemptsView(QWidget):
         self.summary.setStyleSheet("color:#9aa0a6;")
         layout.addWidget(self.summary)
         self.table = QTableWidget(0, len(ATTEMPT_COLUMNS))
-        self.table.setHorizontalHeaderLabels(ATTEMPT_COLUMNS)
+        self.table.setHorizontalHeaderLabels([tr(c) for c in ATTEMPT_COLUMNS])
         self.table.verticalHeader().hide()
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -68,7 +69,7 @@ class AttemptsView(QWidget):
         self.table.setRowCount(len(attempts))
         for row, (number, attempt) in enumerate(reversed(list(enumerate(attempts, 1)))):
             values = (str(number), format_when(attempt.start), format_duration(attempt.seconds),
-                      attempt_log.LABELS[attempt.outcome])
+                      tr(attempt_log.LABELS[attempt.outcome]))
             for column, text in enumerate(values):
                 item = self.table.item(row, column)
                 if item is None:
@@ -99,7 +100,7 @@ class ResultsWindow(QDialog):
         self.summary.setWordWrap(True)
         layout.addWidget(self.summary)
         self.table = QTableWidget(0, len(COLUMNS))
-        self.table.setHorizontalHeaderLabels(COLUMNS)
+        self.table.setHorizontalHeaderLabels([tr(c) for c in COLUMNS])
         self.table.verticalHeader().hide()
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -115,19 +116,19 @@ class ResultsWindow(QDialog):
         header.sortIndicatorChanged.connect(lambda *_: self._render())
         self.table.cellDoubleClicked.connect(self._on_double_click)
         layout.addWidget(self.table, 1)
-        hint = QLabel("Kliknij dwukrotnie bossa, aby zobaczyć historię jego prób.")
+        hint = QLabel(tr("Kliknij dwukrotnie bossa, aby zobaczyć historię jego prób."))
         hint.setStyleSheet("color:#7d828a;")
-        self.fix_names_button = QPushButton("Popraw nazwy bossów")
+        self.fix_names_button = QPushButton(tr("Popraw nazwy bossów"))
         self.fix_names_button.setToolTip(
-            "Porównuje nazwy bossów w tabeli z listą nazw tej gry i zamienia podobne\n"
-            "(np. odczytane z błędem) na nazwy z listy. Przed zmianą pokazuje, co się zmieni."
+            tr("Porównuje nazwy bossów w tabeli z listą nazw tej gry i zamienia podobne\n"
+            "(np. odczytane z błędem) na nazwy z listy. Przed zmianą pokazuje, co się zmieni.")
         )
         self.fix_names_button.clicked.connect(self.fix_names_requested)
         footer = QHBoxLayout()
         footer.addWidget(hint, 1)
         footer.addWidget(self.fix_names_button)
         layout.addLayout(footer)
-        self.empty = QLabel("Brak bossów – walki pojawią się tu, gdy włączysz „Śledź walkę z bossem”.")
+        self.empty = QLabel(tr("Brak bossów – walki pojawią się tu, gdy włączysz „Śledź walkę z bossem”."))
         self.empty.setStyleSheet("color:#9aa0a6;")
         layout.addWidget(self.empty)
         self._tracker: BossTracker | None = None
@@ -138,14 +139,13 @@ class ResultsWindow(QDialog):
     def show_results(self, game: str, deaths: int, tracker: BossTracker) -> None:
         """Pokazuje wyniki gry; wywoływane co sekundę, gdy okno jest otwarte."""
         self._tracker = tracker
-        self.setWindowTitle(f"Wyniki – {game}")
+        self.setWindowTitle(tr("Wyniki – {game}", game=game))
         rows = rows_from_records(tracker.store.records, tracker.current, tracker.elapsed())
         defeated = [r for r in rows if r.defeated]
         boss_deaths = sum(r.deaths for r in rows)
         total_time = sum(r.seconds for r in rows)
         self.summary.setText(
-            f"<b>Śmierci łącznie: {deaths}</b> &nbsp;·&nbsp; pokonani bossowie: {len(defeated)} z {len(rows)}"
-            f" &nbsp;·&nbsp; śmierci przy bossach: {boss_deaths} &nbsp;·&nbsp; czas walk: {format_duration(total_time)}"
+            tr("<b>Śmierci łącznie: {deaths}</b> &nbsp;·&nbsp; pokonani bossowie: {count_defeated} z {count_rows} &nbsp;·&nbsp; śmierci przy bossach: {boss_deaths} &nbsp;·&nbsp; czas walk: {total_time}", deaths=deaths, count_defeated=len(defeated), count_rows=len(rows), boss_deaths=boss_deaths, total_time=format_duration(total_time))
         )
         self.empty.setVisible(not rows)
         # Tylko gry z wbudowaną listą nazw (Dark Souls I–III, Sekiro, Elden Ring).
@@ -206,11 +206,11 @@ class ResultsWindow(QDialog):
     def _cells(row, current: bool) -> list[tuple]:
         """(tekst, klucz sortowania, kolor, do prawej) dla kolejnych kolumn."""
         if row.defeated:
-            status, order, color = "POKONANO", 2, DEFEATED_COLOR
+            status, order, color = tr("POKONANO"), 2, DEFEATED_COLOR
         elif current:
-            status, order, color = "W TRAKCIE (bieżąca walka)", 0, CURRENT_COLOR
+            status, order, color = tr("W TRAKCIE (bieżąca walka)"), 0, CURRENT_COLOR
         else:
-            status, order, color = "W TRAKCIE", 1, None
+            status, order, color = tr("W TRAKCIE"), 1, None
         return [
             (row.name, row.name.casefold(), CURRENT_COLOR if current else None, False),
             (status, order, color, False),

@@ -11,6 +11,8 @@ import struct
 from ctypes import wintypes
 from enum import Enum
 
+from .i18n import N_
+
 SHARED_MEMORY_NAME = "RTSSSharedMemoryV2"
 SIGNATURE = 0x52545353  # 'RTSS'
 MIN_VERSION = 0x00020000
@@ -56,10 +58,10 @@ kernel32.VirtualQuery.restype = ctypes.c_size_t
 
 
 class RtssState(Enum):
-    SHOWN = "tekst przekazany do RTSS"
-    NOT_RUNNING = "RTSS nie jest uruchomiony"
-    UNSUPPORTED = "nieobsługiwana wersja RTSS"
-    NO_SLOT = "brak wolnego miejsca na tekst w RTSS"
+    SHOWN = N_("tekst przekazany do RTSS")
+    NOT_RUNNING = N_("RTSS nie jest uruchomiony")
+    UNSUPPORTED = N_("nieobsługiwana wersja RTSS")
+    NO_SLOT = N_("brak wolnego miejsca na tekst w RTSS")
 
 
 class RtssOsd:

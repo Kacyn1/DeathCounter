@@ -1,7 +1,8 @@
 """Znane nazwy bossów jednej gry (games/<gra>/boss_names.json), uzupełniane z każdą walką.
 
 OCR myli pojedyncze litery, więc odczyt dopasowujemy do najbliższej znanej nazwy. Gry wbudowane mają
-od początku listę polskich nazw z plików gry (data/boss_names/<gra>.json). Lista rośnie sama:
+od początku listę nazw z plików gry w parach polska–angielska (data/boss_names/<gra>.json): odczyt
+w dowolnym z tych języków daje nazwę w języku programu. Lista rośnie sama:
 nazwa zatwierdzona wynikiem albo poprawiona ręcznie trafia do pliku, a błędny odczyt, który
 poprawiłeś, zostaje zapamiętany jako jej odmiana (alias) – następnym razem od razu da właściwą nazwę.
 """
@@ -16,6 +17,8 @@ from pathlib import Path
 
 from .ocr import normalize
 from .storage import atomic_write_text
+from . import i18n
+from .i18n import tr
 
 MATCH_RATIO = 0.6  # domyślne minimalne podobieństwo odczytu do znanej nazwy (ustawienie name_match_ratio)
 BUILTIN_DIR = Path(__file__).resolve().parent / "data" / "boss_names"
@@ -41,6 +44,26 @@ def _read(path: Path) -> tuple[list[str], dict[str, str]]:
     return names, aliases
 
 
+def _read_builtin(path: Path, language: str) -> tuple[list[str], dict[str, str]]:
+    """Lista wbudowana w języku `language`: nazwy oraz aliasy – nazwy w drugim języku i teksty z gry
+    (znormalizowane) → nazwa w `language`. OSError/ValueError, gdy nie da się jej odczytać."""
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
+    other = "en" if language == "pl" else "pl"
+    names: list[str] = []
+    aliases: dict[str, str] = {}
+    by_polish: dict[str, str] = {}
+    for boss in data["bosses"]:
+        name = boss[language]
+        if name not in names:
+            names.append(name)
+        aliases.setdefault(normalize(boss[other]), name)
+        by_polish.setdefault(boss["pl"], name)
+    for key, polish in data.get("aliases", {}).items():
+        aliases.setdefault(key, by_polish.get(polish, polish))
+    own = {normalize(n) for n in names}
+    return names, {k: v for k, v in aliases.items() if k not in own}
+
+
 def base_name(name: str) -> str:
     """„Pursuer (2)” → „Pursuer” – kolejne podejście do pokonanego bossa to wciąż ten sam boss."""
     match = _NUMBERED.match(name)
@@ -59,9 +82,11 @@ def same_boss(a: str, b: str) -> bool:
 
 
 class BossNames:
-    def __init__(self, path: Path, builtin: Path | None = None, min_ratio: float = MATCH_RATIO) -> None:
+    def __init__(self, path: Path, builtin: Path | None = None, min_ratio: float = MATCH_RATIO,
+                 language: str | None = None) -> None:
         self.path = Path(path)
         self.builtin = builtin  # wbudowana lista gry – tylko do odczytu
+        self.language = language or i18n.language()  # język nazw na liście wbudowanej
         self.min_ratio = min_ratio
         self.names: list[str] = []
         self.aliases: dict[str, str] = {}  # znormalizowany błędny odczyt → nazwa
@@ -77,9 +102,11 @@ class BossNames:
         self.builtin_names, self.builtin_aliases, self.builtin_version = [], {}, None
         if self.builtin is not None and self.builtin.exists():
             try:
-                self.builtin_names, self.builtin_aliases = _read(self.builtin)
-                self.builtin_version = hashlib.sha256(self.builtin.read_bytes()).hexdigest()[:12]
-            except (OSError, ValueError):
+                self.builtin_names, self.builtin_aliases = _read_builtin(self.builtin, self.language)
+                # Inna lista albo inny język – zapisane nazwy trzeba porównać (przetłumaczyć) jeszcze raz.
+                digest = hashlib.sha256(self.builtin.read_bytes() + self.language.encode())
+                self.builtin_version = digest.hexdigest()[:12]
+            except (OSError, ValueError, KeyError, TypeError):
                 pass  # bez listy wbudowanej program i tak działa – uczy się nazw z walk
         if not self.path.exists():
             return None
@@ -88,7 +115,7 @@ class BossNames:
             checked = json.loads(self.path.read_text(encoding="utf-8-sig")).get("builtin_checked")
             self.checked = checked if isinstance(checked, str) else None
         except (OSError, ValueError, AttributeError) as exc:
-            return f"Nie można odczytać {self.path.name} ({exc}); lista znanych bossów zacznie się od nowa."
+            return tr("Nie można odczytać {name} ({exc}); lista znanych bossów zacznie się od nowa.", name=self.path.name, exc=exc)
         return None
 
     def save(self) -> None:

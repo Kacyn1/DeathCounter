@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from deathcounter import config as config_module
 from deathcounter.config import (
     GAMES,
     AppConfig,
@@ -18,10 +19,23 @@ from deathcounter.config import (
 from deathcounter.game_data import counter_files, open_game
 
 
-def test_defaults_when_missing(tmp_path):
+def test_defaults_when_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_module, "system_language", lambda: "pl")
     config, warning = load_config(tmp_path / "config.json")
     assert warning is None
     assert config == AppConfig()
+
+
+def test_language_from_windows_only_on_first_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_module, "system_language", lambda: "en")
+    path = tmp_path / "config.json"
+    assert load_config(path)[0].language == "en"  # nowa instalacja
+    path.write_text(json.dumps({"game": "ds1"}), encoding="utf-8")
+    assert load_config(path)[0].language == "pl"  # dotychczasowy użytkownik zostaje przy polskim
+    path.write_text(json.dumps({"language": "en"}), encoding="utf-8")
+    assert load_config(path)[0].language == "en"
+    path.write_text(json.dumps({"language": "de"}), encoding="utf-8")
+    assert load_config(path)[0].language == "pl"
 
 
 def test_roundtrip(tmp_path):

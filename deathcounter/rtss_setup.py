@@ -16,6 +16,8 @@ from ctypes import wintypes
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from .i18n import tr
+
 TASK_NAME = "DeathCounter - RTSS"
 WINGET_ID = "Guru3D.RTSS"
 DEFAULT_PATH = Path(r"C:\Program Files (x86)\RivaTuner Statistics Server\RTSS.exe")
@@ -65,14 +67,14 @@ def install_with_winget() -> None:
         )
     except FileNotFoundError as exc:
         raise RtssSetupError(
-            "W systemie brak programu winget. Zainstaluj RTSS ręcznie ze strony guru3d.com."
+            tr("W systemie brak programu winget. Zainstaluj RTSS ręcznie ze strony guru3d.com.")
         ) from exc
     except subprocess.TimeoutExpired as exc:
-        raise RtssSetupError("Instalacja RTSS trwała zbyt długo i została przerwana.") from exc
+        raise RtssSetupError(tr("Instalacja RTSS trwała zbyt długo i została przerwana.")) from exc
     if find_rtss() is None:
         details = (result.stdout + result.stderr).strip().splitlines()[-3:]
         raise RtssSetupError(
-            "Instalacja RTSS nie powiodła się (anulowana lub błąd winget). " + " ".join(details)
+            tr("Instalacja RTSS nie powiodła się (anulowana lub błąd winget). ") + " ".join(details)
         )
 
 
@@ -85,7 +87,7 @@ def create_start_task(rtss_path: Path) -> None:
     finally:
         xml_path.unlink(missing_ok=True)
     if code != 0 or not task_exists():
-        raise RtssSetupError(f"Nie udało się utworzyć zadania uruchamiającego RTSS (kod {code}).")
+        raise RtssSetupError(tr("Nie udało się utworzyć zadania uruchamiającego RTSS (kod {code}).", code=code))
 
 
 def start_rtss(rtss_path: Path) -> None:
@@ -179,8 +181,8 @@ def run_elevated(file: str, parameters: str, wait: bool = True, show: int = 0) -
     if not _shell32.ShellExecuteExW(ctypes.byref(info)):
         error = ctypes.get_last_error()
         if error == ERROR_CANCELLED:
-            raise RtssSetupError("Anulowano okno uprawnień administratora (UAC).")
-        raise RtssSetupError(f"Nie można uruchomić {Path(file).name} (błąd {error}).")
+            raise RtssSetupError(tr("Anulowano okno uprawnień administratora (UAC)."))
+        raise RtssSetupError(tr("Nie można uruchomić {name} (błąd {error}).", name=Path(file).name, error=error))
     if not info.hProcess:
         return None
     try:
