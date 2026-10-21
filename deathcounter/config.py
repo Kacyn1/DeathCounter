@@ -119,6 +119,16 @@ class DiscordSettings:
 
 
 @dataclass
+class SessionSettings:
+    track: bool = True             # „Śledź sesję” – czas i śmierci, gdy gra jest uruchomiona
+    show_on_overlay: bool = False  # „Pokaż sesję na nakładce”
+    auto_switch: bool = True       # „Przełączaj licznik na uruchomioną grę”
+
+    def sanitize(self) -> None:
+        pass
+
+
+@dataclass
 class BossSettings:
     track: bool = False              # „Śledź walkę z bossem”
     read_names: bool = True          # „Odczytuj nazwę bossa z ekranu” (OCR)
@@ -173,6 +183,7 @@ class UiSettings:
 
     overlay_collapsed: bool = False
     detector_collapsed: bool = False
+    session_collapsed: bool = False
 
     def sanitize(self) -> None:
         pass
@@ -204,6 +215,7 @@ class AppConfig:
     overlay: OverlaySettings = field(default_factory=OverlaySettings)
     rtss: RtssSettings = field(default_factory=RtssSettings)
     bosses: BossSettings = field(default_factory=BossSettings)
+    session: SessionSettings = field(default_factory=SessionSettings)
     discord: DiscordSettings = field(default_factory=DiscordSettings)
     hotkeys: HotkeySettings = field(default_factory=HotkeySettings)
     ui: UiSettings = field(default_factory=UiSettings)
@@ -211,6 +223,9 @@ class AppConfig:
     game: str = DEFAULT_GAME
     player_name: str = ""  # nick gracza na certyfikacie
     custom_games: dict[str, str] = field(default_factory=dict)  # gry dodane przez użytkownika: id → nazwa
+    steam_appids: dict[str, int] = field(default_factory=dict)  # gry dodane ze Steama: id → AppID
+    steam_offered: bool = False  # jednorazowa propozycja wyszukania gier w bibliotece Steam
+    game_exes: dict[str, str] = field(default_factory=dict)  # exe wskazany dla gry spoza Steama: id → ścieżka
     auto_start: bool = False
     language: str = DEFAULT_LANGUAGE  # język interfejsu i nazw bossów (i18n.LANGUAGES)
 
@@ -223,25 +238,38 @@ class AppConfig:
     def game_name(self, game: str) -> str:
         return self.all_games().get(game, game)
 
-    def add_game(self, name: str) -> str:
-        """Dodaje grę użytkownika i zwraca jej id (nazwa folderu). ValueError z opisem, gdy nazwa się nie nadaje."""
+    def add_game(self, name: str, appid: int | None = None) -> str:
+        """Dodaje grę użytkownika i zwraca jej id (nazwa folderu). ValueError z opisem, gdy nazwa się nie nadaje.
+        `appid` – numer gry w Steam (gra znaleziona w bibliotece Steam)."""
         name = " ".join(name.split())
         if not name:
             raise ValueError(tr("Podaj nazwę gry."))
         if len(name) > GAME_NAME_MAX:
             raise ValueError(tr("Nazwa gry może mieć najwyżej {GAME_NAME_MAX} znaków.", GAME_NAME_MAX=GAME_NAME_MAX))
-        if any(existing.casefold() == name.casefold() for existing in self.all_games().values()):
+        if self.has_game_named(name):
             raise ValueError(tr("Gra „{name}” jest już na liście.", name=name))
         base = _slug(name) or "gra"
         game_id, number = base, 2
         while game_id in self.all_games():
             game_id, number = f"{base}-{number}", number + 1
         self.custom_games[game_id] = name
+        if appid is not None:
+            self.steam_appids[game_id] = appid
         return game_id
+
+    def steam_game(self, appid: int) -> str | None:
+        """Id gry dodanej wcześniej ze Steama pod tym AppID."""
+        return next((game_id for game_id, known in self.steam_appids.items() if known == appid), None)
+
+    def has_game_named(self, name: str) -> bool:
+        name = " ".join(name.split()).casefold()
+        return any(existing.casefold() == name for existing in self.all_games().values())
 
     def remove_game(self, game: str) -> None:
         """Usuwa grę dodaną przez użytkownika z listy (gier wbudowanych nie można usunąć)."""
         self.custom_games.pop(game, None)
+        self.steam_appids.pop(game, None)
+        self.game_exes.pop(game, None)
         if self.game == game:
             self.game = DEFAULT_GAME
 
@@ -287,6 +315,7 @@ class AppPaths:
     boss_names: Path
     recent_fights: Path
     attempts: Path
+    session: Path
 
     @classmethod
     def for_game(cls, base: Path, game: str) -> "AppPaths":
@@ -307,6 +336,7 @@ class AppPaths:
             game_dir / "boss_names.json",
             game_dir / "recent_fights.json",
             game_dir / "attempts.json",
+            game_dir / "session.json",
         )
 
     def template_path(self, kind: str) -> Path:
@@ -356,6 +386,7 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
     if not (isinstance(bosses, dict) and "bar_threshold" in bosses):
         # Wcześniej pasek bossa używał wspólnego progu – zostaje taki, jaki był ustawiony.
         config.bosses.bar_threshold = config.detector.threshold
+    _fill(config.session, data.get("session"))
     _fill(config.discord, data.get("discord"))
     _fill(config.hotkeys, data.get("hotkeys"))
     _fill(config.ui, data.get("ui"))
@@ -368,12 +399,26 @@ def load_config(path: Path) -> tuple[AppConfig, str | None]:
             if isinstance(game_id, str) and _GAME_ID.match(game_id) and game_id not in GAMES
             and isinstance(name, str) and name.strip()
         }
+    appids = data.get("steam_appids")
+    if isinstance(appids, dict):
+        config.steam_appids = {
+            game_id: appid for game_id, appid in appids.items()
+            if game_id in config.custom_games and isinstance(appid, int) and not isinstance(appid, bool) and appid > 0
+        }
+    exes = data.get("game_exes")
+    if isinstance(exes, dict):
+        config.game_exes = {
+            game_id: exe for game_id, exe in exes.items()
+            if game_id in config.custom_games and isinstance(exe, str) and exe.lower().endswith(".exe")
+        }
     if data.get("game") in config.all_games():
         config.game = data["game"]
     if isinstance(data.get("player_name"), str):
         config.player_name = " ".join(data["player_name"].split())[:GAME_NAME_MAX]
     if isinstance(data.get("auto_start"), bool):
         config.auto_start = data["auto_start"]
+    if isinstance(data.get("steam_offered"), bool):
+        config.steam_offered = data["steam_offered"]
     if data.get("language") in LANGUAGES:
         config.language = data["language"]
     for part in (config.detector, config.capture, config.overlay, config.bosses, config.discord, config.hotkeys,

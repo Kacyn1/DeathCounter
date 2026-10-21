@@ -22,6 +22,7 @@ from . import recent_fights
 from .attempts import Attempt, AttemptLog
 from .boss_names import BossNames, base_name, is_placeholder, same_boss
 from .ocr import normalize
+from .play_session import SessionView
 from .recent_fights import RecentFights
 from .storage import StorageError, atomic_write_text
 from .i18n import tr, N_
@@ -620,9 +621,12 @@ def format_duration(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
-def overlay_text(deaths: int, boss: BossView | None) -> str:
-    """Wspólny tekst nakładki-okna i RTSS. Po zwycięstwie zostaje sam ogólny licznik."""
+def overlay_text(deaths: int, boss: BossView | None, session: SessionView | None = None) -> str:
+    """Wspólny tekst nakładki-okna i RTSS. Po zwycięstwie zostaje sam ogólny licznik.
+    `session` – linia z bieżącą sesją (opcja „Pokaż sesję na nakładce”)."""
     lines = [f"DEATHS: {deaths}"]
+    if session is not None:
+        lines.append(tr("Sesja: {deaths} · {time}", deaths=session.deaths, time=format_duration(session.seconds)))
     if boss is not None and boss.state is not BossState.DEFEATED:
         lines.append(tr("{name} — deaths: {deaths}", name=boss.name, deaths=boss.deaths))
         lines.append(tr("Czas: {seconds}", seconds=format_duration(boss.seconds)))

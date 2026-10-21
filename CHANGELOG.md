@@ -1,5 +1,19 @@
 # Historia zmian
 
+## 1.11.0
+
+- Nowa sekcja „Aktualna sesja” pod „Walką z bossem”: śmierci i czas bieżącej sesji. Sesja zaczyna się, gdy uruchomisz grę – program co 2 s sprawdza listę procesów Windows (tylko odczyt, gra nie jest w żaden sposób dotykana). Czas biegnie tylko wtedy, gdy gra jest aktywnym oknem – stoi, gdy gra jest zminimalizowana, w tle po Alt+Tab (także w oknie bez ramek) albo ekran jest zablokowany. Po powrocie do gry rusza, gdy kolejne sprawdzenie po ok. 2 s potwierdzi, że gra nadal jest aktywna, i te 2 s są doliczane. Powrót do gry w ciągu 15 minut (np. po wysypaniu się gry) kontynuuje tę samą sesję, a czas przerwy się nie liczy. Sesja jest osobna dla każdej gry, zapisuje się w `session.json` w folderze gry i przetrwa ponowne uruchomienie programu. Śledzenie można wyłączyć polem „Śledź sesję”.
+- Opcja „Pokaż sesję na nakładce” dodaje do nakładki i RTSS linię „Sesja: 12 · 01:40:12”. Status na Discordzie pokazuje czas od początku sesji.
+- Licznik sam przełącza się na grę, którą uruchomisz (opcja „Przełączaj licznik na uruchomioną grę”, domyślnie włączona). Gdy ta gra nie ma jeszcze kalibracji, program o tym informuje i miga na pasku zadań. Przełączenie następuje tylko w chwili uruchomienia gry, więc ręczny wybór innej gry w trakcie grania zostaje.
+- Gry wbudowane program rozpoznaje po nazwie exe, gry ze Steama – po folderze instalacji, a gry dodane ręcznie – po nazwie zainstalowanej gry Steam. Dla gier spoza Steama (np. GOG, Epic) jest przycisk „Wskaż exe gry…”.
+- Nowa pozycja na liście gier: „Znajdź zainstalowane gry ze Steam…”. Program czyta z plików Steama na tym komputerze listę zainstalowanych gier (ze wszystkich bibliotek, także na innych dyskach) i sprawdza w sklepie Steam, które z nich mają tag „Souls-like”. Znalezione gry pokazuje do zaznaczenia, a po kliknięciu „Dodaj zaznaczone” tworzy dla nich liczniki. Nie trzeba logować się do Steama ani podawać klucza API. Do sklepu trafiają tylko numery gier (AppID).
+- Gry z tagiem wśród 3 głównych tagów (albo z wbudowanej listy) są zaznaczone. Gry z tagiem na miejscach 4–10 trafiają do osobnej, niezaznaczonej sekcji „Możliwe souls-like” – to zwykle gry tylko inspirowane soulsami, np. Armored Core VI czy Dead Cells. Gry z tagiem dalej nie są pokazywane.
+- Bez internetu program korzysta z wbudowanej listy 25 znanych gier souls-like (m.in. Lies of P, Nioh 1–2, Lords of the Fallen, Remnant 1–2, Hollow Knight, Black Myth: Wukong).
+- Gry wbudowane w program (Dark Souls I–III, Sekiro, Elden Ring) są rozpoznawane po AppID i nie są dodawane drugi raz. Gry dodane wcześniej ze Steama albo o tej samej nazwie też są pomijane.
+- Przy pierwszym uruchomieniu na komputerze ze Steamem program raz proponuje wyszukanie gier.
+- Gier FromSoftware nie można usunąć z listy: przy nich przycisk „Usuń licznik” nazywa się teraz „Resetuj licznik”. Zeruje licznik śmierci i bossów (pliki trafiają do Kosza), a kalibracja zostaje.
+- Okno programu mieści się na mniejszych ekranach (np. Full HD albo skalowanie 125–150%): ma wysokość ekranu, a zawartość przewija się w pionie. Okno dopasowuje wysokość przy starcie, przy zwijaniu i rozwijaniu sekcji oraz po przeciągnięciu na inny monitor, i nigdy nie wystaje poza ekran. Można je też dowolnie zmniejszyć w pionie.
+
 ## 1.10.0
 
 - Program ma angielską wersję językową. Język (PL / ENG) wybiera się w oknie „O programie” – lista „Język” z flagami w prawym górnym rogu; po zmianie program uruchamia się ponownie w nowym języku. Przy pierwszym uruchomieniu język dobiera się do języka Windows, a dotychczasowi użytkownicy zostają przy polskim. Przetłumaczony jest cały interfejs, komunikaty i certyfikat PDF.

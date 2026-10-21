@@ -114,6 +114,7 @@ EN = {
     "Utracono obraz w trakcie walki – kontynuuj walkę albo zatwierdź wynik.":
         "The image was lost during the fight – continue the fight or confirm the result.",
     "{name} — deaths: {deaths}": "{name} — deaths: {deaths}",
+    "Sesja: {deaths} · {time}": "Session: {deaths} · {time}",
     "Czas: {seconds}": "Time: {seconds}",
     "niepoprawny JSON": "invalid JSON",
     "wpis „{name}” nie jest obiektem": "entry “{name}” is not an object",
@@ -284,14 +285,29 @@ EN = {
     "Okno + RTSS": "Window + RTSS",
     "Okno na wierzchu": "Window on top",
     "Tylko RTSS (pełny ekran)": "RTSS only (fullscreen)",
-    "Każda gra ma własny licznik śmierci, bossów i kalibrację.\n„+ Dodaj grę…” tworzy nowy licznik dla gry spoza listy.":
+    "Każda gra ma własny licznik śmierci, bossów i kalibrację.\n„+ Dodaj grę…” tworzy nowy licznik dla gry spoza "
+    "listy, a „Znajdź zainstalowane gry ze Steam…”\ndodaje liczniki dla gier souls-like.":
         "Each game has its own death counter, bosses and calibration.\n“+ Add game…” creates a new counter for a "
-        "game that is not on the list.",
+        "game that is not on the list, and “Find installed Steam games…”\nadds counters for souls-like games.",
     "Usuń licznik": "Delete counter",
-    "Gra dodana przez Ciebie znika z listy razem z licznikiem, bossami i kalibracją.\nPrzy grze wbudowanej usuwa "
-    "licznik śmierci i bossów, a kalibracja zostaje. Pliki trafiają do Kosza.":
-        "A game you added disappears from the list together with its counter, bosses and calibration.\nFor a "
-        "built-in game it deletes the death counter and bosses, and the calibration stays. Files go to the Recycle Bin.",
+    "Resetuj licznik": "Reset counter",
+    "Gra znika z listy razem z licznikiem, bossami i kalibracją. Pliki trafiają do Kosza.":
+        "The game disappears from the list together with its counter, bosses and calibration. Files go to the "
+        "Recycle Bin.",
+    "Gier FromSoftware nie można usunąć z listy. Reset zeruje licznik śmierci i bossów,\na kalibracja zostaje. "
+    "Pliki trafiają do Kosza.":
+        "FromSoftware games cannot be removed from the list. A reset clears the death counter and bosses,\nand the "
+        "calibration stays. Files go to the Recycle Bin.",
+    "Czy na pewno chcesz zresetować licznik {name}?": "Are you sure you want to reset the {name} counter?",
+    "Zresetowano licznik {name} (pliki są w Koszu).": "Reset the {name} counter (the files are in the Recycle Bin).",
+    "Znajdź zainstalowane gry ze Steam…": "Find installed Steam games…",
+    "Gry ze Steama": "Steam games",
+    "Na tym komputerze jest Steam. Sprawdzić zainstalowane gry i dodać liczniki dla gier souls-like?\n\n"
+    "Później zrobisz to pozycją „Znajdź zainstalowane gry ze Steam…” na liście gier.":
+        "Steam is installed on this computer. Check the installed games and add counters for souls-like games?\n\n"
+        "You can do it later with “Find installed Steam games…” on the game list.",
+    "Dodano gry ze Steama: {names}. Wybierz grę z listy i wykonaj kalibrację.":
+        "Added Steam games: {names}. Choose a game from the list and calibrate it.",
     "Gra:": "Game:",
     "ŚMIERCI": "DEATHS",
     "Stan": "Status",
@@ -635,6 +651,76 @@ EN = {
         "The selected area is almost uniform. Select the text or the bar frame, not just the background.",
     "Brak pliku wzorca {name}. Wykonaj kalibrację.": "The template file {name} is missing. Calibrate.",
     "Nie można zakodować obrazu wzorca.": "Cannot encode the template image.",
+
+    # main_window.py – aktualna sesja
+    "Aktualna sesja": "Current session",
+    "Śledź sesję": "Track session",
+    "Sesja zaczyna się, gdy uruchomisz grę, a czas biegnie tylko wtedy, gdy gra jest włączona\n"
+    "i jest aktywnym oknem – stoi, gdy gra jest zminimalizowana albo w tle po Alt+Tab\n"
+    "(po powrocie do gry czas rusza po ok. 2 s, które też są doliczane).\n"
+    "Powrót do gry w ciągu 15 minut (np. po wysypaniu się gry) kontynuuje tę samą sesję.":
+        "A session starts when you launch the game, and its time runs only while the game is running\n"
+        "and is the active window – it pauses while the game is minimised or in the background after Alt+Tab\n"
+        "(after you return to the game the time starts after about 2 s, which are counted too).\n"
+        "Returning to the game within 15 minutes (e.g. after a crash) continues the same session.",
+    "Przełączaj licznik na uruchomioną grę": "Switch the counter to the running game",
+    "Gdy uruchomisz inną grę z listy, licznik sam się na nią przełączy.\n"
+    "Ręczny wybór gry w trakcie grania nie jest cofany.":
+        "When you launch another game from the list, the counter switches to it by itself.\n"
+        "Choosing a game by hand while playing is not undone.",
+    "Pokaż sesję na nakładce": "Show session on the overlay",
+    "Nakładka i RTSS pokazują śmierci i czas sesji, gdy gra jest uruchomiona.":
+        "The overlay and RTSS show the session deaths and time while the game is running.",
+    "Stan:": "State:",
+    "Śmierci:": "Deaths:",
+    "Czas:": "Time:",
+    "Uruchomiono grę {name} – licznik przełączył się na nią.": "{name} was launched – the counter switched to it.",
+    "Ta gra nie ma jeszcze kalibracji – kliknij „Kalibracja…”, żeby liczyć śmierci.":
+        "This game is not calibrated yet – click “Calibration…” to count deaths.",
+    "Nie zapisano sesji: {exc}": "The session was not saved: {exc}",
+    "Wskaż exe gry": "Choose the game's exe",
+    "Programy (*.exe)": "Programs (*.exe)",
+    "Zmień exe gry…": "Change game exe…",
+    "Wskaż exe gry…": "Choose game exe…",
+    "Program nie zna exe tej gry – wskaż go, żeby śledzić sesję.":
+        "The program does not know this game's exe – choose it to track the session.",
+    "Śledzenie sesji jest wyłączone.": "Session tracking is off.",
+    "Program nie wie, jak rozpoznać tę grę – wskaż jej exe.":
+        "The program does not know how to recognise this game – choose its exe.",
+    "Gra uruchomiona ({exe})": "Game running ({exe})",
+    "Gra w tle ({exe}) – czas sesji stoi.": "Game in the background ({exe}) – the session time is paused.",
+    "Gra zamknięta – powrót w ciągu {minutes} min kontynuuje sesję.":
+        "Game closed – returning within {minutes} min continues the session.",
+    "Czekam na uruchomienie gry.": "Waiting for the game to start.",
+    "ostatnia sesja": "last session",
+
+    # steam_library.py
+    "Brak połączenia ze sklepem Steam ({exc}).": "No connection to the Steam store ({exc}).",
+    "Nieczytelna odpowiedź sklepu Steam ({exc}).": "Unreadable response from the Steam store ({exc}).",
+    "Nie znaleziono Steama na tym komputerze.": "Steam was not found on this computer.",
+
+    # steam_dialog.py
+    "tag Souls-like w Steam": "Souls-like tag on Steam",
+    "znana gra souls-like": "known souls-like game",
+    "inspirowana soulsami": "inspired by Souls",
+    "Możliwe souls-like – tag „Souls-like” jest dalej wśród tagów gry. Zaznacz, jeśli gra ma ekran śmierci:":
+        "Possible souls-like – the “Souls-like” tag is lower among the game's tags. Select a game if it has a "
+        "death screen:",
+    "Program czyta listę zainstalowanych gier z plików Steama na tym komputerze. Do sklepu Steam wysyła tylko ich "
+    "numery (AppID), żeby sprawdzić tag „Souls-like”.":
+        "The program reads the list of installed games from Steam's files on this computer. It sends only their "
+        "numbers (AppID) to the Steam store to check the “Souls-like” tag.",
+    "Sprawdzanie biblioteki Steam…": "Checking the Steam library…",
+    "Dodaj zaznaczone": "Add selected",
+    "Anuluj": "Cancel",
+    "Zainstalowane gry: {installed}. Souls-like: {sure}, możliwe souls-like: {maybe}.":
+        "Installed games: {installed}. Souls-like: {sure}, possible souls-like: {maybe}.",
+    "Nie udało się sprawdzić tagów: {error} Użyto wbudowanej listy znanych gier.":
+        "Could not check the tags: {error} The built-in list of known games was used.",
+    "Zaznacz gry, które mają dostać licznik.": "Select the games that should get a counter.",
+    "Brak nowych gier do dodania.": "No new games to add.",
+    "{name} – wbudowana w program ({game})": "{name} – built into the program ({game})",
+    "{name} – już na liście": "{name} – already on the list",
 
     # updater.py
     "Nieczytelny numer wersji w wydaniu: {get!r}.": "Unreadable version number in the release: {get!r}.",

@@ -1,4 +1,4 @@
-"""Cienkie opakowania funkcji Windows API (ctypes) używanych przez nakładkę i skrót klawiszowy."""
+"""Cienkie opakowania funkcji Windows API (ctypes): nakładka, skróty klawiszowe, Kosz i lista procesów."""
 
 from __future__ import annotations
 
@@ -115,3 +115,56 @@ user32.SendMessageW.restype = wintypes.LPARAM
 def set_big_icon(hwnd: int, hicon: int) -> None:
     """Duża ikona okna – z niej Windows rysuje przycisk na pasku zadań."""
     user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon)
+
+
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+MAX_PROCESSES = 8192
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+kernel32.K32EnumProcesses.argtypes = [ctypes.POINTER(wintypes.DWORD), wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+kernel32.K32EnumProcesses.restype = wintypes.BOOL
+kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+kernel32.OpenProcess.restype = wintypes.HANDLE
+kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                                                ctypes.POINTER(wintypes.DWORD)]
+kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+kernel32.CloseHandle.restype = wintypes.BOOL
+
+
+def process_paths() -> dict[int, str]:
+    """PID → pełna ścieżka exe działających procesów. Tylko odczyt – procesy (w tym gra) nie są w żaden sposób
+    zmieniane; procesy, do których Windows nie daje dostępu, są pomijane."""
+    pids = (wintypes.DWORD * MAX_PROCESSES)()
+    needed = wintypes.DWORD()
+    if not kernel32.K32EnumProcesses(pids, ctypes.sizeof(pids), ctypes.byref(needed)):
+        return {}
+    paths = {}
+    buffer = ctypes.create_unicode_buffer(1024)
+    for pid in pids[:needed.value // ctypes.sizeof(wintypes.DWORD)]:
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            continue
+        try:
+            size = wintypes.DWORD(len(buffer))
+            if kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
+                paths[pid] = buffer.value
+        finally:
+            kernel32.CloseHandle(handle)
+    return paths
+
+
+
+user32.GetForegroundWindow.argtypes = []
+user32.GetForegroundWindow.restype = wintypes.HWND
+user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+
+
+def foreground_pid() -> int | None:
+    """PID procesu, do którego należy aktywne okno (None – brak, np. zablokowany ekran)."""
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return None
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return pid.value or None

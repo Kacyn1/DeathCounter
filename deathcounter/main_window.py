@@ -13,8 +13,10 @@ from PySide6.QtCore import QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QFont, QIcon
 from PySide6.QtNetwork import QLocalServer
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QFrame,
@@ -28,13 +30,15 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSpinBox,
+    QStyle,
     QVBoxLayout,
     QWidget,
 )
 from shiboken6 import isValid
 
-from . import hotkeys, legal, updater, winapi
+from . import game_process, hotkeys, legal, updater, winapi
 from .boss_panel import BossPanel
 from .collapsible import CollapsibleBox
 from .bosses import BossState, BossTracker, format_duration, overlay_text
@@ -52,6 +56,9 @@ from .overlay import OverlayWindow
 from .results_window import ResultsWindow
 from .report import Adjustments, CertificateData, Verdict, rows_from_records, verify_pdf, write_certificate
 from .signing import load_key
+from .steam_dialog import SteamScanDialog
+from .steam_library import find_steam, installed_games
+from .play_session import GAP_SECONDS
 from .rtss import RtssOsd, RtssState
 from .storage import StorageError
 from .template import DeathTemplate, load_source_image, save_source_image
@@ -77,7 +84,10 @@ TIMEOUT_MS_ON_CLOSE = 20000          # zamknięcie czeka na wątek aktualizacji 
 # Skróty globalne (działają także w pełnym ekranie): identyfikator RegisterHotKey → pole HotkeySettings.
 HOTKEY_IDS = {0xD52: "snapshot", 0xD53: "plus", 0xD54: "minus", 0xD55: "overlay"}
 ADD_GAME = "__add_game__"  # pozycja „+ Dodaj grę…” na liście gier
+STEAM_SCAN = "__steam_scan__"  # pozycja „Znajdź zainstalowane gry ze Steam…”
 RTSS_REFRESH_MS = 2000
+WINDOW_WIDTH = 640  # początkowa szerokość okna; wysokość dopasowuje się do zawartości i ekranu
+PROCESS_CHECK_MS = 2000  # co tyle sprawdzamy, która gra jest uruchomiona
 BOSS_REFRESH_MS = 1000
 OVERLAY_MODE_LABELS = {
     "both": N_("Okno + RTSS"),
@@ -117,7 +127,13 @@ class MainWindow(QMainWindow):
         self._rtss_setup: RtssSetupWorker | None = None
         self.discord: DiscordPresence | None = None
         self._discord_state = ""                  # ustawiany z wątku Discorda, pokazywany co sekundę
-        self._session_started = int(time.time())  # „gra od…” w statusie Discorda
+        self._session_started = int(time.time())  # „gra od…” w statusie Discorda, gdy nie śledzimy sesji
+        self._matchers: dict[str, game_process.GameMatcher] = {}  # jak rozpoznać proces każdej gry
+        self._steam_folders: set[str] = set()  # gry rozpoznawane po folderze instalacji Steama
+        self._running_games: set[str] = set()  # gry uruchomione przy ostatnim sprawdzeniu
+        self._running_exe: str | None = None   # exe wybranej gry, gdy działa
+        self._auto_switched: str | None = None  # gra, na którą licznik przełączył się sam
+        self._refresh_matchers()
 
         self.overlay = OverlayWindow(config.overlay)
         self.rtss = RtssOsd()
@@ -130,6 +146,8 @@ class MainWindow(QMainWindow):
         # Timer walki: odświeża czas w panelu i nakładce oraz co kilka sekund zapisuje go do pliku.
         self._boss_timer = QTimer(self, interval=BOSS_REFRESH_MS)
         self._boss_timer.timeout.connect(self._on_boss_tick)
+        self._process_timer = QTimer(self, interval=PROCESS_CHECK_MS)
+        self._process_timer.timeout.connect(self._on_process_tick)
 
         self._build_ui()
         self._apply_overlay()
@@ -138,7 +156,10 @@ class MainWindow(QMainWindow):
         self._refresh_boss_hint()
         self._set_status(self._idle_status(), self._idle_message())
         QTimer.singleShot(0, self._report_fixed_names)  # okno najpierw się pokazuje
+        QTimer.singleShot(800, self._offer_steam_scan)
         self._boss_timer.start()
+        self._process_timer.start()
+        QTimer.singleShot(1000, self._on_process_tick)  # gra uruchomiona przed programem
         self._apply_discord()
 
         if config.auto_start and self.templates["death"] is not None:
@@ -156,16 +177,14 @@ class MainWindow(QMainWindow):
         self._fill_games()
         self.game_combo.setToolTip(
             tr("Każda gra ma własny licznik śmierci, bossów i kalibrację.\n"
-            "„+ Dodaj grę…” tworzy nowy licznik dla gry spoza listy.")
+            "„+ Dodaj grę…” tworzy nowy licznik dla gry spoza listy, a „Znajdź zainstalowane gry ze Steam…”\n"
+            "dodaje liczniki dla gier souls-like.")
         )
         self.game_combo.setMinimumWidth(260)
         self.game_combo.currentIndexChanged.connect(self._on_game_selected)
-        self.delete_counter_button = QPushButton(tr("Usuń licznik"))
-        self.delete_counter_button.setToolTip(
-            tr("Gra dodana przez Ciebie znika z listy razem z licznikiem, bossami i kalibracją.\n"
-            "Przy grze wbudowanej usuwa licznik śmierci i bossów, a kalibracja zostaje. Pliki trafiają do Kosza.")
-        )
+        self.delete_counter_button = QPushButton()
         self.delete_counter_button.clicked.connect(self.confirm_delete_counter)
+        self._refresh_delete_button()
         game_row = QHBoxLayout()
         game_row.addStretch(1)
         game_row.addWidget(QLabel(tr("Gra:")))
@@ -247,6 +266,7 @@ class MainWindow(QMainWindow):
         self.boss_panel.calibrate_requested.connect(lambda: self.open_calibration("boss_bar"))
         self.boss_panel.results_requested.connect(self.open_results)
         root.addWidget(self.boss_panel)
+        root.addWidget(self._build_session_box())
 
         settings_row = QHBoxLayout()
         settings_row.addWidget(self._build_overlay_box(), 1, Qt.AlignmentFlag.AlignTop)
@@ -281,8 +301,16 @@ class MainWindow(QMainWindow):
         footer_row.addWidget(about_button)
         root.addLayout(footer_row)
 
-        self.setCentralWidget(central)
-        self.resize(640, 860)
+        # Na mniejszych ekranach (np. Full HD, skalowanie 125–150%) okno nie mieści całej zawartości –
+        # wtedy zawartość przewija się w pionie, a okno ma wysokość ekranu.
+        self._content = central
+        scroll = QScrollArea()
+        scroll.setWidget(central)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.setCentralWidget(scroll)
+        self._fitted = False
+        self.resize(WINDOW_WIDTH, central.minimumSizeHint().height())
 
     def _collapsible(self, title: str, setting: str) -> tuple[CollapsibleBox, QFormLayout]:
         box = CollapsibleBox(title, getattr(self.config.ui, setting))
@@ -292,11 +320,77 @@ class MainWindow(QMainWindow):
     def _on_section_collapsed(self, setting: str, collapsed: bool) -> None:
         setattr(self.config.ui, setting, collapsed)
         self._save_timer.start()
-        if collapsed:
-            # Okno kurczy się o zwiniętą sekcję (rozwinięcie samo je powiększy, jeśli trzeba).
-            for layout in (self.centralWidget().layout(), self.layout()):
-                layout.activate()  # przelicza wysokość od razu, bez ukrytej sekcji
-            self.resize(self.width(), self.minimumSizeHint().height())
+        self._fit_to_screen()  # okno kurczy się o zwiniętą sekcję albo rośnie o rozwiniętą, o ile jest miejsce
+
+    def _fit_to_screen(self, move: bool = True) -> None:
+        """Okno tak wysokie jak zawartość, ale nie wyższe niż ekran (resztę przewija pasek przewijania).
+        `move` – także przesuwa okno, żeby nie wystawało poza ekran (nie w trakcie przeciągania na inny monitor)."""
+        self._content.layout().activate()  # przelicza wysokość od razu, np. bez zwiniętej sekcji
+        screen = (self.screen() or QApplication.primaryScreen()).availableGeometry()
+        frame = self.frameGeometry()
+        # Ramka i pasek tytułu okna (przed pierwszym pokazaniem okna Windows jeszcze ich nie podaje – wtedy 0).
+        extra_w, extra_h = frame.width() - self.width(), frame.height() - self.height()
+        # Okno zawsze ma miejsce na pionowy pasek przewijania: gdy pojawi się przy zmniejszaniu wysokości okna,
+        # zawartość nie traci szerokości (inaczej pojawiłby się też pasek poziomy).
+        bar = self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
+        width = min(max(WINDOW_WIDTH, self._content.minimumSizeHint().width() + bar), screen.width() - extra_w)
+        self.centralWidget().setMinimumWidth(width)
+        needed = self._content_height(width)
+        if needed > screen.height() - extra_h:
+            needed = self._content_height(width - bar)  # z paskiem przewijania zawartość jest o niego węższa
+        self.resize(width, min(needed, screen.height() - extra_h))
+        if not move:
+            return
+        frame = self.frameGeometry()
+        x = min(max(frame.left(), screen.left()), screen.right() + 1 - frame.width())
+        y = min(max(frame.top(), screen.top()), screen.bottom() + 1 - frame.height())
+        if (x, y) != (frame.left(), frame.top()):
+            self.move(x, y)  # okno nie wystaje poza ekran
+
+    def _content_height(self, width: int) -> int:
+        """Wysokość zawartości przy danej szerokości (zawijane etykiety są wyższe, gdy jest węższa)."""
+        content = self._content
+        return content.heightForWidth(width) if content.hasHeightForWidth() else content.sizeHint().height()
+
+    def _build_session_box(self) -> QGroupBox:
+        box, form = self._collapsible(tr("Aktualna sesja"), "session_collapsed")
+        s = self.config.session
+        self.session_track = QCheckBox(tr("Śledź sesję"))
+        self.session_track.setChecked(s.track)
+        self.session_track.setToolTip(
+            tr("Sesja zaczyna się, gdy uruchomisz grę, a czas biegnie tylko wtedy, gdy gra jest włączona\n"
+               "i jest aktywnym oknem – stoi, gdy gra jest zminimalizowana albo w tle po Alt+Tab\n"
+               "(po powrocie do gry czas rusza po ok. 2 s, które też są doliczane).\n"
+               "Powrót do gry w ciągu 15 minut (np. po wysypaniu się gry) kontynuuje tę samą sesję."))
+        self.session_switch = QCheckBox(tr("Przełączaj licznik na uruchomioną grę"))
+        self.session_switch.setChecked(s.auto_switch)
+        self.session_switch.setToolTip(
+            tr("Gdy uruchomisz inną grę z listy, licznik sam się na nią przełączy.\n"
+               "Ręczny wybór gry w trakcie grania nie jest cofany."))
+        self.session_overlay = QCheckBox(tr("Pokaż sesję na nakładce"))
+        self.session_overlay.setChecked(s.show_on_overlay)
+        self.session_overlay.setToolTip(tr("Nakładka i RTSS pokazują śmierci i czas sesji, gdy gra jest uruchomiona."))
+        for check in (self.session_track, self.session_switch, self.session_overlay):
+            check.toggled.connect(self._on_session_settings)
+        options = QHBoxLayout()
+        options.addWidget(self.session_track)
+        options.addWidget(self.session_switch, 1)
+        form.addRow(options)
+        self.session_state = QLabel()
+        self.session_state.setWordWrap(True)
+        self.session_deaths = QLabel("–")
+        self.session_time = QLabel("–")
+        form.addRow(tr("Stan:"), self.session_state)
+        form.addRow(tr("Śmierci:"), self.session_deaths)
+        form.addRow(tr("Czas:"), self.session_time)
+        self.session_exe_button = QPushButton()
+        self.session_exe_button.clicked.connect(self._pick_game_exe)
+        bottom = QHBoxLayout()
+        bottom.addWidget(self.session_overlay, 1)
+        bottom.addWidget(self.session_exe_button)
+        form.addRow(bottom)
+        self._refresh_session()
+        return box
 
     def _build_overlay_box(self) -> QGroupBox:
         box, form = self._collapsible(tr("Nakładka"), "overlay_collapsed")
@@ -417,6 +511,7 @@ class MainWindow(QMainWindow):
     def _change_deaths(self, operation, manual: bool, boss_event=None, correction: bool = False) -> None:
         """Zmienia ogólny licznik (deaths.json), a potem – jeśli trzeba – licznik bossa (bosses.json).
         `correction` – ręczna korekta (przycisk, skrót, reset), zapisywana w rejestrze zmian."""
+        before = self.store.deaths
         try:
             operation()
         except StorageError as exc:
@@ -425,6 +520,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, tr("Błąd zapisu"), str(exc))
         else:
             self._clear_error()
+            self._session_deaths(operation, self.store.deaths - before)
             if self.audit is not None:
                 self.audit.deaths_changed(self.store.deaths, manual=correction)
                 try:
@@ -473,6 +569,7 @@ class MainWindow(QMainWindow):
             self.boss_panel.set_note(text)
             self.notice_label.setText(text)
             self.diag.write(f"BOSS: {text}")
+        self._refresh_session()
         self._refresh_overlay()
         self._refresh_discord_label()
         self._refresh_results()
@@ -563,6 +660,7 @@ class MainWindow(QMainWindow):
         self.calibration = game.calibration
         self.templates = dict(game.templates)
         self.audit = game.audit
+        self.session = game.session
         if game.boss_names is not None:
             game.boss_names.min_ratio = self.config.bosses.name_match_ratio
         self.bosses = BossTracker(game.boss_store, audit=game.audit, names=game.boss_names, recent=game.recent,
@@ -600,6 +698,7 @@ class MainWindow(QMainWindow):
             combo.addItem(name, game_id)
         combo.insertSeparator(combo.count())
         combo.addItem(tr("+ Dodaj grę…"), ADD_GAME)
+        combo.addItem(tr("Znajdź zainstalowane gry ze Steam…"), STEAM_SCAN)
         combo.setCurrentIndex(max(0, combo.findData(self._pending_game or self.paths.game)))
         combo.blockSignals(False)
 
@@ -617,13 +716,56 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, tr("Dodaj grę"), str(exc))
             return
         self._save_config()
+        self._refresh_matchers()
         self._fill_games()
         self.game_combo.setCurrentIndex(self.game_combo.findData(game_id))  # przełącza na nową grę
+
+    def _offer_steam_scan(self) -> None:
+        """Raz, gdy na komputerze jest Steam: propozycja dodania liczników dla zainstalowanych gier souls-like."""
+        if self.config.steam_offered or find_steam() is None:
+            return
+        self.config.steam_offered = True
+        self._save_config()
+        answer = QMessageBox.question(
+            self, tr("Gry ze Steama"),
+            tr("Na tym komputerze jest Steam. Sprawdzić zainstalowane gry i dodać liczniki dla gier souls-like?\n\n"
+               "Później zrobisz to pozycją „Znajdź zainstalowane gry ze Steam…” na liście gier."),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self._scan_steam()
+
+    def _scan_steam(self) -> None:
+        self._fill_games()  # lista wraca do bieżącej gry
+        dialog = SteamScanDialog(self, self.config)
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        games = dialog.selected() if accepted else []
+        dialog.deleteLater()
+        added = []
+        for game in games:
+            try:
+                self.config.add_game(game.name, game.appid)
+            except ValueError as exc:
+                self.diag.write(f"STEAM: pominięto {game.name} ({game.appid}): {exc}")
+                continue
+            added.append(game.name)
+        if not added:
+            return
+        self._save_config()
+        self._refresh_matchers()
+        self._fill_games()
+        self.diag.write(f"STEAM: dodano gry: {', '.join(added)}")
+        self.notice_label.setText(tr("Dodano gry ze Steama: {names}. Wybierz grę z listy i wykonaj kalibrację.",
+                                     names=", ".join(added)))
 
     def _on_game_selected(self) -> None:
         game_id = self.game_combo.currentData()
         if game_id == ADD_GAME:
             self._add_game()
+            return
+        if game_id == STEAM_SCAN:
+            self._scan_steam()
             return
         if game_id == self.paths.game and self._pending_game is None:
             return
@@ -636,6 +778,7 @@ class MainWindow(QMainWindow):
 
     def _switch_game(self, game_id: str, restart: bool, reload: bool = False) -> None:
         """Wczytuje dane gry; `reload` – ponownie tej samej (po usunięciu jej licznika, bez zapisu starych danych)."""
+        auto, self._auto_switched = self._auto_switched == game_id, None
         if game_id != self.paths.game or reload:
             if not reload:
                 self._boss_event(self.bosses.pause)  # czas trwającej walki zostaje zapisany
@@ -648,6 +791,8 @@ class MainWindow(QMainWindow):
                 self.game_combo.blockSignals(False)
                 game = None
             if game is not None:
+                if not reload:
+                    self._stop_session()  # czas sesji poprzedniej gry zostaje zapisany
                 self._use_game(game)
                 self._session_started = int(time.time())
                 self.config.game = game_id
@@ -656,9 +801,13 @@ class MainWindow(QMainWindow):
                 self._refresh_count()
                 self._refresh_template_label()
                 self._refresh_footer()
+                self._refresh_delete_button()
                 self._set_status(self._idle_status(), self._idle_message())
                 self.notice_label.setText(tr("Wybrano grę: {game_name}.", game_name=self.config.game_name(game_id)))
                 self.diag.write(f"ZMIANA GRY: {self.config.game_name(game_id)}, śmierci: {self.store.deaths}")
+                if auto:
+                    self._report_auto_switch(game_id)
+                self._refresh_session()
                 for warning in game.warnings:
                     QMessageBox.warning(self, "Death Counter by MK", warning)
                 self._report_fixed_names()
@@ -667,19 +816,32 @@ class MainWindow(QMainWindow):
         if (restart or self.config.auto_start) and self.templates["death"] is not None:
             self.start_detection()
 
+    def _refresh_delete_button(self) -> None:
+        """Grę dodaną przez użytkownika można usunąć, a grę wbudowaną (FromSoftware) tylko zresetować."""
+        if self.paths.game in self.config.custom_games:
+            self.delete_counter_button.setText(tr("Usuń licznik"))
+            self.delete_counter_button.setToolTip(
+                tr("Gra znika z listy razem z licznikiem, bossami i kalibracją. Pliki trafiają do Kosza."))
+        else:
+            self.delete_counter_button.setText(tr("Resetuj licznik"))
+            self.delete_counter_button.setToolTip(
+                tr("Gier FromSoftware nie można usunąć z listy. Reset zeruje licznik śmierci i bossów,\n"
+                   "a kalibracja zostaje. Pliki trafiają do Kosza."))
+
     def confirm_delete_counter(self) -> None:
         game_id = self.paths.game
         name = self.config.game_name(game_id)
         custom = game_id in self.config.custom_games
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle(tr("Usuń licznik"))
-        box.setText(tr("Czy na pewno chcesz usunąć licznik {name}?", name=name))
-        box.setInformativeText(
-            tr("Gra zniknie z listy, a jej licznik śmierci, bossowie i kalibracja trafią do Kosza.")
-            if custom
-            else tr("Licznik śmierci ({deaths}) i lista bossów trafią do Kosza. Gra zostaje na liście, a jej kalibracja się nie zmienia.", deaths=self.store.deaths)
-        )
+        if custom:
+            box.setWindowTitle(tr("Usuń licznik"))
+            box.setText(tr("Czy na pewno chcesz usunąć licznik {name}?", name=name))
+            box.setInformativeText(tr("Gra zniknie z listy, a jej licznik śmierci, bossowie i kalibracja trafią do Kosza."))
+        else:
+            box.setWindowTitle(tr("Resetuj licznik"))
+            box.setText(tr("Czy na pewno chcesz zresetować licznik {name}?", name=name))
+            box.setInformativeText(tr("Licznik śmierci ({deaths}) i lista bossów trafią do Kosza. Gra zostaje na liście, a jej kalibracja się nie zmienia.", deaths=self.store.deaths))
         yes = box.addButton(tr("Tak"), QMessageBox.ButtonRole.YesRole)
         no = box.addButton(tr("Nie"), QMessageBox.ButtonRole.NoRole)
         box.setDefaultButton(no)
@@ -695,9 +857,11 @@ class MainWindow(QMainWindow):
 
     def _delete_counter(self, game_id: str, restart: bool) -> None:
         name = self.config.game_name(game_id)
+        custom = game_id in self.config.custom_games
+        title = tr("Usuń licznik") if custom else tr("Resetuj licznik")
         old_paths = self.paths
         try:
-            if game_id in self.config.custom_games:
+            if custom:
                 # Najpierw przełączenie na inną grę (zapisuje i zwalnia dane), potem usunięcie folderu.
                 self._switch_game(DEFAULT_GAME, restart=False)
                 winapi.send_to_recycle_bin([old_paths.game_dir])
@@ -708,12 +872,13 @@ class MainWindow(QMainWindow):
                 winapi.send_to_recycle_bin(counter_files(old_paths))
                 self._switch_game(game_id, restart=False, reload=True)
         except OSError as exc:
-            QMessageBox.critical(self, tr("Usuń licznik"), tr("Nie udało się usunąć licznika {name}.\n\n{exc}", name=name, exc=exc))
+            QMessageBox.critical(self, title, tr("Nie udało się usunąć licznika {name}.\n\n{exc}", name=name, exc=exc))
             return
         finally:
             if restart and self.worker is None and self.templates["death"] is not None:
                 self.start_detection()
-        self.notice_label.setText(tr("Usunięto licznik {name} (pliki są w Koszu).", name=name))
+        self.notice_label.setText(tr("Usunięto licznik {name} (pliki są w Koszu).", name=name) if custom
+                                  else tr("Zresetowano licznik {name} (pliki są w Koszu).", name=name))
 
     def _refresh_footer(self) -> None:
         self.footer_label.setText(tr("Dane gry: {game_dir}", game_dir=self.paths.game_dir))
@@ -801,9 +966,138 @@ class MainWindow(QMainWindow):
     def _refresh_overlay(self) -> None:
         """Ten sam tekst trafia do nakładki-okna i do RTSS, więc obie pokazują to samo."""
         boss = self.bosses.view() if self.bosses.enabled else None
-        self.overlay.set_text(overlay_text(self.store.deaths, boss))
+        session = None
+        if self.config.session.track and self.config.session.show_on_overlay:
+            view = self.session.view(time.time())
+            session = view if view.running else None
+        self.overlay.set_text(overlay_text(self.store.deaths, boss, session))
         self._update_rtss()
         self._update_discord()
+
+    # ------------------------------------------------------------- sesja
+
+    def _refresh_matchers(self) -> None:
+        """Jak rozpoznać proces każdej gry: exe gier wbudowanych, foldery gier ze Steama, exe wskazane ręcznie."""
+        steam = find_steam()
+        self._steam_games = installed_games(steam) if steam is not None else []
+        self._matchers = game_process.build_matchers(self.config, self._steam_games)
+        self._steam_folders = {game_id for game_id, matcher in self._matchers.items() if matcher.folders}
+
+    def _on_process_tick(self) -> None:
+        s = self.config.session
+        if not (s.track or s.auto_switch):
+            self._running_games = set()
+            return
+        processes = winapi.process_paths()
+        paths = list(processes.values())
+        running = game_process.running_games(paths, self._matchers)
+        started, self._running_games = running - self._running_games, running
+        current = self.paths.game
+        for game_id in started:
+            self.diag.write(f"GRA URUCHOMIONA: {self.config.game_name(game_id)}")
+        if s.auto_switch and current not in running and self._pending_game is None:
+            # Tylko w chwili uruchomienia gry – ręczny wybór innej gry w trakcie grania zostaje.
+            target = next((game_id for game_id in self.config.all_games() if game_id in started), None)
+            if target is not None:
+                self._auto_switched = target
+                self.diag.write(f"AUTO: przełączenie licznika na {self.config.game_name(target)}")
+                self.game_combo.setCurrentIndex(self.game_combo.findData(target))
+        matcher = self._matchers.get(current)
+        self._running_exe = game_process.matching_exe(paths, matcher) if current in running else None
+        # Czas sesji biegnie tylko wtedy, gdy gra jest aktywnym oknem (nie zminimalizowana ani w tle po Alt+Tab).
+        background = current in running and not matcher.matches(processes.get(winapi.foreground_pid(), ""))
+        if s.track:
+            if background != self.session.background and current in running:
+                self.diag.write("SESJA: gra w tle – czas stoi" if background
+                                else "SESJA: powrót do gry – czas rusza po potwierdzeniu")
+            try:
+                if self.session.tick(current in running, time.time(), background):
+                    self.diag.write(f"SESJA: nowa sesja {self.config.game_name(current)}")
+            except StorageError as exc:
+                self._show_error(tr("Nie zapisano sesji: {exc}", exc=exc))
+        self._refresh_session()
+
+    def _report_auto_switch(self, game_id: str) -> None:
+        text = tr("Uruchomiono grę {name} – licznik przełączył się na nią.", name=self.config.game_name(game_id))
+        if self.templates["death"] is None:
+            text += " " + tr("Ta gra nie ma jeszcze kalibracji – kliknij „Kalibracja…”, żeby liczyć śmierci.")
+            QApplication.alert(self)  # miganie na pasku zadań: trzeba zajrzeć do programu
+        self.notice_label.setText(text)
+        self.diag.write(f"AUTO: {text}")
+
+    def _session_deaths(self, operation, delta: int) -> None:
+        if not self.config.session.track:
+            return
+        try:
+            if operation == self.store.reset:
+                self.session.reset_deaths()
+            else:
+                self.session.add_deaths(delta)
+        except StorageError as exc:
+            self._show_error(tr("Nie zapisano sesji: {exc}", exc=exc))
+
+    def _stop_session(self) -> None:
+        try:
+            self.session.stop(time.time())
+        except StorageError as exc:
+            self._show_error(tr("Nie zapisano sesji: {exc}", exc=exc))
+
+    def _on_session_settings(self) -> None:
+        s = self.config.session
+        if s.track and not self.session_track.isChecked():
+            self._stop_session()
+        s.track = self.session_track.isChecked()
+        s.auto_switch = self.session_switch.isChecked()
+        s.show_on_overlay = self.session_overlay.isChecked()
+        self._save_timer.start()
+        self._on_process_tick()
+        self._refresh_overlay()
+
+    def _pick_game_exe(self) -> None:
+        game_id = self.paths.game
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr("Wskaż exe gry"), self.config.game_exes.get(game_id, ""), tr("Programy (*.exe)"))
+        if not path:
+            return
+        self.config.game_exes[game_id] = str(Path(path))
+        self._save_config()
+        self._refresh_matchers()
+        self._on_process_tick()
+
+    def _refresh_session(self) -> None:
+        s = self.config.session
+        game_id = self.paths.game
+        known = game_id in self._matchers
+        # Exe wskazuje się tylko dla gier spoza Steama – wbudowane i ze Steama program rozpoznaje sam.
+        exe = self.config.game_exes.get(game_id)
+        self.session_exe_button.setVisible(game_id in self.config.custom_games and game_id not in self._steam_folders)
+        self.session_exe_button.setText(tr("Zmień exe gry…") if exe else tr("Wskaż exe gry…"))
+        self.session_exe_button.setToolTip(exe or tr("Program nie zna exe tej gry – wskaż go, żeby śledzić sesję."))
+        self.session_overlay.setEnabled(s.track)
+        view = self.session.view(time.time())
+        color = "#9aa0a6"
+        if not s.track:
+            state = tr("Śledzenie sesji jest wyłączone.")
+        elif not known:
+            state, color = tr("Program nie wie, jak rozpoznać tę grę – wskaż jej exe."), "#c97a1e"
+        elif view.background:
+            state, color = tr("Gra w tle ({exe}) – czas sesji stoi.", exe=self._running_exe or "?"), "#c97a1e"
+        elif view.running:
+            state, color = tr("Gra uruchomiona ({exe})", exe=self._running_exe or "?"), "#2f9e5b"
+        elif view.continues:
+            state = tr("Gra zamknięta – powrót w ciągu {minutes} min kontynuuje sesję.", minutes=GAP_SECONDS // 60)
+        else:
+            state = tr("Czekam na uruchomienie gry.")
+        self.session_state.setText(state)
+        self.session_state.setStyleSheet(f"color:{color};")
+        if not s.track or view.started is None:
+            self.session_deaths.setText("–")
+            self.session_time.setText("–")
+            return
+        ended = not (view.running or view.continues)
+        suffix = f"  ({tr('ostatnia sesja')})" if ended else ""
+        self.session_deaths.setText(f"{view.deaths}{suffix}")
+        self.session_time.setText(f"{format_duration(view.seconds)}{suffix}")
 
     # ------------------------------------------------------------- Discord
 
@@ -830,7 +1124,10 @@ class MainWindow(QMainWindow):
     def _update_discord(self) -> None:
         if self.discord is not None:
             game = self.config.game_name(self.paths.game)
-            self.discord.update(build_activity(game, self.store.deaths, self._session_started))
+            started = self._session_started
+            if self.config.session.track and self.session.running and self.session.started is not None:
+                started = int(self.session.started)  # „gra od…” = początek sesji
+            self.discord.update(build_activity(game, self.store.deaths, started))
 
     def _refresh_discord_label(self) -> None:
         d = self.config.discord
@@ -1198,6 +1495,11 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        if not self._fitted:
+            self._fitted = True
+            QTimer.singleShot(0, self._fit_to_screen)  # gdy Windows poda już rozmiar ramki okna
+            # Przeciągnięcie okna na monitor o innej wysokości (np. z 2K na Full HD) – nowa wysokość okna.
+            self.windowHandle().screenChanged.connect(lambda _: QTimer.singleShot(0, lambda: self._fit_to_screen(move=False)))
         self._set_taskbar_icon()
         if not self._hotkeys:
             self._register_hotkeys()
@@ -1548,6 +1850,8 @@ class MainWindow(QMainWindow):
                 if isinstance(thread, UpdateDownloadWorker):
                     thread.cancel()
                 thread.wait(TIMEOUT_MS_ON_CLOSE)
+        self._process_timer.stop()
+        self._stop_session()
         self._instance_server.close()
         super().closeEvent(event)
         if self._relaunch is not None:

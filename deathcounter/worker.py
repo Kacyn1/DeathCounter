@@ -13,7 +13,7 @@ from PySide6.QtCore import QThread, Signal
 
 from pathlib import Path
 
-from . import ocr, rtss_setup, updater
+from . import ocr, rtss_setup, steam_library, updater
 from .capture import DxcamSource
 from .config import BossSettings, CaptureSettings, DetectorSettings
 from .detector import BarEvent, CaptureHealth, DetectionSession
@@ -82,6 +82,18 @@ class UpdateCheckWorker(QThread):
         try:
             self.done.emit(updater.fetch_latest(), "")
         except updater.UpdateError as exc:
+            self.done.emit(None, str(exc))
+
+
+class SteamScanWorker(QThread):
+    """Czyta bibliotekę Steam i pyta sklep o tagi gier w tle – interfejs nie czeka na sieć."""
+
+    done = Signal(object, str)  # steam_library.ScanResult | None, opis błędu
+
+    def run(self) -> None:
+        try:
+            self.done.emit(steam_library.scan(), "")
+        except steam_library.SteamError as exc:
             self.done.emit(None, str(exc))
 
 

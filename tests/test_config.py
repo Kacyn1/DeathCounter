@@ -206,10 +206,36 @@ def test_remove_custom_game():
     assert "ds3" in config.all_games()
 
 
+def test_steam_games_remember_appid(tmp_path):
+    config = AppConfig()
+    game_id = config.add_game("Lies of P", appid=1627720)
+    assert config.steam_game(1627720) == game_id
+    assert config.has_game_named(" lies  of p ")
+    config.steam_offered = True
+    save_config(tmp_path / "config.json", config)
+    loaded, _ = load_config(tmp_path / "config.json")
+    assert loaded.steam_appids == {game_id: 1627720}
+    assert loaded.steam_offered
+    loaded.remove_game(game_id)
+    assert loaded.steam_game(1627720) is None
+
+
+def test_invalid_steam_appids_are_dropped(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({
+        "custom_games": {"lies-of-p": "Lies of P", "nioh": "Nioh"},
+        "steam_appids": {"lies-of-p": 1627720, "nioh": "485510", "ds1": 570940, "brak": 1, "zla": True},
+    }), encoding="utf-8")
+    loaded, _ = load_config(path)
+    assert loaded.steam_appids == {"lies-of-p": 1627720}
+    assert not loaded.steam_offered
+
+
 def test_counter_files_keep_calibration(tmp_path):
     paths = AppPaths.for_game(tmp_path, "ds1")
     names = {p.name for p in counter_files(paths)}
-    assert names == {"deaths.json", "deaths.json.uszkodzony", "bosses.json", "bosses.json.uszkodzony", "audit.json"}
+    assert names == {"deaths.json", "deaths.json.uszkodzony", "bosses.json", "bosses.json.uszkodzony", "audit.json",
+                     "session.json"}
 
 
 def test_bar_threshold_defaults_to_old_shared_threshold(tmp_path):

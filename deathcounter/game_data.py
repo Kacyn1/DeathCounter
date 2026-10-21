@@ -10,6 +10,7 @@ from .boss_names import BossNames, builtin_path
 from .bosses import BossStore
 from .attempts import AttemptLog
 from .recent_fights import RecentFights
+from .play_session import PlaySession
 from .config import TEMPLATE_FIELDS, AppPaths, Calibration, load_calibration
 from .storage import DeathStore, StorageError
 from .signing import load_key
@@ -30,6 +31,7 @@ class GameData:
     boss_names: BossNames | None = None
     recent: RecentFights | None = None
     attempts: AttemptLog | None = None
+    session: PlaySession | None = None
     warnings: list[str] = field(default_factory=list)
 
 
@@ -41,6 +43,7 @@ def counter_files(paths: AppPaths) -> list[Path]:
         paths.bosses,
         paths.bosses.with_name(paths.bosses.name + ".uszkodzony"),
         paths.audit,  # nowy licznik zaczyna też nowy rejestr zmian
+        paths.session,
     ]
 
 
@@ -76,4 +79,5 @@ def open_game(base: Path, game: str) -> GameData:
                 templates[kind] = DeathTemplate.load(paths.template_path(kind), info)
             except TemplateError as exc:
                 warnings.append(tr("Nie można wczytać wzorca {item}: {exc} Wykonaj kalibrację ponownie.", item=tr(TEMPLATE_LABELS[kind]), exc=exc))
-    return GameData(paths, store, boss_store, calibration, templates, audit, boss_names, recent, attempts, warnings)
+    return GameData(paths, store, boss_store, calibration, templates, audit, boss_names, recent, attempts,
+                    PlaySession(paths.session), warnings)

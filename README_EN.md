@@ -35,7 +35,9 @@ The language applies to the whole interface, the PDF certificate and boss names.
 
 The **Game** list above the counter: Dark Souls I, Dark Souls II, Dark Souls III, Sekiro: Shadows Die Twice, Elden Ring. Each game has its **own** death counter, bosses and calibration. Program settings (overlay, RTSS, thresholds, monitor) are shared.
 
-Add a game that is not on the list with **+ Add game…** at the end of the list. **Delete counter** next to the list moves the selected game's data to the **Recycle Bin** (after a Yes/No confirmation): a game you added disappears from the list, while for a built-in game the death counter and boss list are deleted and the calibration stays.
+Add a game that is not on the list with **+ Add game…** at the end of the list. The button next to the list moves the selected game's data to the **Recycle Bin** (after a Yes/No confirmation): **Delete counter** removes a game you added from the list, together with its counter, bosses and calibration. Built-in FromSoftware games cannot be removed – for them the button is **Reset counter**, which clears the death counter and boss list and keeps the calibration.
+
+**Find installed Steam games…** on the list adds counters for souls-like games installed in Steam. The program reads the installed games from Steam's files on this computer (all libraries, no login or API key) and asks the Steam store for their tags – only the game numbers (AppID) are sent. Games with “Souls-like” among their 3 main tags, or on the built-in list of known souls-likes, are selected. Games with the tag in places 4–10 (usually games only inspired by Souls, e.g. Armored Core VI or Dead Cells) are listed separately as “possible souls-like” and are not selected. Without internet only the built-in list is used. Built-in games and games added before are skipped. An added game needs calibration like any other game that is not on the list. On the first start on a computer with Steam the program offers this search once.
 
 ## First use: calibration
 
@@ -86,6 +88,16 @@ With **"Read the boss name from the screen"** on (the default), the program read
 - **Victory message** – an image with the message shown after defeating a boss. Select just the text.
 
 The victory message is visible only for a few seconds, so it is easiest to take F12 screenshots during the fight and at the moment of victory, and calibrate both templates later from files.
+
+## Current session
+
+The **Current session** section (below “Boss fight”) shows the deaths and time of the current play session. A session starts when you launch the game and its time runs only while the game is running – the program checks the list of Windows processes every 2 s (read-only, the game is not touched). The time runs only while the game is the active window: it pauses when you minimise the game, Alt+Tab to another window (also from borderless windowed mode), click another program or lock the screen. After you return to the game the program checks again about 2 s later whether it is still active, and then the time runs again with those 2 s counted. Returning to the game within 15 minutes (e.g. after a crash) continues the same session without counting the break; a longer break starts a new session. Each game has its own session, saved in `session.json` in the game folder, so restarting the program does not end it.
+
+- **Track session** turns the feature on and off.
+- **Switch the counter to the running game** – when you launch another game from the list, the counter switches to it and tells you so; if that game is not calibrated yet, the program reminds you and flashes on the taskbar. It happens only when a game starts, so choosing another game by hand while playing is not undone.
+- **Show session on the overlay** adds the line “Session: 12 · 01:40:12” to the overlay and RTSS. The Discord status shows the time since the session started.
+
+Built-in games are recognised by their exe name, Steam games by their install folder, and games added by hand by the name of an installed Steam game. For a game outside Steam (e.g. GOG, Epic) the section shows **Choose game exe…**.
 
 ## PDF certificate
 

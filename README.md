@@ -47,7 +47,24 @@ Lista **Gra** nad licznikiem: Dark Souls I, Dark Souls II, Dark Souls III, Sekir
 
 Grę spoza listy dodasz pozycją **+ Dodaj grę…** na końcu listy: po podaniu nazwy program tworzy dla niej nowy licznik (z bossami i kalibracją) i od razu ją wybiera. Dodane gry zapisują się w `config.json` (`custom_games`), a ich dane w `games\<nazwa-gry>\`, np. `games\lies-of-p\`.
 
-Przycisk **Usuń licznik** obok listy (po potwierdzeniu Tak/Nie) przenosi dane wybranej gry do **Kosza**, skąd można je przywrócić. Gra dodana przez użytkownika znika wtedy z listy razem z licznikiem, bossami i kalibracją, a program przechodzi na Dark Souls I. Przy grze wbudowanej usuwany jest licznik śmierci i lista bossów – gra zostaje na liście, a jej kalibracja się nie zmienia.
+Przycisk obok listy przenosi dane wybranej gry do **Kosza** (po potwierdzeniu Tak/Nie), skąd można je przywrócić:
+- **Usuń licznik** przy grze dodanej przez użytkownika – gra znika z listy razem z licznikiem, bossami i kalibracją, a program przechodzi na Dark Souls I;
+- **Resetuj licznik** przy grze wbudowanej (FromSoftware) – takich gier nie można usunąć z listy. Reset zeruje licznik śmierci i listę bossów, a kalibracja się nie zmienia.
+
+### Gry ze Steama
+
+Pozycja **Znajdź zainstalowane gry ze Steam…** na liście gier dodaje liczniki dla gier souls-like zainstalowanych w Steam:
+
+1. Program czyta listę zainstalowanych gier z plików Steama na tym komputerze (`steamapps\libraryfolders.vdf` i `appmanifest_*.acf`), ze wszystkich bibliotek, także na innych dyskach. Logowanie do Steama ani klucz API nie są potrzebne.
+2. Pyta sklep Steam o tagi tych gier. Do sklepu trafiają tylko numery gier (AppID), jednym zapytaniem. Tag „Souls-like” mają też gry tylko inspirowane soulsami, dlatego liczy się jego miejsce wśród tagów gry (Steam układa je od najczęściej nadawanego):
+   - **souls-like** (zaznaczone) – tag wśród 3 głównych tagów albo gra z wbudowanej listy znanych souls-like (np. Nioh 2 i Black Myth: Wukong mają tag dopiero na 4. miejscu);
+   - **możliwe souls-like** (osobna sekcja, niezaznaczone) – tag na miejscach 4–10, np. Armored Core VI czy Dead Cells. Zaznacz grę, jeśli ma ekran śmierci;
+   - gry z tagiem dalej albo bez tagu nie są pokazywane.
+3. **Dodaj zaznaczone** tworzy dla zaznaczonych gier liczniki, tak jak „+ Dodaj grę…”.
+
+Gry wbudowane (także Dark Souls: Remastered i Scholar of the First Sin) są rozpoznawane po AppID i pokazane jako „wbudowane w program”. Gry dodane wcześniej są pomijane – numer AppID zapisuje się w `config.json` (`steam_appids`). Gdy sklep Steam nie odpowiada, program korzysta z wbudowanej listy znanych gier souls-like. Dodana gra wymaga kalibracji, jak każda gra spoza listy.
+
+Przy pierwszym uruchomieniu na komputerze ze Steamem program raz proponuje takie wyszukanie.
 
 Dane gry leżą w `games\<gra>\` obok programu (`ds1`, `ds2`, `ds3`, `sekiro`, `eldenring`): `deaths.json`, `bosses.json`, `calibration.json` i pliki wzorców. Po aktualizacji z wersji bez wyboru gry program jednorazowo pyta, do której gry przypisać dotychczasowy licznik, bossów i kalibrację, i przenosi je do jej folderu.
 
@@ -151,6 +168,25 @@ Komunikat zwycięstwa widać tylko kilka sekund, dlatego najwygodniej zrobić zr
 
 Po ponownym uruchomieniu wykrywania (Start) napis widoczny na ekranie nie jest liczony od razu – musi najpierw zniknąć, żeby ta sama śmierć nie została policzona dwa razy.
 
+## Aktualna sesja
+
+Sekcja **Aktualna sesja** (pod „Walką z bossem”) pokazuje śmierci i czas bieżącej sesji gry:
+
+- sesja zaczyna się, gdy uruchomisz grę, a czas biegnie tylko wtedy, gdy gra jest włączona. Program co 2 s sprawdza listę procesów Windows – tylko ją odczytuje, gry nie dotyka;
+- czas biegnie tylko wtedy, gdy gra jest aktywnym oknem. Gdy ją zminimalizujesz, przejdziesz Alt+Tab do innego okna (także z okna bez ramek), klikniesz w inny program albo zablokujesz ekran – czas sesji stoi. Po powrocie do gry program sprawdza jeszcze raz po ok. 2 s, czy gra nadal jest aktywna – jeśli tak, czas rusza, a te 2 s są doliczone. Kliknięcie w okno samego licznika też chwilowo zatrzymuje czas (nakładki to nie dotyczy);
+- powrót do gry w ciągu 15 minut (np. po wysypaniu się gry albo wyjściu do pulpitu) kontynuuje tę samą sesję, a czas przerwy się nie liczy. Po dłuższej przerwie uruchomienie gry zaczyna nową sesję;
+- do sesji liczą się śmierci wykryte i ręczne +1/−1, gdy gra jest uruchomiona; reset licznika zeruje też sesję;
+- sesja jest osobna dla każdej gry i zapisuje się w `session.json` w folderze gry, więc ponowne uruchomienie programu (np. po aktualizacji) jej nie przerywa.
+
+Opcje w sekcji:
+- **Śledź sesję** – włącza i wyłącza całą funkcję;
+- **Przełączaj licznik na uruchomioną grę** – gdy uruchomisz inną grę z listy, licznik sam się na nią przełączy i napisze o tym w oknie. Jeśli ta gra nie ma jeszcze kalibracji, program o tym przypomni i zamiga na pasku zadań. Przełączenie następuje tylko w chwili uruchomienia gry – gdy w trakcie grania sam wybierzesz inną grę, program tego nie cofa;
+- **Pokaż sesję na nakładce** – nakładka i RTSS pokazują dodatkową linię „Sesja: 12 · 01:40:12”.
+
+Status na Discordzie pokazuje czas od początku sesji.
+
+Jak program rozpoznaje grę: gry wbudowane po nazwie exe (`DARKSOULS.exe`, `DarkSoulsRemastered.exe`, `DarkSoulsII.exe`, `DarkSoulsIII.exe`, `sekiro.exe`, `eldenring.exe`), gry ze Steama po folderze instalacji (dowolny exe z `steamapps\common\<gra>`), a gry dodane ręcznie – po nazwie zainstalowanej gry Steam. Dla gry spoza Steama (np. GOG, Epic) w sekcji pojawia się przycisk **Wskaż exe gry…**; wybrany plik zapisuje się w `config.json` (`game_exes`).
+
 ## Certyfikat PDF
 
 Przycisk **Certyfikat PDF…** (na dole okna) zapisuje certyfikat wybranej gry (A4 poziomo) i od razu go otwiera: logo, nick gracza (program pyta o niego i zapamiętuje), gra, śmierci łącznie, liczba pokonanych bossów, śmierci przy bossach i czas ich pokonania oraz lista pokonanych bossów. Gdy bossów jest więcej, pełna lista (także walki w trakcie) trafia do załącznika na kolejnych stronach.
@@ -234,6 +270,10 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/signing.py` | kod weryfikacyjny certyfikatu (HMAC), klucz spoza repozytorium |
 | `deathcounter/discord_presence.py` | status na Discordzie (Rich Presence przez lokalny kanał Discorda) |
 | `deathcounter/config.py` | `config.json`, lista gier, ścieżki, `calibration.json`, przeniesienie starych danych |
+| `deathcounter/play_session.py` | aktualna sesja: śmierci i czas przy uruchomionej grze (`session.json`) |
+| `deathcounter/game_process.py` | która gra jest uruchomiona (procesy Windows dopasowane do gier) |
+| `deathcounter/steam_library.py` | gry z biblioteki Steam i rozpoznanie souls-like (tagi sklepu, lista zapasowa) |
+| `deathcounter/steam_dialog.py` | okno „Znajdź zainstalowane gry ze Steam” |
 | `deathcounter/game_data.py` | wczytanie danych jednej gry (licznik, bossowie, wzorce) |
 | `deathcounter/template.py` | wzorzec napisu i dopasowanie |
 | `deathcounter/detector.py` | maszyna stanów detektora, kontrola obrazu (bez Qt, testowalne) |
