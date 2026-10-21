@@ -95,7 +95,7 @@ The **Current session** section (below “Boss fight”) shows the deaths and ti
 
 - **Track session** turns the feature on and off.
 - **Switch the counter to the running game** – when you launch another game from the list, the counter switches to it and tells you so; if that game is not calibrated yet, the program reminds you and flashes on the taskbar. It happens only when a game starts, so choosing another game by hand while playing is not undone.
-- **Show session on the overlay** adds the line “Session: 12 · 01:40:12” to the overlay and RTSS. The Discord status shows the time since the session started.
+- **Show session on the overlay** adds the line “Session: 12 · 01:40:12” to the overlay and RTSS. The Discord status shows the time since the session started. The session state is shown as a badge: **IN GAME**, **PAUSED**, **BREAK**, **WAITING**, **UNKNOWN GAME** or **OFF**.
 
 Built-in games are recognised by their exe name, Steam games by their install folder, and games added by hand by the name of an installed Steam game. For a game outside Steam (e.g. GOG, Epic) the section shows **Choose game exe…**.
 
@@ -105,6 +105,7 @@ Built-in games are recognised by their exe name, Steam games by their install fo
 
 ## Fullscreen games
 
+- **Can you see the counter in the game?** **Show overlay / Hide overlay** turns the overlay on and off, and the **Overlay** row in the “State” section tells you whether the counter is visible: **VISIBLE**, **PARTLY** (window visible, but RTSS is not running – in fullscreen the counter may not be visible), **NOT VISIBLE** (“RTSS only” mode without RTSS running) or **HIDDEN** (overlay off), with a hint what to do.
 - **Overlay through RTSS.** A regular "always on top" window often cannot appear over exclusive DirectX fullscreen, so the counter can be shown through [RivaTuner Statistics Server](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/). RTSS must be running with "Show On-Screen Display" turned on, and the mode must be "Window + RTSS" or "RTSS only". If RTSS is not installed, the program offers to install it through winget.
 - **Global hotkeys** (defaults): **Ctrl+Alt+F9** – calibration screenshot, **Ctrl+Alt+F10** – +1, **Ctrl+Alt+F11** – −1, **Ctrl+Alt+F8** – overlay on/off. Change them with **Hotkeys…**.
 - **Start detection on launch** lets you start the counter before the game without switching to its window.

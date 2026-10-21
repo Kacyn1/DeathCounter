@@ -95,6 +95,24 @@ OVERLAY_MODE_LABELS = {
     "rtss": N_("Tylko RTSS (pełny ekran)"),
 }
 
+# Znacznik stanu sesji (jak w sekcjach „Stan” i „Walka z bossem”): napis i kolor tła.
+SESSION_BADGES = {
+    "running": (N_("W grze"), "#2f9e5b"),
+    "background": (N_("Pauza"), "#c97a1e"),
+    "break": (N_("Przerwa"), "#b8860b"),
+    "waiting": (N_("Oczekiwanie"), "#6b6f76"),
+    "unknown": (N_("Nieznana gra"), "#c97a1e"),
+    "off": (N_("Wyłączona"), "#6b6f76"),
+}
+
+# Czy licznik widać w grze (wiersz „Nakładka” w sekcji „Stan”): napis znacznika i kolor tła.
+OVERLAY_BADGES = {
+    "visible": (N_("Widoczna"), "#2f9e5b"),
+    "partial": (N_("Częściowo"), "#c97a1e"),
+    "invisible": (N_("Niewidoczna"), "#c97a1e"),
+    "hidden": (N_("Ukryta"), "#6b6f76"),
+}
+
 STATUS_COLORS = {
     DetectorStatus.ACTIVE: "#2f9e5b",
     DetectorStatus.STOPPED: "#6b6f76",
@@ -220,6 +238,10 @@ class MainWindow(QMainWindow):
         self.image_label = QLabel("–")
         self.score_label = QLabel("–")
         self.boss_score_label = QLabel("–")
+        self.overlay_badge = QLabel()
+        self.overlay_status = QLabel()
+        self.overlay_status.setWordWrap(True)
+        self._rtss_state: RtssState | None = None  # ostatni wynik przekazania tekstu do RTSS
         self.template_label = QLabel()
         self.notice_label = QLabel()
         self.notice_label.setWordWrap(True)
@@ -228,6 +250,10 @@ class MainWindow(QMainWindow):
         status_row.addWidget(self.status_label)
         status_row.addWidget(self.status_message, 1)
         status_form.addRow(tr("Wykrywanie:"), status_row)
+        overlay_row = QHBoxLayout()
+        overlay_row.addWidget(self.overlay_badge)
+        overlay_row.addWidget(self.overlay_status, 1)
+        status_form.addRow(tr("Nakładka:"), overlay_row)
         status_form.addRow(tr("Obraz:"), self.image_label)
         status_form.addRow(tr("Dopasowanie:"), self.score_label)
         status_form.addRow(tr("Boss:"), self.boss_score_label)
@@ -239,6 +265,7 @@ class MainWindow(QMainWindow):
         self.start_button = QPushButton(tr("Start"))
         self.start_button.clicked.connect(self.toggle_detection)
         self.overlay_button = QPushButton()
+        self.overlay_button.setCheckable(True)  # wciśnięty, gdy nakładka jest włączona
         self.overlay_button.clicked.connect(self.toggle_overlay)
         self.plus_button = QPushButton(tr("Dodaj +1"))
         self.plus_button.clicked.connect(self._manual_plus)
@@ -376,11 +403,15 @@ class MainWindow(QMainWindow):
         options.addWidget(self.session_track)
         options.addWidget(self.session_switch, 1)
         form.addRow(options)
+        self.session_badge = QLabel()
         self.session_state = QLabel()
         self.session_state.setWordWrap(True)
+        state_row = QHBoxLayout()
+        state_row.addWidget(self.session_badge)
+        state_row.addWidget(self.session_state, 1)
         self.session_deaths = QLabel("–")
         self.session_time = QLabel("–")
-        form.addRow(tr("Stan:"), self.session_state)
+        form.addRow(tr("Stan:"), state_row)
         form.addRow(tr("Śmierci:"), self.session_deaths)
         form.addRow(tr("Czas:"), self.session_time)
         self.session_exe_button = QPushButton()
@@ -1003,7 +1034,10 @@ class MainWindow(QMainWindow):
                 self.diag.write(f"AUTO: przełączenie licznika na {self.config.game_name(target)}")
                 self.game_combo.setCurrentIndex(self.game_combo.findData(target))
         matcher = self._matchers.get(current)
-        self._running_exe = game_process.matching_exe(paths, matcher) if current in running else None
+        running_exe = game_process.matching_exe(paths, matcher) if current in running else None
+        if running_exe != self._running_exe:
+            self._running_exe = running_exe
+            self._refresh_overlay_status()  # podpowiedź o pełnym ekranie zależy od tego, czy gra działa
         # Czas sesji biegnie tylko wtedy, gdy gra jest aktywnym oknem (nie zminimalizowana ani w tle po Alt+Tab).
         background = current in running and not matcher.matches(processes.get(winapi.foreground_pid(), ""))
         if s.track:
@@ -1075,21 +1109,25 @@ class MainWindow(QMainWindow):
         self.session_exe_button.setToolTip(exe or tr("Program nie zna exe tej gry – wskaż go, żeby śledzić sesję."))
         self.session_overlay.setEnabled(s.track)
         view = self.session.view(time.time())
-        color = "#9aa0a6"
+        exe = self._running_exe or "?"
         if not s.track:
-            state = tr("Śledzenie sesji jest wyłączone.")
+            badge, state = "off", tr("Śledzenie sesji jest wyłączone.")
         elif not known:
-            state, color = tr("Program nie wie, jak rozpoznać tę grę – wskaż jej exe."), "#c97a1e"
+            badge, state = "unknown", tr("Program nie wie, jak rozpoznać tę grę – wskaż jej exe.")
         elif view.background:
-            state, color = tr("Gra w tle ({exe}) – czas sesji stoi.", exe=self._running_exe or "?"), "#c97a1e"
+            badge, state = "background", tr("Gra w tle ({exe}) – czas sesji stoi.", exe=exe)
         elif view.running:
-            state, color = tr("Gra uruchomiona ({exe})", exe=self._running_exe or "?"), "#2f9e5b"
+            badge, state = "running", tr("{exe} – czas sesji biegnie.", exe=exe)
         elif view.continues:
-            state = tr("Gra zamknięta – powrót w ciągu {minutes} min kontynuuje sesję.", minutes=GAP_SECONDS // 60)
+            badge, state = "break", tr("Gra zamknięta – powrót w ciągu {minutes} min kontynuuje sesję.",
+                                       minutes=GAP_SECONDS // 60)
         else:
-            state = tr("Czekam na uruchomienie gry.")
+            badge, state = "waiting", tr("Czekam na uruchomienie gry.")
+        text, color = SESSION_BADGES[badge]
+        self.session_badge.setText(tr(text).upper())
+        self.session_badge.setStyleSheet(
+            f"padding:2px 8px; border-radius:4px; color:white; font-weight:bold; background:{color};")
         self.session_state.setText(state)
-        self.session_state.setStyleSheet(f"color:{color};")
         if not s.track or view.started is None:
             self.session_deaths.setText("–")
             self.session_time.setText("–")
@@ -1308,19 +1346,54 @@ class MainWindow(QMainWindow):
         else:
             self._rtss_timer.stop()
             self.rtss.clear()
+            self._rtss_state = None
             self.rtss_label.setText(tr("nieużywany") if s.mode == "window" else tr("nakładka wyłączona"))
-        self.overlay_button.setText(tr("Nakładka: Wyłącz") if s.enabled else tr("Nakładka: Włącz"))
+        # Przycisk mówi, co zrobi kliknięcie, a wciśnięty pokazuje, że nakładka jest włączona.
+        self.overlay_button.setText(tr("Ukryj nakładkę") if s.enabled else tr("Pokaż nakładkę"))
+        self.overlay_button.setChecked(s.enabled)
+        self._refresh_overlay_status()
 
     def _update_rtss(self) -> None:
         if not self._rtss_timer.isActive():
             return
         state = self.rtss.show(self.overlay.text)
+        if state is not self._rtss_state:
+            self._rtss_state = state
+            self._refresh_overlay_status()
         if state is RtssState.SHOWN:
             self.rtss_label.setText(tr("licznik przekazany do RTSS"))
         elif state is RtssState.NOT_RUNNING:
             self.rtss_label.setText(tr("RTSS nie jest uruchomiony – licznik pojawi się, gdy go włączysz"))
         else:
             self.rtss_label.setText(tr(state.value))
+
+    def _refresh_overlay_status(self) -> None:
+        """Wiersz „Nakładka” w sekcji „Stan”: czy licznik widać w grze, a jeśli nie – dlaczego."""
+        s = self.config.overlay
+        window, rtss = s.mode in ("window", "both"), s.mode in ("rtss", "both")
+        rtss_ok = self._rtss_state is RtssState.SHOWN
+        rtss_problem = tr(self._rtss_state.value) if self._rtss_state is not None else tr("RTSS nie jest uruchomiony")
+        if not s.enabled:
+            badge, text = "hidden", tr("Kliknij „Pokaż nakładkę”, żeby widzieć licznik w grze.")
+        elif rtss and not window:
+            badge, text = (("visible", tr("RTSS – licznik widać także w pełnym ekranie.")) if rtss_ok else
+                           ("invisible", tr("{problem} – uruchom RTSS albo zmień tryb nakładki.",
+                                            problem=_capitalized(rtss_problem))))
+        elif rtss and not rtss_ok:
+            badge, text = "partial", tr("Okno widoczne, ale {problem} – w pełnym ekranie licznika może nie być widać.",
+                                        problem=rtss_problem)
+        elif rtss:
+            badge, text = "visible", tr("Okno na wierzchu i RTSS.")
+        else:
+            badge, text = "visible", tr("Okno na wierzchu.")
+            if self._running_exe:
+                # Gra działa: okno nakładki nie przebija się przez ekskluzywny pełny ekran.
+                text += " " + tr("Jeśli w grze go nie widać (pełny ekran), wybierz tryb z RTSS.")
+        label, color = OVERLAY_BADGES[badge]
+        self.overlay_badge.setText(tr(label).upper())
+        self.overlay_badge.setStyleSheet(
+            f"padding:2px 8px; border-radius:4px; color:white; font-weight:bold; background:{color};")
+        self.overlay_status.setText(text)
 
     def _on_overlay_settings(self) -> None:
         s = self.config.overlay
@@ -1869,6 +1942,10 @@ class MainWindow(QMainWindow):
 
     def _clear_error(self) -> None:
         self.error_banner.hide()
+
+
+def _capitalized(text: str) -> str:
+    return text[:1].upper() + text[1:]
 
 
 def _threshold_spin(value: float) -> QDoubleSpinBox:

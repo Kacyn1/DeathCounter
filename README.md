@@ -183,7 +183,7 @@ Opcje w sekcji:
 - **Przełączaj licznik na uruchomioną grę** – gdy uruchomisz inną grę z listy, licznik sam się na nią przełączy i napisze o tym w oknie. Jeśli ta gra nie ma jeszcze kalibracji, program o tym przypomni i zamiga na pasku zadań. Przełączenie następuje tylko w chwili uruchomienia gry – gdy w trakcie grania sam wybierzesz inną grę, program tego nie cofa;
 - **Pokaż sesję na nakładce** – nakładka i RTSS pokazują dodatkową linię „Sesja: 12 · 01:40:12”.
 
-Status na Discordzie pokazuje czas od początku sesji.
+Stan sesji pokazuje znacznik: **W GRZE** (czas biegnie), **PAUZA** (gra w tle), **PRZERWA** (gra zamknięta, powrót w ciągu 15 min kontynuuje sesję), **OCZEKIWANIE**, **NIEZNANA GRA** (wskaż exe) albo **WYŁĄCZONA**. Status na Discordzie pokazuje czas od początku sesji.
 
 Jak program rozpoznaje grę: gry wbudowane po nazwie exe (`DARKSOULS.exe`, `DarkSoulsRemastered.exe`, `DarkSoulsII.exe`, `DarkSoulsIII.exe`, `sekiro.exe`, `eldenring.exe`), gry ze Steama po folderze instalacji (dowolny exe z `steamapps\common\<gra>`), a gry dodane ręcznie – po nazwie zainstalowanej gry Steam. Dla gry spoza Steama (np. GOG, Epic) w sekcji pojawia się przycisk **Wskaż exe gry…**; wybrany plik zapisuje się w `config.json` (`game_exes`).
 
@@ -209,6 +209,8 @@ Do działania potrzebny jest identyfikator aplikacji z [Discord Developer Portal
 ## Gra w pełnym ekranie
 
 Wiele gier (np. Dark Souls II) nie ma trybu okna bez ramek, dlatego program jest przygotowany na pełny ekran:
+
+- **Czy licznik widać w grze?** Przycisk **Pokaż nakładkę / Ukryj nakładkę** włącza i wyłącza nakładkę, a wiersz **Nakładka** w sekcji „Stan” mówi, czy licznik jest widoczny: **WIDOCZNA**, **CZĘŚCIOWO** (okno widoczne, ale RTSS nie działa – w pełnym ekranie licznika może nie być widać), **NIEWIDOCZNA** (tryb „Tylko RTSS”, a RTSS nie działa) albo **UKRYTA** (nakładka wyłączona). Obok jest podpowiedź, co zrobić.
 
 - **Nakładka przez RTSS.** Zwykłe okno „na wierzchu” często nie przebija się przez ekskluzywny pełny ekran DirectX. Dlatego licznik może być wyświetlany przez [RivaTuner Statistics Server](https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/) (często instalowany razem z MSI Afterburner). Program tylko wpisuje tekst do pamięci współdzielonej RTSS, a w grze rysuje go RTSS. Wymagania:
   - RTSS jest uruchomiony;

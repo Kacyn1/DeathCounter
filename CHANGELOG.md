@@ -1,5 +1,11 @@
 # Historia zmian
 
+## 1.11.1
+
+- Przycisk nakładki nazywa się teraz „Pokaż nakładkę” albo „Ukryj nakładkę”, czyli mówi, co zrobi kliknięcie. Gdy nakładka jest włączona, przycisk jest wciśnięty. Poprzednie „Nakładka: Włącz / Wyłącz” myliło stan z poleceniem, a w wersji angielskiej przy włączonej nakładce pokazywało „Overlay: Off”.
+- W sekcji „Stan” jest nowy wiersz „Nakładka” ze znacznikiem, który mówi, czy licznik widać w grze: WIDOCZNA, CZĘŚCIOWO (okno widoczne, ale RTSS nie działa), NIEWIDOCZNA (tryb „Tylko RTSS”, a RTSS nie działa) albo UKRYTA. Obok jest podpowiedź, co zrobić. Gdy gra jest uruchomiona, a nakładka używa tylko okna, program przypomina, że w pełnym ekranie trzeba wybrać tryb z RTSS.
+- Stan w sekcji „Aktualna sesja” ma taki sam znacznik jak wykrywanie i walka z bossem: W GRZE, PAUZA, PRZERWA, OCZEKIWANIE, NIEZNANA GRA albo WYŁĄCZONA, z opisem obok.
+
 ## 1.11.0
 
 - Nowa sekcja „Aktualna sesja” pod „Walką z bossem”: śmierci i czas bieżącej sesji. Sesja zaczyna się, gdy uruchomisz grę – program co 2 s sprawdza listę procesów Windows (tylko odczyt, gra nie jest w żaden sposób dotykana). Czas biegnie tylko wtedy, gdy gra jest aktywnym oknem – stoi, gdy gra jest zminimalizowana, w tle po Alt+Tab (także w oknie bez ramek) albo ekran jest zablokowany. Po powrocie do gry rusza, gdy kolejne sprawdzenie po ok. 2 s potwierdzi, że gra nadal jest aktywna, i te 2 s są doliczane. Powrót do gry w ciągu 15 minut (np. po wysypaniu się gry) kontynuuje tę samą sesję, a czas przerwy się nie liczy. Sesja jest osobna dla każdej gry, zapisuje się w `session.json` w folderze gry i przetrwa ponowne uruchomienie programu. Śledzenie można wyłączyć polem „Śledź sesję”.
