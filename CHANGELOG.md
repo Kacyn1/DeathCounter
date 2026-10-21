@@ -1,5 +1,13 @@
 # Historia zmian
 
+## 1.13.0
+
+- Sekcja „Aktualna sesja” pokazuje dwa czasy: **czas sesji** (gra uruchomiona i aktywna, razem z menu) i **czas gry** (faktyczna rozgrywka – bez menu głównego i bez wczytywania po wyjściu z menu).
+- Nowa zakładka kalibracji „Menu i rozgrywka” z dwoma wzorcami: „Menu główne” (np. logo gry albo napisy menu) i „Pasek zdrowia postaci” (lewy koniec paska). Dopóki menu jest na ekranie, czas gry stoi. Po wyjściu z menu czas gry rusza dopiero, gdy pojawi się pasek zdrowia, więc ekran wczytywania się nie liczy. Potem czas gry biegnie aż do powrotu do menu, także gdy pasek zniknie (np. ukryty interfejs albo przerywnik filmowy). Jeśli pasek nie pojawi się przez 2 minuty, rozgrywka i tak się zaczyna, a ten czas jest doliczany.
+- Bez wzorca paska zdrowia czas gry rusza zaraz po wyjściu z menu. Bez wzorca menu albo przy wyłączonym wykrywaniu czas gry liczy się jak czas sesji. Po uruchomieniu gry logo wydawcy i menu się nie liczą.
+- Nowe znaczniki stanu sesji: MENU i WCZYTYWANIE. Menu i pasek zdrowia są sprawdzane co 0,5 s, a zmiana stanu menu jest potwierdzana po 2 s.
+- Okno „Statystyki sesji” pokazuje oba czasy (kafelki, dymek na wykresie słupkowym i kolumna w tabeli), a śmierci na godzinę liczy od czasu gry. Sesje zapisane wcześniej mają czas gry równy czasowi sesji.
+
 ## 1.12.0
 
 - Nowy przycisk „Statystyki sesji…” w sekcji „Aktualna sesja”. Otwiera okno, które nie blokuje programu i odświeża się co sekundę. Okno ma dwie zakładki.

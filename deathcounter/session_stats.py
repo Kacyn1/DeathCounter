@@ -34,29 +34,31 @@ GRID = QColor(58, 60, 66)         # siatka i osie – ledwo odcięte od tła
 TEXT = QColor(225, 225, 225)
 MUTED = QColor("#9aa0a6")
 MAX_BARS = 20                     # tyle ostatnich sesji na wykresie słupkowym (wszystkie są w tabeli)
-TABLE_COLUMNS = (N_("Sesja"), N_("Początek"), N_("Czas"), N_("Śmierci"), N_("Śmierci/h"))
+TABLE_COLUMNS = (N_("Sesja"), N_("Początek"), N_("Czas sesji"), N_("Czas gry"), N_("Śmierci"), N_("Śmierci/h"))
 
 
 @dataclass(frozen=True)
 class SessionRow:
     number: int
     started: float
-    seconds: float
+    seconds: float       # czas sesji
+    game_seconds: float  # czas gry (bez menu)
     deaths: int
     current: bool
 
 
 def sessions(session: PlaySession, now: float) -> list[SessionRow]:
     """Wszystkie sesje gry od najstarszej: historia i na końcu bieżąca (albo ostatnia, jeszcze nie w historii)."""
-    rows = [SessionRow(i + 1, r.started, r.seconds, r.deaths, False) for i, r in enumerate(session.history)]
+    rows = [SessionRow(i + 1, r.started, r.seconds, r.game_seconds, r.deaths, False)
+            for i, r in enumerate(session.history)]
     if session.started is not None:
         view = session.view(now)
-        rows.append(SessionRow(len(rows) + 1, session.started, view.seconds, view.deaths, True))
+        rows.append(SessionRow(len(rows) + 1, session.started, view.seconds, view.game_seconds, view.deaths, True))
     return rows
 
 
 def per_hour(deaths: int, seconds: float) -> str:
-    """Śmierci na godzinę („7,2”); przy sesji krótszej niż minuta – „–” (za mało danych)."""
+    """Śmierci na godzinę czasu gry („7,2”); przy czasie krótszym niż minuta – „–” (za mało danych)."""
     return decimal(deaths / (seconds / 3600)) if seconds >= 60 else "–"
 
 
@@ -239,7 +241,7 @@ class DeathTimeline(Chart):
                 painter.setBrush(SERIES)
                 painter.drawEllipse(QPointF(x, self._y(area, value, top)), 4, 4)
                 self._tooltip(painter, QPointF(x, self._y(area, value, top)),
-                              [tr("Czas gry: {time}", time=format_duration(t)), tr("Śmierci: {deaths}", deaths=value)])
+                              [tr("Czas sesji: {time}", time=format_duration(t)), tr("Śmierci: {deaths}", deaths=value)])
 
 
 class SessionBars(Chart):
@@ -293,8 +295,9 @@ class SessionBars(Chart):
             title = tr("Sesja {number} (bieżąca)", number=row.number) if row.current else tr("Sesja {number}", number=row.number)
             self._tooltip(painter, QPointF(area.left() + slot * (hovered + 0.5), self._y(area, row.deaths, top)), [
                 title, format_when(row.started), tr("Śmierci: {deaths}", deaths=row.deaths),
-                tr("Czas gry: {time}", time=format_duration(row.seconds)),
-                tr("Śmierci na godzinę: {value}", value=per_hour(row.deaths, row.seconds))])
+                tr("Czas sesji: {time}", time=format_duration(row.seconds)),
+                tr("Czas gry: {time}", time=format_duration(row.game_seconds)),
+                tr("Śmierci na godzinę: {value}", value=per_hour(row.deaths, row.game_seconds))])
 
 
 def _rounded_top(rect: QRectF, radius: float) -> QPainterPath:
@@ -344,14 +347,14 @@ class SessionStatsWindow(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
-        self.resize(680, 560)
+        self.resize(760, 580)
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
 
         current = QWidget()
         box = QVBoxLayout(current)
-        self.current_tiles = StatTiles([tr("Śmierci"), tr("Czas gry"), tr("Śmierci na godzinę"),
+        self.current_tiles = StatTiles([tr("Śmierci"), tr("Czas sesji"), tr("Czas gry"), tr("Śmierci na godzinę"),
                                         tr("Najdłużej bez śmierci"), tr("Od ostatniej śmierci")])
         self.current_title = QLabel()
         self.timeline = DeathTimeline()
@@ -366,7 +369,7 @@ class SessionStatsWindow(QDialog):
 
         everything = QWidget()
         box = QVBoxLayout(everything)
-        self.all_tiles = StatTiles([tr("Sesje"), tr("Śmierci łącznie"), tr("Czas gry łącznie"),
+        self.all_tiles = StatTiles([tr("Sesje"), tr("Śmierci łącznie"), tr("Czas sesji łącznie"), tr("Czas gry łącznie"),
                                     tr("Średnio na sesję"), tr("Śmierci na godzinę")])
         self.all_title = QLabel(tr("Śmierci w kolejnych sesjach"))
         self.bars = SessionBars()
@@ -391,7 +394,7 @@ class SessionStatsWindow(QDialog):
 
     def _update_current(self, session: PlaySession, now: float) -> None:
         if session.started is None:
-            self.current_tiles.set_values(["–"] * 5)
+            self.current_tiles.set_values(["–"] * 6)
             self.current_title.setText(tr("Przebieg sesji"))
             self.timeline.empty_text = tr("Brak sesji – uruchom grę, a sesja zacznie się sama.")
             self.timeline.update()
@@ -401,7 +404,8 @@ class SessionStatsWindow(QDialog):
         times = session.death_times
         since_last = format_duration(view.seconds - times[-1]) if times else "–"
         self.current_tiles.set_values([
-            str(view.deaths), format_duration(view.seconds), per_hour(view.deaths, view.seconds),
+            str(view.deaths), format_duration(view.seconds), format_duration(view.game_seconds),
+            per_hour(view.deaths, view.game_seconds),
             format_duration(longest_without_death(times, view.seconds, view.deaths - len(times)))
             if times or not view.deaths else "–",
             since_last])
@@ -419,9 +423,10 @@ class SessionStatsWindow(QDialog):
     def _update_all(self, rows: list[SessionRow]) -> None:
         total_deaths = sum(row.deaths for row in rows)
         total_seconds = sum(row.seconds for row in rows)
+        total_game = sum(row.game_seconds for row in rows)
         self.all_tiles.set_values([
-            str(len(rows)), str(total_deaths), format_duration(total_seconds),
-            decimal(total_deaths / len(rows)) if rows else "–", per_hour(total_deaths, total_seconds)])
+            str(len(rows)), str(total_deaths), format_duration(total_seconds), format_duration(total_game),
+            decimal(total_deaths / len(rows)) if rows else "–", per_hour(total_deaths, total_game)])
         self.bars.empty_text = "" if rows else tr("Brak sesji – historia zbiera się od wersji 1.12.0.")
         self.bars.set_data(rows)
         if len(rows) > MAX_BARS:
@@ -431,8 +436,8 @@ class SessionStatsWindow(QDialog):
         self.table.setRowCount(len(rows))
         for i, row in enumerate(reversed(rows)):  # najnowsza na górze
             number = tr("{number} (bieżąca)", number=row.number) if row.current else str(row.number)
-            cells = (number, format_when(row.started), format_duration(row.seconds), str(row.deaths),
-                     per_hour(row.deaths, row.seconds))
+            cells = (number, format_when(row.started), format_duration(row.seconds), format_duration(row.game_seconds),
+                     str(row.deaths), per_hour(row.deaths, row.game_seconds))
             for column, text in enumerate(cells):
                 item = QTableWidgetItem(text)
                 if column >= 2:

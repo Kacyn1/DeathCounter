@@ -163,6 +163,22 @@ KINDS = {
         N_("Zaznacz myszą prostokąt obejmujący <b>sam napis</b> komunikatu, z niewielkim marginesem."),
         N_("Na obrazie z komunikatem wynik powinien przekroczyć próg, a na zwykłym zrzucie z gry być wyraźnie niższy."),
     ),
+    "menu": TemplateKind(
+        "menu",
+        N_("menu główne gry"),
+        N_("gdy widać menu główne (ekran tytułowy z „Kontynuuj” / „Nowa gra”)"),
+        N_("Zaznacz coś, co jest w menu głównym zawsze i tylko tam – np. <b>logo gry</b> albo napisy menu. "
+           "Nie zaznaczaj animowanego tła."),
+        N_("Na zrzucie menu wynik powinien przekroczyć próg, a na zrzucie z rozgrywki być wyraźnie niższy."),
+    ),
+    "hud": TemplateKind(
+        "hud",
+        N_("pasek zdrowia postaci"),
+        N_("w trakcie rozgrywki, gdy widać pasek zdrowia postaci"),
+        N_("Zaznacz <b>lewy koniec paska zdrowia</b> postaci: ramkę i początek paska, bez całego paska – "
+           "jego wypełnienie zmienia się razem ze zdrowiem."),
+        N_("Na zrzucie z rozgrywki wynik powinien przekroczyć próg, a na zrzucie menu i ekranu wczytywania być wyraźnie niższy."),
+    ),
 }
 
 
@@ -411,7 +427,8 @@ class CalibrationPage(QWidget):
 
 
 class CalibrationDialog(QDialog):
-    """Zakładki „Napis śmierci” i „Walka z bossem” (pasek bossa, komunikat zwycięstwa).
+    """Zakładki „Napis śmierci”, „Walka z bossem” (pasek bossa, komunikat zwycięstwa) i „Menu i rozgrywka”
+    (menu główne, pasek zdrowia postaci).
     Każdy wzorzec zapisuje się od razu przyciskiem „Zapisz wzorzec”; okno zostaje otwarte."""
 
     def __init__(
@@ -453,6 +470,21 @@ class CalibrationDialog(QDialog):
         boss_layout.addWidget(boss_hint)
         boss_layout.addWidget(self.boss_tabs, 1)
         self.tabs.addTab(boss_page, tr("Walka z bossem"))
+        self.play_tabs = QTabWidget()
+        self.play_tabs.addTab(self.pages["menu"], tr("Menu główne"))
+        self.play_tabs.addTab(self.pages["hud"], tr("Pasek zdrowia postaci"))
+        play_page = QWidget()
+        play_layout = QVBoxLayout(play_page)
+        play_hint = QLabel(
+            tr("Menu główne oddziela czas gry od czasu sesji: czas w menu się nie liczy. Pasek zdrowia postaci "
+               "pokazuje, kiedy po wyjściu z menu zaczęła się rozgrywka – bez niego czas gry rusza zaraz po menu, "
+               "razem z ekranem wczytywania.")
+        )
+        play_hint.setWordWrap(True)
+        play_hint.setStyleSheet("color:#9aa0a6;")
+        play_layout.addWidget(play_hint)
+        play_layout.addWidget(self.play_tabs, 1)
+        self.tabs.addTab(play_page, tr("Menu i rozgrywka"))
         self.show_kind(initial_kind)
 
         close_button = QPushButton(tr("Zamknij"))
@@ -475,6 +507,9 @@ class CalibrationDialog(QDialog):
     def show_kind(self, key: str) -> None:
         if key == "death":
             self.tabs.setCurrentIndex(0)
+        elif key in ("menu", "hud"):
+            self.tabs.setCurrentIndex(2)
+            self.play_tabs.setCurrentWidget(self.pages[key])
         else:
             self.tabs.setCurrentIndex(1)
             self.boss_tabs.setCurrentWidget(self.pages[key])
@@ -482,6 +517,8 @@ class CalibrationDialog(QDialog):
     def current_page(self) -> CalibrationPage:
         if self.tabs.currentIndex() == 0:
             return self.pages["death"]
+        if self.tabs.currentIndex() == 2:
+            return self.play_tabs.currentWidget()
         return self.boss_tabs.currentWidget()
 
     def set_frame(self, frame: np.ndarray) -> None:

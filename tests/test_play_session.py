@@ -1,7 +1,16 @@
 import json
 
 from deathcounter.bosses import overlay_text
-from deathcounter.play_session import GAP_SECONDS, MAX_STEP, PlaySession
+from deathcounter.play_session import (
+    GAP_SECONDS,
+    LOADING,
+    LOADING_FALLBACK,
+    MAX_STEP,
+    MENU,
+    PLAYING,
+    GamePhase,
+    PlaySession,
+)
 
 START = 1_800_000_000.0
 
@@ -200,3 +209,83 @@ def test_broken_history_file(tmp_path):
     assert [r.deaths for r in PlaySession(tmp_path / "session.json").history] == [3]
     history.write_text("{", encoding="utf-8")
     assert PlaySession(tmp_path / "session.json").history == []
+
+
+
+def test_phase_menu_loading_then_health_bar():
+    phase = GamePhase()
+    phase.restart(0)
+    assert phase.phase == LOADING                         # logo wydawcy po uruchomieniu gry
+    assert phase.update(False, False, 5) is None
+    assert phase.update(True, False, 20) == "discard"    # menu: logo nie było grą
+    assert phase.phase == MENU
+    assert phase.update(False, False, 60) is None         # „Kontynuuj” – wczytywanie
+    assert phase.phase == LOADING
+    assert phase.update(False, True, 75) == "discard"    # pasek zdrowia: rozgrywka, wczytywanie się nie liczy
+    assert phase.phase == PLAYING
+    assert phase.update(False, False, 300) is None        # pasek znika (ukryty interfejs) – gra trwa
+    assert phase.phase == PLAYING
+    assert phase.update(True, False, 400) is None         # powrót do menu
+    assert phase.phase == MENU
+
+
+def test_phase_without_health_bar_starts_after_menu():
+    phase = GamePhase()
+    phase.restart(0)
+    phase.update(True, None, 10)
+    assert phase.update(False, None, 30) == "credit"      # bez wzorca paska: gra zaraz po menu
+    assert phase.phase == PLAYING
+
+
+def test_phase_fallback_when_health_bar_never_shows():
+    phase = GamePhase()
+    phase.restart(0)                                      # program uruchomiony w trakcie gry, interfejs ukryty
+    assert phase.update(False, False, LOADING_FALLBACK - 1) is None
+    assert phase.update(False, False, LOADING_FALLBACK) == "credit"
+    assert phase.phase == PLAYING
+
+
+def test_phase_without_menu_template_is_always_play():
+    phase = GamePhase()
+    phase.restart(0)
+    phase.update(None, True, 1)
+    assert phase.phase == PLAYING
+
+
+def test_game_time_excludes_menu_and_loading(tmp_path):
+    session = PlaySession(tmp_path / "session.json")
+    session.tick(True, START, phase=MENU)
+    now = START
+    for _ in range(30):                                   # minuta w menu
+        now += 2
+        session.tick(True, now, phase=MENU)
+    for _ in range(10):                                   # 20 s wczytywania
+        now += 2
+        session.tick(True, now, phase=LOADING)
+    session.resolve_loading(False)                        # pasek zdrowia – to było wczytywanie
+    for _ in range(50):                                   # 100 s gry
+        now += 2
+        session.tick(True, now, phase=PLAYING)
+    view = session.view(now)
+    assert view.seconds == 180 and view.game_seconds == 98   # pierwsze 2 s gry przypadają jeszcze wczytywaniu
+    session.stop(now)
+    again = PlaySession(tmp_path / "session.json")
+    assert again.game_seconds == 98
+
+
+def test_loading_credited_when_gameplay_confirmed_late(tmp_path):
+    session = PlaySession(tmp_path / "session.json")
+    session.tick(True, START, phase=LOADING)
+    session.tick(True, START + 2, phase=LOADING)
+    session.tick(True, START + 4, phase=LOADING)
+    session.resolve_loading(True)
+    assert session.game_seconds == 4
+
+
+def test_old_files_count_whole_session_as_game_time(tmp_path):
+    (tmp_path / "session.json").write_text('{"started": 1, "last_seen": 900, "seconds": 600, "deaths": 2}',
+                                           encoding="utf-8")
+    (tmp_path / "session_history.json").write_text('[{"started": 1, "ended": 2, "seconds": 300, "deaths": 1}]',
+                                                   encoding="utf-8")
+    session = PlaySession(tmp_path / "session.json")
+    assert session.game_seconds == 600 and session.history[0].game_seconds == 300

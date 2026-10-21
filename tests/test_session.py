@@ -163,3 +163,25 @@ def test_bar_uses_own_threshold(boss_session, clock, settings):
     assert events(results) == []                      # pasek nie przekracza progu 0.99…
     assert all(r.bar_score > settings.threshold for r in results[-10:])
     assert boss_session.detector.threshold == settings.threshold  # …a próg śmierci się nie zmienia
+
+
+def test_menu_and_health_bar_presence(clock, settings):
+    from deathcounter.detector import MENU_CONFIRM_SECONDS, SCREEN_EVERY_SAMPLES
+
+    death = DeathTemplate.from_frame(death_frame(1), TEXT_ROI)
+    menu = DeathTemplate.from_frame(victory_frame(2), VICTORY_ROI)   # „menu” – duży napis na środku
+    hud = DeathTemplate.from_frame(boss_frame(3), BAR_ROI)          # „pasek zdrowia”
+    session = DetectionSession(death, settings, clock, menu_template=menu, hud_template=hud)
+    result = None
+    for i in range(int((MENU_CONFIRM_SECONDS + 1) / STEP) + SCREEN_EVERY_SAMPLES):
+        clock.advance(STEP)
+        result = session.process(victory_frame(10 + i))
+    assert result.menu_visible is True and result.hud_visible is False
+    for i in range(int((MENU_CONFIRM_SECONDS + 1) / STEP) + SCREEN_EVERY_SAMPLES):
+        clock.advance(STEP)
+        result = session.process(boss_frame(40 + i))
+    assert result.menu_visible is False and result.hud_visible is True
+    plain = DetectionSession(death, settings, clock)
+    clock.advance(STEP)
+    result = plain.process(gameplay_frame(1))
+    assert result.menu_visible is None and result.hud_visible is None   # bez wzorców – brak informacji

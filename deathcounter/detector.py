@@ -16,6 +16,11 @@ from .template import DeathTemplate, to_gray
 Clock = Callable[[], float]
 
 
+MENU_CONFIRM_SECONDS = 2.0  # menu główne widoczne / zniknęło przez tyle sekund
+HUD_CONFIRM_SECONDS = 1.0   # pasek zdrowia postaci widoczny przez tyle sekund = rozgrywka się zaczęła
+SCREEN_EVERY_SAMPLES = 5    # menu i pasek zdrowia sprawdzane co tyle próbek (przy 100 ms – co 0,5 s)
+
+
 class DeathDetector:
     """Maszyna stanów: uzbrojony → (N kolejnych trafień) → śmierć → rozbrojony → (brak napisu) → uzbrojony.
 
@@ -120,6 +125,32 @@ class PresenceDetector:
         self._absent_since = None
 
 
+class ScreenPresence:
+    """Czy na ekranie jest dany element (menu główne, pasek zdrowia postaci). Zmiana stanu w obie strony
+    dopiero wtedy, gdy nowy stan trwa `confirm_seconds` – pojedyncza klatka (np. przy przejściu) niczego nie zmienia."""
+
+    def __init__(self, threshold: float, hysteresis: float, confirm_seconds: float, clock: Clock = time.monotonic) -> None:
+        self._clock = clock
+        self.threshold, self.hysteresis, self.confirm_seconds = threshold, hysteresis, confirm_seconds
+        self.visible = False
+        self._since: float | None = None
+
+    def update(self, score: float) -> bool:
+        seen = score >= (self.threshold - self.hysteresis if self.visible else self.threshold)
+        if seen == self.visible:
+            self._since = None
+        else:
+            now = self._clock()
+            if self._since is None:
+                self._since = now
+            if now - self._since >= self.confirm_seconds:
+                self.visible, self._since = seen, None
+        return self.visible
+
+    def interrupt(self) -> None:
+        self._since = None
+
+
 class CaptureHealth(Enum):
     OK = "ok"
     NO_FRAMES = "no_frames"   # przechwytywanie nie dostarcza nowych klatek
@@ -190,6 +221,8 @@ class SampleResult:
     bar_visible: bool = False
     victory_score: float | None = None
     victory: bool = False
+    menu_visible: bool | None = None  # None – wzorzec menu głównego nieskalibrowany
+    hud_visible: bool | None = None   # None – wzorzec paska zdrowia postaci nieskalibrowany
     frames_lost: bool = False  # obraz właśnie przestał docierać (zgłaszane raz, przy przejściu z OK)
 
 
@@ -208,16 +241,23 @@ class DetectionSession:
         bar_template: DeathTemplate | None = None,
         victory_template: DeathTemplate | None = None,
         bosses: BossSettings | None = None,
+        menu_template: DeathTemplate | None = None,
+        hud_template: DeathTemplate | None = None,
     ) -> None:
         self.template = template
         self.bar_template = bar_template
         self.victory_template = victory_template
+        self.menu_template = menu_template
+        self.hud_template = hud_template
         self.settings = settings
         self.bosses = bosses or BossSettings()
         self.monitor = FrameMonitor(settings.freeze_timeout_seconds, clock)
         self.detector = DeathDetector(settings, clock, armed=False)
         self.victory_detector = DeathDetector(settings, clock, armed=False)
         self.bar_detector = PresenceDetector(settings, self.bosses, clock)
+        self.menu = ScreenPresence(settings.threshold, settings.hysteresis, MENU_CONFIRM_SECONDS, clock)
+        self.hud = ScreenPresence(self.bosses.bar_threshold, settings.hysteresis, HUD_CONFIRM_SECONDS, clock)
+        self._screen_samples = 0
         self._healthy = True
 
     def apply_settings(self, settings: DetectorSettings, bosses: BossSettings | None = None) -> None:
@@ -227,6 +267,8 @@ class DetectionSession:
         self.detector.apply_settings(settings)
         self.victory_detector.apply_settings(settings)
         self.bar_detector.apply_settings(settings, self.bosses)
+        self.menu.threshold, self.menu.hysteresis = settings.threshold, settings.hysteresis
+        self.hud.threshold, self.hud.hysteresis = self.bosses.bar_threshold, settings.hysteresis
 
     def set_template(self, kind: str, template: DeathTemplate) -> None:
         if kind == "boss_bar":
@@ -235,6 +277,12 @@ class DetectionSession:
         elif kind == "victory":
             self.victory_template = template
             self.victory_detector.interrupt()
+        elif kind == "menu":
+            self.menu_template = template
+            self.menu.interrupt()
+        elif kind == "hud":
+            self.hud_template = template
+            self.hud.interrupt()
         else:
             self.template = template
             self.detector.interrupt()
@@ -243,6 +291,8 @@ class DetectionSession:
         self.detector.interrupt()
         self.victory_detector.interrupt()
         self.bar_detector.interrupt()
+        self.menu.interrupt()
+        self.hud.interrupt()
 
     def capture_restarted(self) -> None:
         self.monitor.reset()
@@ -273,5 +323,14 @@ class DetectionSession:
             if self.victory_template is not None:
                 result.victory_score = self.victory_template.match(frame, margin)
                 result.victory = self.victory_detector.update(result.victory_score)
+            # Menu i pasek zdrowia postaci zmieniają się rzadko – wystarczy co kilka próbek (mniej pracy procesora).
+            self._screen_samples = (self._screen_samples + 1) % SCREEN_EVERY_SAMPLES
+            if self._screen_samples == 0:
+                if self.menu_template is not None:
+                    self.menu.update(self.menu_template.match(frame, margin))
+                if self.hud_template is not None:
+                    self.hud.update(self.hud_template.match(frame, margin))
         result.bar_visible = self.bar_detector.visible
+        result.menu_visible = self.menu.visible if self.menu_template is not None else None
+        result.hud_visible = self.hud.visible if self.hud_template is not None else None
         return result

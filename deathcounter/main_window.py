@@ -59,7 +59,7 @@ from .report import Adjustments, CertificateData, Verdict, rows_from_records, ve
 from .signing import load_key
 from .steam_dialog import SteamScanDialog
 from .steam_library import find_steam, installed_games
-from .play_session import GAP_SECONDS
+from .play_session import GAP_SECONDS, LOADING, MENU, PLAYING, GamePhase
 from .rtss import RtssOsd, RtssState
 from .storage import StorageError
 from .template import DeathTemplate, load_source_image, save_source_image
@@ -99,6 +99,8 @@ OVERLAY_MODE_LABELS = {
 # Znacznik stanu sesji (jak w sekcjach „Stan” i „Walka z bossem”): napis i kolor tła.
 SESSION_BADGES = {
     "running": (N_("W grze"), "#2f9e5b"),
+    "menu": (N_("Menu"), "#6b6f76"),
+    "loading": (N_("Wczytywanie"), "#6b6f76"),
     "background": (N_("Pauza"), "#c97a1e"),
     "break": (N_("Przerwa"), "#b8860b"),
     "waiting": (N_("Oczekiwanie"), "#6b6f76"),
@@ -153,6 +155,7 @@ class MainWindow(QMainWindow):
         self._running_games: set[str] = set()  # gry uruchomione przy ostatnim sprawdzeniu
         self._running_exe: str | None = None   # exe wybranej gry, gdy działa
         self._auto_switched: str | None = None  # gra, na którą licznik przełączył się sam
+        self._phase = GamePhase()               # menu główne / wczytywanie / rozgrywka – z obrazu (wzorce menu i paska)
         self._refresh_matchers()
 
         self.overlay = OverlayWindow(config.overlay)
@@ -413,9 +416,14 @@ class MainWindow(QMainWindow):
         state_row.addWidget(self.session_state, 1)
         self.session_deaths = QLabel("–")
         self.session_time = QLabel("–")
+        self.session_game_time = QLabel("–")
+        self.session_game_time.setToolTip(
+            tr("Czas sesji bez menu głównego i wczytywania po wyjściu z menu.\n"
+               "Wymaga skalibrowanego menu głównego (Kalibracja… → Menu i rozgrywka) i włączonego wykrywania."))
         form.addRow(tr("Stan:"), state_row)
         form.addRow(tr("Śmierci:"), self.session_deaths)
-        form.addRow(tr("Czas:"), self.session_time)
+        form.addRow(tr("Czas sesji:"), self.session_time)
+        form.addRow(tr("Czas gry:"), self.session_game_time)
         self.session_exe_button = QPushButton()
         self.session_exe_button.clicked.connect(self._pick_game_exe)
         stats_button = QPushButton(tr("Statystyki sesji…"))
@@ -1033,6 +1041,8 @@ class MainWindow(QMainWindow):
         current = self.paths.game
         for game_id in started:
             self.diag.write(f"GRA URUCHOMIONA: {self.config.game_name(game_id)}")
+        if self.paths.game in started:
+            self._phase.restart(time.time())  # po uruchomieniu gry najpierw logo i menu – czas gry czeka
         if s.auto_switch and current not in running and self._pending_game is None:
             # Tylko w chwili uruchomienia gry – ręczny wybór innej gry w trakcie grania zostaje.
             target = next((game_id for game_id in self.config.all_games() if game_id in started), None)
@@ -1052,7 +1062,7 @@ class MainWindow(QMainWindow):
                 self.diag.write("SESJA: gra w tle – czas stoi" if background
                                 else "SESJA: powrót do gry – czas rusza po potwierdzeniu")
             try:
-                if self.session.tick(current in running, time.time(), background):
+                if self.session.tick(current in running, time.time(), background, self._tick_phase()):
                     self.diag.write(f"SESJA: nowa sesja {self.config.game_name(current)}")
             except StorageError as exc:
                 self._show_error(tr("Nie zapisano sesji: {exc}", exc=exc))
@@ -1070,6 +1080,20 @@ class MainWindow(QMainWindow):
     def _refresh_session_stats(self) -> None:
         if self._session_stats is not None and self._session_stats.isVisible():
             self._session_stats.update_data(self.session, self.config.game_name(self.paths.game), time.time())
+
+    def _tick_phase(self) -> str:
+        """Faza gry dla czasu gry: z obrazu, gdy działa wykrywanie i jest wzorzec menu; inaczej czas gry = czas sesji."""
+        return self._phase.phase if self.worker is not None and self.templates["menu"] is not None else PLAYING
+
+    def _update_phase(self, menu: bool | None, hud: bool | None) -> None:
+        before = self._phase.phase
+        verdict = self._phase.update(menu, hud, time.time())
+        if verdict is not None:
+            self.session.resolve_loading(verdict == "credit")
+        if self._phase.phase != before:
+            names = {MENU: "menu główne", LOADING: "wczytywanie", PLAYING: "rozgrywka"}
+            extra = " (bez paska zdrowia – czas wczytywania doliczony)" if verdict == "credit" and hud is not None else ""
+            self.diag.write(f"FAZA GRY: {names[before]} -> {names[self._phase.phase]}{extra}")
 
     def _report_auto_switch(self, game_id: str) -> None:
         text = tr("Uruchomiono grę {name} – licznik przełączył się na nią.", name=self.config.game_name(game_id))
@@ -1136,8 +1160,12 @@ class MainWindow(QMainWindow):
             badge, state = "unknown", tr("Program nie wie, jak rozpoznać tę grę – wskaż jej exe.")
         elif view.background:
             badge, state = "background", tr("Gra w tle ({exe}) – czas sesji stoi.", exe=exe)
+        elif view.running and self._tick_phase() == MENU:
+            badge, state = "menu", tr("Menu główne – czas sesji biegnie, czas gry stoi.")
+        elif view.running and self._tick_phase() == LOADING:
+            badge, state = "loading", tr("Czekam na rozpoczęcie rozgrywki – czas gry stoi.")
         elif view.running:
-            badge, state = "running", tr("{exe} – czas sesji biegnie.", exe=exe)
+            badge, state = "running", tr("{exe} – czas sesji i czas gry biegną.", exe=exe)
         elif view.continues:
             badge, state = "break", tr("Gra zamknięta – powrót w ciągu {minutes} min kontynuuje sesję.",
                                        minutes=GAP_SECONDS // 60)
@@ -1149,13 +1177,19 @@ class MainWindow(QMainWindow):
             f"padding:2px 8px; border-radius:4px; color:white; font-weight:bold; background:{color};")
         self.session_state.setText(state)
         if not s.track or view.started is None:
-            self.session_deaths.setText("–")
-            self.session_time.setText("–")
+            for label in (self.session_deaths, self.session_time, self.session_game_time):
+                label.setText("–")
             return
         ended = not (view.running or view.continues)
         suffix = f"  ({tr('ostatnia sesja')})" if ended else ""
         self.session_deaths.setText(f"{view.deaths}{suffix}")
         self.session_time.setText(f"{format_duration(view.seconds)}{suffix}")
+        hint = ""
+        if self.templates["menu"] is None:
+            hint = "  " + tr("(skalibruj menu główne, żeby odliczać czas w menu)")
+        elif self.worker is None and view.running:
+            hint = "  " + tr("(wykrywanie wyłączone – liczy się jak czas sesji)")
+        self.session_game_time.setText(f"{format_duration(view.game_seconds)}{suffix or hint}")
 
     # ------------------------------------------------------------- Discord
 
@@ -1232,6 +1266,7 @@ class MainWindow(QMainWindow):
             self._set_status(DetectorStatus.NO_TEMPLATE, tr("Najpierw wykonaj kalibrację (przycisk „Kalibracja…”)."))
             return
         worker = DetectionWorker(self.templates, self.config.detector, self.config.capture, self.config.bosses)
+        self._phase.restart(time.time())  # nie wiadomo, co jest na ekranie – okaże się z próbek
         worker.death_detected.connect(self._on_death_detected)
         worker.boss_event.connect(self._on_boss_signal)
         worker.status_changed.connect(self._set_status)
@@ -1270,6 +1305,8 @@ class MainWindow(QMainWindow):
         self.boss_score_label.setText("–")
         # Bez wykrywania nikt nie zgłosi śmierci ani zniknięcia paska – timer walki staje.
         self._boss_event(self.bosses.pause)
+        # Bez obrazu nie widać menu – czas gry liczy się dalej jak czas sesji, a trwające wczytywanie przechodzi do gry.
+        self.session.resolve_loading(True)
         self._refresh_overlay()
         self._refresh_boss_hint()
         # Błąd, który sam zakończył wątek, zostaje widoczny; zwykłe zatrzymanie pokazuje stan spoczynku.
@@ -1313,6 +1350,7 @@ class MainWindow(QMainWindow):
         self.boss_score_label.setText(", ".join(parts) or "–")
         self.diag.sample(result, self.config.detector.threshold, self.config.bosses.bar_threshold,
                          self.bosses.state.value)
+        self._update_phase(result.menu_visible, result.hud_visible)
 
     def _set_status(self, status: DetectorStatus, message: str) -> None:
         self._status = status
@@ -1461,7 +1499,8 @@ class MainWindow(QMainWindow):
             templates=self.templates,
             saved={k: self._saved_calibration(k) for k in self.templates},
             thresholds={"death": self.config.detector.threshold, "victory": self.config.detector.threshold,
-                        "boss_bar": self.config.bosses.bar_threshold},
+                        "boss_bar": self.config.bosses.bar_threshold, "menu": self.config.detector.threshold,
+                        "hud": self.config.bosses.bar_threshold},
             margin=self.config.detector.search_margin,
             hotkey_text=self._hotkey_text("snapshot"),
             initial_frame=hotkey_frame,
@@ -1496,6 +1535,8 @@ class MainWindow(QMainWindow):
             # Wzorzec działa także bez podglądu – zgłaszamy, ale nie przerywamy.
             self.notice_label.setText(tr("Wzorzec zapisany, ale bez zrzutu do podglądu: {exc}", exc=exc))
         self.templates[kind] = template
+        if kind == "menu":
+            self._phase.restart(time.time())
         self._refresh_template_label()
         self._refresh_boss_hint()
         if self.worker is not None:
@@ -1505,7 +1546,8 @@ class MainWindow(QMainWindow):
         return None
 
     def _refresh_template_label(self) -> None:
-        names = (("death", tr("śmierć")), ("boss_bar", tr("pasek bossa")), ("victory", tr("zwycięstwo")))
+        names = (("death", tr("śmierć")), ("boss_bar", tr("pasek bossa")), ("victory", tr("zwycięstwo")),
+                 ("menu", tr("menu")), ("hud", tr("pasek zdrowia")))
         parts = [tr("{label}: {value}", label=label, value='✓' if self.templates[kind] is not None else tr('brak')) for kind, label in names]
         self.template_label.setText(", ".join(parts))
 

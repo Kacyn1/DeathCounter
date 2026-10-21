@@ -17,7 +17,8 @@ from .signing import load_key
 from .template import DeathTemplate, TemplateError
 from .i18n import tr, N_
 
-TEMPLATE_LABELS = {"death": N_("napisu śmierci"), "boss_bar": N_("paska bossa"), "victory": N_("komunikatu zwycięstwa")}
+TEMPLATE_LABELS = {"death": N_("napisu śmierci"), "boss_bar": N_("paska bossa"), "victory": N_("komunikatu zwycięstwa"),
+                   "menu": N_("menu głównego"), "hud": N_("paska zdrowia postaci")}
 
 
 @dataclass

@@ -687,7 +687,20 @@ EN = {
         "The overlay and RTSS show the session deaths and time while the game is running.",
     "Stan:": "State:",
     "Śmierci:": "Deaths:",
-    "Czas:": "Time:",
+    "Czas sesji:": "Session time:",
+    "Czas gry:": "Play time:",
+    "Czas sesji bez menu głównego i wczytywania po wyjściu z menu.\n"
+    "Wymaga skalibrowanego menu głównego (Kalibracja… → Menu i rozgrywka) i włączonego wykrywania.":
+        "Session time without the main menu and the loading after leaving the menu.\n"
+        "Needs a calibrated main menu (Calibration… → Menu and gameplay) and detection turned on.",
+    "Menu": "Menu",
+    "Wczytywanie": "Loading",
+    "Menu główne – czas sesji biegnie, czas gry stoi.": "Main menu – the session time runs, the play time is paused.",
+    "Czekam na rozpoczęcie rozgrywki – czas gry stoi.": "Waiting for the gameplay to start – the play time is paused.",
+    "(skalibruj menu główne, żeby odliczać czas w menu)": "(calibrate the main menu to leave out time in the menu)",
+    "(wykrywanie wyłączone – liczy się jak czas sesji)": "(detection off – counted like the session time)",
+    "menu": "menu",
+    "pasek zdrowia": "health bar",
     "Uruchomiono grę {name} – licznik przełączył się na nią.": "{name} was launched – the counter switched to it.",
     "Ta gra nie ma jeszcze kalibracji – kliknij „Kalibracja…”, żeby liczyć śmierci.":
         "This game is not calibrated yet – click “Calibration…” to count deaths.",
@@ -706,7 +719,7 @@ EN = {
     "Przerwa": "Break",
     "Nieznana gra": "Unknown game",
     "Wyłączona": "Off",
-    "{exe} – czas sesji biegnie.": "{exe} – the session time is running.",
+    "{exe} – czas sesji i czas gry biegną.": "{exe} – the session and play time are running.",
     "Gra w tle ({exe}) – czas sesji stoi.": "Game in the background ({exe}) – the session time is paused.",
     "Gra zamknięta – powrót w ciągu {minutes} min kontynuuje sesję.":
         "Game closed – returning within {minutes} min continues the session.",
@@ -718,6 +731,9 @@ EN = {
         "The course of the current session and a comparison of all sessions of this game.",
 
     # session_stats.py
+    "Czas sesji": "Session time",
+    "Czas sesji: {time}": "Session time: {time}",
+    "Czas sesji łącznie": "Total session time",
     "Sesja": "Session",
     "Śmierci/h": "Deaths/h",
     "Śmierci w kolejnych sesjach": "Deaths in each session",
@@ -745,6 +761,38 @@ EN = {
     "{number} (bieżąca)": "{number} (current)",
     "Czas gry: {time}": "Play time: {time}",
     "Śmierci na godzinę: {value}": "Deaths per hour: {value}",
+
+    # calibration.py – menu i rozgrywka
+    "menu główne gry": "the game's main menu",
+    "gdy widać menu główne (ekran tytułowy z „Kontynuuj” / „Nowa gra”)":
+        "when the main menu is visible (the title screen with “Continue” / “New game”)",
+    "Zaznacz coś, co jest w menu głównym zawsze i tylko tam – np. <b>logo gry</b> albo napisy menu. "
+    "Nie zaznaczaj animowanego tła.":
+        "Select something that is always in the main menu and only there – e.g. <b>the game logo</b> or the menu "
+        "items. Do not select the animated background.",
+    "Na zrzucie menu wynik powinien przekroczyć próg, a na zrzucie z rozgrywki być wyraźnie niższy.":
+        "On a menu screenshot the score should exceed the threshold, and on a gameplay screenshot it should be clearly lower.",
+    "pasek zdrowia postaci": "the character's health bar",
+    "w trakcie rozgrywki, gdy widać pasek zdrowia postaci": "during gameplay, when the character's health bar is visible",
+    "Zaznacz <b>lewy koniec paska zdrowia</b> postaci: ramkę i początek paska, bez całego paska – "
+    "jego wypełnienie zmienia się razem ze zdrowiem.":
+        "Select <b>the left end of the health bar</b>: its frame and the start of the bar, not the whole bar – "
+        "its fill changes with your health.",
+    "Na zrzucie z rozgrywki wynik powinien przekroczyć próg, a na zrzucie menu i ekranu wczytywania być wyraźnie niższy.":
+        "On a gameplay screenshot the score should exceed the threshold, and on the menu and loading screens it should be clearly lower.",
+    "Menu główne": "Main menu",
+    "Pasek zdrowia postaci": "Character health bar",
+    "Menu główne oddziela czas gry od czasu sesji: czas w menu się nie liczy. Pasek zdrowia postaci "
+    "pokazuje, kiedy po wyjściu z menu zaczęła się rozgrywka – bez niego czas gry rusza zaraz po menu, "
+    "razem z ekranem wczytywania.":
+        "The main menu separates the play time from the session time: time in the menu is not counted. The character's "
+        "health bar shows when the gameplay started after leaving the menu – without it the play time starts right "
+        "after the menu, including the loading screen.",
+    "Menu i rozgrywka": "Menu and gameplay",
+
+    # game_data.py
+    "menu głównego": "the main menu",
+    "paska zdrowia postaci": "the character's health bar",
 
     # steam_library.py
     "Brak połączenia ze sklepem Steam ({exc}).": "No connection to the Steam store ({exc}).",

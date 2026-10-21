@@ -31,11 +31,14 @@ GAMES_DIR = "games"
 GAME_NAME_MAX = 60
 _GAME_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
-# Wzorce: napis śmierci, ramka paska zdrowia bossa, komunikat zwycięstwa – (pole w Calibration, pole w AppPaths).
+# Wzorce: napis śmierci, ramka paska zdrowia bossa, komunikat zwycięstwa, menu główne, pasek zdrowia postaci –
+# (pole w Calibration, pole w AppPaths).
 TEMPLATE_FIELDS = {
     "death": ("template", "template"),
     "boss_bar": ("boss_bar_template", "boss_bar_template"),
     "victory": ("victory_template", "victory_template"),
+    "menu": ("menu_template", "menu_template"),
+    "hud": ("hud_template", "hud_template"),
 }
 
 
@@ -281,6 +284,8 @@ class Calibration:
     template: TemplateInfo | None = None           # napis śmierci
     boss_bar_template: TemplateInfo | None = None  # ramka paska zdrowia bossa
     victory_template: TemplateInfo | None = None   # komunikat zwycięstwa
+    menu_template: TemplateInfo | None = None      # menu główne gry (czas w menu nie jest czasem gry)
+    hud_template: TemplateInfo | None = None       # pasek zdrowia postaci (początek rozgrywki po wyjściu z menu)
 
     def info(self, kind: str) -> TemplateInfo | None:
         return getattr(self, TEMPLATE_FIELDS[kind][0])
@@ -317,6 +322,8 @@ class AppPaths:
     attempts: Path
     session: Path
     session_history: Path
+    menu_template: Path
+    hud_template: Path
 
     @classmethod
     def for_game(cls, base: Path, game: str) -> "AppPaths":
@@ -339,6 +346,8 @@ class AppPaths:
             game_dir / "attempts.json",
             game_dir / "session.json",
             game_dir / "session_history.json",
+            game_dir / "menu.png",
+            game_dir / "hud.png",
         )
 
     def template_path(self, kind: str) -> Path:

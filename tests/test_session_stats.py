@@ -43,15 +43,20 @@ def test_sessions_list_history_then_current(tmp_path):
 
 
 def test_window_shows_both_tabs(tmp_path):
-    session = make_session(tmp_path, [{"started": NOW - 9000, "ended": NOW - 5000, "seconds": 3600, "deaths": 20}],
-                           {"started": NOW - 600, "last_seen": NOW, "seconds": 500, "deaths": 4, "death_times": [100, 200, 300]})
+    session = make_session(tmp_path, [{"started": NOW - 9000, "ended": NOW - 5000, "seconds": 3600, "deaths": 20,
+                                       "game_seconds": 3000}],
+                           {"started": NOW - 600, "last_seen": NOW, "seconds": 500, "game_seconds": 400, "deaths": 4,
+                            "death_times": [100, 200, 300]})
     window = SessionStatsWindow()
     window.update_data(session, "Dark Souls II", NOW)
     assert window.windowTitle() == "Statystyki sesji – Dark Souls II"
-    assert [label.text() for label in window.current_tiles.values] == ["4", "00:08:20", "28,8", "00:03:20", "00:03:20"]
+    # Śmierci, czas sesji, czas gry, śmierci na godzinę czasu gry, najdłużej bez śmierci, od ostatniej śmierci.
+    assert [label.text() for label in window.current_tiles.values] == ["4", "00:08:20", "00:06:40", "36,0",
+                                                                       "00:03:20", "00:03:20"]
     assert "1 śmierci" in window.current_note.text()                  # jedna śmierć bez czasu
-    assert [label.text() for label in window.all_tiles.values] == ["2", "24", "01:08:20", "12,0", "21,1"]
-    assert window.table.item(0, 0).text() == "2 (bieżąca)" and window.table.item(1, 3).text() == "20"
+    assert [label.text() for label in window.all_tiles.values] == ["2", "24", "01:08:20", "00:56:40", "12,0", "25,4"]
+    assert window.table.item(0, 0).text() == "2 (bieżąca)" and window.table.item(1, 3).text() == "00:50:00"
+    assert window.table.item(1, 4).text() == "20"
     window.timeline._mouse = QPointF(200, 100)   # rysowanie z dymkiem nie rzuca wyjątków
     window.bars._mouse = QPointF(100, 150)
     window.resize(600, 500)

@@ -201,11 +201,14 @@ class DetectionWorker(QThread):
             bar_template=self._templates.get("boss_bar"),
             victory_template=self._templates.get("victory"),
             bosses=self._bosses,
+            menu_template=self._templates.get("menu"),
+            hud_template=self._templates.get("hud"),
         )
         source = None
         retry_at = 0.0
         last_frame = None
         last_sample_signal = 0.0
+        last_screen = (None, None)  # menu / pasek zdrowia postaci z ostatnio wysłanej próbki
 
         try:
             while not self._stop.is_set():
@@ -278,8 +281,10 @@ class DetectionWorker(QThread):
                     self.boss_event.emit(BOSS_BAR_LOST)
                     self._name_bands = None
                 self._collect_name(frame, result, started)
-                if result.death or result.victory or result.bar_event or started - last_sample_signal >= SAMPLE_SIGNAL_INTERVAL:
-                    last_sample_signal = started
+                screen = (result.menu_visible, result.hud_visible)
+                if (result.death or result.victory or result.bar_event or screen != last_screen
+                        or started - last_sample_signal >= SAMPLE_SIGNAL_INTERVAL):
+                    last_sample_signal, last_screen = started, screen
                     self.sample.emit(result)
 
                 elapsed = time.monotonic() - started

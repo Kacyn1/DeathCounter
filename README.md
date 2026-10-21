@@ -183,7 +183,19 @@ Opcje w sekcji:
 - **Przełączaj licznik na uruchomioną grę** – gdy uruchomisz inną grę z listy, licznik sam się na nią przełączy i napisze o tym w oknie. Jeśli ta gra nie ma jeszcze kalibracji, program o tym przypomni i zamiga na pasku zadań. Przełączenie następuje tylko w chwili uruchomienia gry – gdy w trakcie grania sam wybierzesz inną grę, program tego nie cofa;
 - **Pokaż sesję na nakładce** – nakładka i RTSS pokazują dodatkową linię „Sesja: 12 · 01:40:12”.
 
-Stan sesji pokazuje znacznik: **W GRZE** (czas biegnie), **PAUZA** (gra w tle), **PRZERWA** (gra zamknięta, powrót w ciągu 15 min kontynuuje sesję), **OCZEKIWANIE**, **NIEZNANA GRA** (wskaż exe) albo **WYŁĄCZONA**. Status na Discordzie pokazuje czas od początku sesji.
+**Czas sesji i czas gry.** Sekcja pokazuje dwa czasy:
+- **czas sesji** – cały czas z uruchomioną i aktywną grą, razem z menu;
+- **czas gry** – faktyczna rozgrywka: czas sesji bez menu głównego i bez wczytywania po wyjściu z menu.
+
+Czas gry wymaga dwóch wzorców z **Kalibracja… → Menu i rozgrywka** i włączonego wykrywania:
+- **Menu główne** – zaznacz np. logo gry albo napisy menu. Dopóki menu jest na ekranie, czas gry stoi (znacznik **MENU**);
+- **Pasek zdrowia postaci** – zaznacz lewy koniec paska (ramkę i początek). Po wyjściu z menu czas gry rusza dopiero, gdy pasek się pojawi, więc ekran wczytywania się nie liczy (znacznik **WCZYTYWANIE**). Pasek służy tylko do wykrycia startu – potem czas biegnie aż do powrotu do menu, także gdy pasek zniknie (np. ukryty interfejs w Elden Ringu albo przerywnik filmowy). Jeśli pasek nie pojawi się przez 2 minuty, rozgrywka i tak się zaczyna, a ten czas jest doliczany.
+
+Bez wzorca paska zdrowia czas gry rusza zaraz po wyjściu z menu (razem z wczytywaniem). Bez wzorca menu albo przy wyłączonym wykrywaniu czas gry liczy się jak czas sesji. Po uruchomieniu gry logo wydawcy i menu się nie liczą. Zmiana stanu menu jest potwierdzana po 2 s, a menu i pasek są sprawdzane co 0,5 s.
+
+W oknie statystyk są oba czasy, a śmierci na godzinę liczone są od czasu gry.
+
+Stan sesji pokazuje znacznik: **W GRZE** (czas biegnie), **MENU**, **WCZYTYWANIE**, **PAUZA** (gra w tle), **PRZERWA** (gra zamknięta, powrót w ciągu 15 min kontynuuje sesję), **OCZEKIWANIE**, **NIEZNANA GRA** (wskaż exe) albo **WYŁĄCZONA**. Status na Discordzie pokazuje czas od początku sesji.
 
 **Statystyki sesji…** (przycisk w sekcji) otwiera okno, które nie blokuje programu i odświeża się co sekundę. Ma dwie zakładki:
 - **Aktualna sesja** – kafelki (śmierci, czas gry, śmierci na godzinę, najdłużej bez śmierci, od ostatniej śmierci) i wykres liniowy: łączna liczba śmierci w czasie gry. Każda śmierć to skok linii o 1, więc strome fragmenty pokazują, gdzie była „ściana” (np. boss). Oś czasu to czas gry w sesji, bez pauz. Po najechaniu myszą widać czas gry i liczbę śmierci w tej chwili;
