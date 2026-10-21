@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ctypes
 import struct
+import unicodedata
 from ctypes import wintypes
 from enum import Enum
 
@@ -27,7 +28,20 @@ OSD_EX_OFFSET, OSD_EX_SIZE = 512, 4096
 
 FILE_MAP_ALL_ACCESS = 0xF001F
 
-_ASCII_FALLBACK = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ—", "acelnoszzACELNOSZZ-")
+# Znaki, których nie da się rozłożyć na literę i akcent (ł, ø, ß…), oraz interpunkcja spoza ASCII.
+_ASCII_FALLBACK = str.maketrans({
+    "ł": "l", "Ł": "L", "ø": "o", "Ø": "O", "ß": "ss", "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE",
+    "·": "|", "•": "|", "—": "-", "–": "-", "−": "-", "…": "...", "×": "x",
+    "„": '"', "”": '"', "“": '"', "«": '"', "»": '"', "‘": "'", "’": "'", "‚": "'", "\u00a0": " ",
+})
+
+
+def to_ascii(text: str) -> str:
+    """Tekst dla czcionki RTSS (sam ASCII): litery bez akcentów („Ś” → „S”, „é” → „e”), interpunkcja
+    zamieniona na odpowiedniki („·” → „|”, „—” → „-”), a znaki bez odpowiednika – na „?”."""
+    text = unicodedata.normalize("NFKD", text.translate(_ASCII_FALLBACK))
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return text.encode("ascii", errors="replace").decode("ascii")
 
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 kernel32.OpenFileMappingW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
@@ -71,7 +85,7 @@ class RtssOsd:
 
     def show(self, text: str) -> RtssState:
         # Czcionka rastrowa RTSS nie ma polskich liter („Ś” znikało), więc przekazujemy sam ASCII.
-        data = text.translate(_ASCII_FALLBACK).encode("ascii", errors="replace")
+        data = to_ascii(text).encode("ascii")
         return self._with_memory(lambda base, size: self._write(base, size, data))
 
     def clear(self) -> RtssState:

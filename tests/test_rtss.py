@@ -97,3 +97,14 @@ def test_rejects_wrong_signature(fake_rtss):
     name, base = fake_rtss
     ctypes.memmove(base, b"\0\0\0\0", 4)
     assert RtssOsd(memory_name=name).show("x") is RtssState.UNSUPPORTED
+
+
+def test_text_for_rtss_font_is_ascii():
+    from deathcounter.rtss import to_ascii
+
+    assert to_ascii("DEATHS: 7\nSesja: 12 · 01:40:12") == "DEATHS: 7\nSesja: 12 | 01:40:12"
+    assert to_ascii("Margit, Upadły Omen — deaths: 3") == "Margit, Upadly Omen - deaths: 3"
+    assert to_ascii("ŚMIERCI Żółć „Bóg” …") == 'SMIERCI Zolc "Bog" ...'
+    assert to_ascii("Rennala, Królowa Pełni Księżyca") == "Rennala, Krolowa Pelni Ksiezyca"
+    assert to_ascii("Éloïse ø ß") == "Eloise o ss"
+    assert to_ascii("☠ 5") == "? 5"   # znak bez odpowiednika

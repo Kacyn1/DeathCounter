@@ -1,5 +1,10 @@
 # Historia zmian
 
+## 1.13.1
+
+- Poprawiono linię sesji w nakładce RTSS: zamiast „Sesja: 12 ? 01:40:12” jest „Sesja: 12 | 01:40:12”. Czcionka RTSS ma tylko znaki ASCII, a kropka „·” nie była zamieniana na odpowiednik. Okno nakładki pokazywało ją poprawnie.
+- Tekst dla RTSS jest teraz zamieniany na ASCII ogólnie: litery z akcentami tracą akcent (np. „Ś” → „S”, „é” → „e”), a typowa interpunkcja ma odpowiedniki („—” → „-”, „…” → „...”, cudzysłowy → `"`). „?” pojawia się tylko przy znaku bez żadnego odpowiednika.
+
 ## 1.13.0
 
 - Sekcja „Aktualna sesja” pokazuje dwa czasy: **czas sesji** (gra uruchomiona i aktywna, razem z menu) i **czas gry** (faktyczna rozgrywka – bez menu głównego i bez wczytywania po wyjściu z menu).
