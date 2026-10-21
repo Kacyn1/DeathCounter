@@ -235,7 +235,7 @@ def test_counter_files_keep_calibration(tmp_path):
     paths = AppPaths.for_game(tmp_path, "ds1")
     names = {p.name for p in counter_files(paths)}
     assert names == {"deaths.json", "deaths.json.uszkodzony", "bosses.json", "bosses.json.uszkodzony", "audit.json",
-                     "session.json"}
+                     "session.json", "session_history.json"}
 
 
 def test_bar_threshold_defaults_to_old_shared_threshold(tmp_path):

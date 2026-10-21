@@ -316,6 +316,7 @@ class AppPaths:
     recent_fights: Path
     attempts: Path
     session: Path
+    session_history: Path
 
     @classmethod
     def for_game(cls, base: Path, game: str) -> "AppPaths":
@@ -337,6 +338,7 @@ class AppPaths:
             game_dir / "recent_fights.json",
             game_dir / "attempts.json",
             game_dir / "session.json",
+            game_dir / "session_history.json",
         )
 
     def template_path(self, kind: str) -> Path:

@@ -1,5 +1,12 @@
 # Historia zmian
 
+## 1.12.0
+
+- Nowy przycisk „Statystyki sesji…” w sekcji „Aktualna sesja”. Otwiera okno, które nie blokuje programu i odświeża się co sekundę. Okno ma dwie zakładki.
+- Zakładka „Aktualna sesja”: kafelki (śmierci, czas gry, śmierci na godzinę, najdłużej bez śmierci, od ostatniej śmierci) i wykres liniowy łącznej liczby śmierci w czasie gry. Każda śmierć to skok linii o 1, więc strome fragmenty pokazują, gdzie była „ściana”, np. boss. Oś czasu to czas gry w sesji, bez pauz. Po najechaniu myszą widać czas gry i liczbę śmierci w tej chwili. Po zamknięciu gry zakładka pokazuje ostatnią sesję („zakończona”) aż do kolejnego uruchomienia gry.
+- Zakładka „Wszystkie sesje”: kafelki (liczba sesji, śmierci i czas gry łącznie, średnio na sesję, śmierci na godzinę), wykres słupkowy śmierci w kolejnych sesjach (ostatnich 20; po najechaniu – data, czas gry i śmierci na godzinę) i tabela wszystkich sesji.
+- Zakończone sesje zapisują się w `session_history.json` w folderze gry (bez sesji krótszych niż minuta i bez śmierci), a czas każdej śmierci w sesji – w `session.json`. Historia i czasy śmierci zbierają się od tej wersji; śmierci z bieżącej sesji sprzed aktualizacji są na początku wykresu. „Resetuj licznik” czyści też historię sesji danej gry.
+
 ## 1.11.1
 
 - Przycisk nakładki nazywa się teraz „Pokaż nakładkę” albo „Ukryj nakładkę”, czyli mówi, co zrobi kliknięcie. Gdy nakładka jest włączona, przycisk jest wciśnięty. Poprzednie „Nakładka: Włącz / Wyłącz” myliło stan z poleceniem, a w wersji angielskiej przy włączonej nakładce pokazywało „Overlay: Off”.

@@ -95,7 +95,8 @@ The **Current session** section (below “Boss fight”) shows the deaths and ti
 
 - **Track session** turns the feature on and off.
 - **Switch the counter to the running game** – when you launch another game from the list, the counter switches to it and tells you so; if that game is not calibrated yet, the program reminds you and flashes on the taskbar. It happens only when a game starts, so choosing another game by hand while playing is not undone.
-- **Show session on the overlay** adds the line “Session: 12 · 01:40:12” to the overlay and RTSS. The Discord status shows the time since the session started. The session state is shown as a badge: **IN GAME**, **PAUSED**, **BREAK**, **WAITING**, **UNKNOWN GAME** or **OFF**.
+- **Show session on the overlay** adds the line “Session: 12 · 01:40:12” to the overlay and RTSS. The Discord status shows the time since the session started.
+- **Session statistics…** opens a window (it does not block the program and refreshes every second) with two tabs: **Current session** – tiles and a line chart of total deaths over play time (each death is a step up, so steep parts show where you hit a wall); **All sessions** – tiles, a bar chart of deaths in each session (last 20) and a table of all sessions. Finished sessions are saved in `session_history.json` in the game folder; history and death times are recorded since version 1.12.0. The session state is shown as a badge: **IN GAME**, **PAUSED**, **BREAK**, **WAITING**, **UNKNOWN GAME** or **OFF**.
 
 Built-in games are recognised by their exe name, Steam games by their install folder, and games added by hand by the name of an installed Steam game. For a game outside Steam (e.g. GOG, Epic) the section shows **Choose game exe…**.
 

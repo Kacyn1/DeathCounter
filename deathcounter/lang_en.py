@@ -713,6 +713,39 @@ EN = {
     "Czekam na uruchomienie gry.": "Waiting for the game to start.",
     "ostatnia sesja": "last session",
 
+    "Statystyki sesji…": "Session statistics…",
+    "Przebieg aktualnej sesji i porównanie wszystkich sesji tej gry.":
+        "The course of the current session and a comparison of all sessions of this game.",
+
+    # session_stats.py
+    "Sesja": "Session",
+    "Śmierci/h": "Deaths/h",
+    "Śmierci w kolejnych sesjach": "Deaths in each session",
+    "Wszystkie sesje": "All sessions",
+    "Statystyki sesji – {game}": "Session statistics – {game}",
+    "Brak sesji – uruchom grę, a sesja zacznie się sama.": "No session yet – launch the game and a session starts by itself.",
+    "Brak sesji – historia zbiera się od wersji 1.12.0.": "No sessions – the history has been recorded since version 1.12.0.",
+    "Sesja {number} (bieżąca)": "Session {number} (current)",
+    "Sesja {number}": "Session {number}",
+    "Czas gry": "Play time",
+    "Śmierci na godzinę": "Deaths per hour",
+    "Najdłużej bez śmierci": "Longest without dying",
+    "Od ostatniej śmierci": "Since the last death",
+    "Sesje": "Sessions",
+    "Śmierci łącznie": "Total deaths",
+    "Czas gry łącznie": "Total play time",
+    "Średnio na sesję": "Average per session",
+    "Przebieg sesji": "Session timeline",
+    "Przebieg sesji z {when} (zakończona)": "Session from {when} (ended)",
+    "Przebieg sesji z {when}": "Session from {when}",
+    "{count} śmierci z tej sesji nie ma zapisanego czasu (sprzed zbierania czasów śmierci) – są na początku wykresu.":
+        "{count} deaths of this session have no recorded time (from before death times were recorded) – "
+        "they are at the start of the chart.",
+    "Śmierci w ostatnich {count} sesjach (wszystkie są w tabeli)": "Deaths in the last {count} sessions (all are in the table)",
+    "{number} (bieżąca)": "{number} (current)",
+    "Czas gry: {time}": "Play time: {time}",
+    "Śmierci na godzinę: {value}": "Deaths per hour: {value}",
+
     # steam_library.py
     "Brak połączenia ze sklepem Steam ({exc}).": "No connection to the Steam store ({exc}).",
     "Nieczytelna odpowiedź sklepu Steam ({exc}).": "Unreadable response from the Steam store ({exc}).",

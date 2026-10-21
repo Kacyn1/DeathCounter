@@ -185,6 +185,12 @@ Opcje w sekcji:
 
 Stan sesji pokazuje znacznik: **W GRZE** (czas biegnie), **PAUZA** (gra w tle), **PRZERWA** (gra zamknięta, powrót w ciągu 15 min kontynuuje sesję), **OCZEKIWANIE**, **NIEZNANA GRA** (wskaż exe) albo **WYŁĄCZONA**. Status na Discordzie pokazuje czas od początku sesji.
 
+**Statystyki sesji…** (przycisk w sekcji) otwiera okno, które nie blokuje programu i odświeża się co sekundę. Ma dwie zakładki:
+- **Aktualna sesja** – kafelki (śmierci, czas gry, śmierci na godzinę, najdłużej bez śmierci, od ostatniej śmierci) i wykres liniowy: łączna liczba śmierci w czasie gry. Każda śmierć to skok linii o 1, więc strome fragmenty pokazują, gdzie była „ściana” (np. boss). Oś czasu to czas gry w sesji, bez pauz. Po najechaniu myszą widać czas gry i liczbę śmierci w tej chwili;
+- **Wszystkie sesje** – kafelki (liczba sesji, śmierci i czas gry łącznie, średnio na sesję, śmierci na godzinę), wykres słupkowy śmierci w kolejnych sesjach (ostatnich 20; po najechaniu – data, czas gry i śmierci na godzinę) i tabela wszystkich sesji, od najnowszej.
+
+Zakończone sesje zapisują się w `session_history.json` w folderze gry (bez sesji krótszych niż minuta i bez śmierci), a czas każdej śmierci – w `session.json`. Historia i czasy śmierci zbierają się od wersji 1.12.0. „Resetuj licznik” czyści też historię sesji danej gry.
+
 Jak program rozpoznaje grę: gry wbudowane po nazwie exe (`DARKSOULS.exe`, `DarkSoulsRemastered.exe`, `DarkSoulsII.exe`, `DarkSoulsIII.exe`, `sekiro.exe`, `eldenring.exe`), gry ze Steama po folderze instalacji (dowolny exe z `steamapps\common\<gra>`), a gry dodane ręcznie – po nazwie zainstalowanej gry Steam. Dla gry spoza Steama (np. GOG, Epic) w sekcji pojawia się przycisk **Wskaż exe gry…**; wybrany plik zapisuje się w `config.json` (`game_exes`).
 
 ## Certyfikat PDF
@@ -272,7 +278,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1        # testy + dist\DeathCo
 | `deathcounter/signing.py` | kod weryfikacyjny certyfikatu (HMAC), klucz spoza repozytorium |
 | `deathcounter/discord_presence.py` | status na Discordzie (Rich Presence przez lokalny kanał Discorda) |
 | `deathcounter/config.py` | `config.json`, lista gier, ścieżki, `calibration.json`, przeniesienie starych danych |
-| `deathcounter/play_session.py` | aktualna sesja: śmierci i czas przy uruchomionej grze (`session.json`) |
+| `deathcounter/play_session.py` | aktualna sesja: śmierci i czas przy uruchomionej grze (`session.json`), historia sesji (`session_history.json`) |
+| `deathcounter/session_stats.py` | okno „Statystyki sesji” z wykresami |
 | `deathcounter/game_process.py` | która gra jest uruchomiona (procesy Windows dopasowane do gier) |
 | `deathcounter/steam_library.py` | gry z biblioteki Steam i rozpoznanie souls-like (tagi sklepu, lista zapasowa) |
 | `deathcounter/steam_dialog.py` | okno „Znajdź zainstalowane gry ze Steam” |

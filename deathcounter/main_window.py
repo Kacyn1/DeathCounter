@@ -54,6 +54,7 @@ from .diagnostics import DiagnosticLog
 from .discord_presence import DiscordPresence, build_activity
 from .overlay import OverlayWindow
 from .results_window import ResultsWindow
+from .session_stats import SessionStatsWindow
 from .report import Adjustments, CertificateData, Verdict, rows_from_records, verify_pdf, write_certificate
 from .signing import load_key
 from .steam_dialog import SteamScanDialog
@@ -140,6 +141,7 @@ class MainWindow(QMainWindow):
         self._hotkeys: set[int] = set()  # zarejestrowane identyfikatory z HOTKEY_IDS
         self._calibration: CalibrationDialog | None = None
         self._results: ResultsWindow | None = None
+        self._session_stats: SessionStatsWindow | None = None
         self._closing = False
         self._stop_requested = False
         self._rtss_setup: RtssSetupWorker | None = None
@@ -416,9 +418,13 @@ class MainWindow(QMainWindow):
         form.addRow(tr("Czas:"), self.session_time)
         self.session_exe_button = QPushButton()
         self.session_exe_button.clicked.connect(self._pick_game_exe)
+        stats_button = QPushButton(tr("Statystyki sesji…"))
+        stats_button.setToolTip(tr("Przebieg aktualnej sesji i porównanie wszystkich sesji tej gry."))
+        stats_button.clicked.connect(self.open_session_stats)
         bottom = QHBoxLayout()
         bottom.addWidget(self.session_overlay, 1)
         bottom.addWidget(self.session_exe_button)
+        bottom.addWidget(stats_button)
         form.addRow(bottom)
         self._refresh_session()
         return box
@@ -601,6 +607,7 @@ class MainWindow(QMainWindow):
             self.notice_label.setText(text)
             self.diag.write(f"BOSS: {text}")
         self._refresh_session()
+        self._refresh_session_stats()
         self._refresh_overlay()
         self._refresh_discord_label()
         self._refresh_results()
@@ -1051,6 +1058,19 @@ class MainWindow(QMainWindow):
                 self._show_error(tr("Nie zapisano sesji: {exc}", exc=exc))
         self._refresh_session()
 
+    def open_session_stats(self) -> None:
+        """Okno nie blokuje programu – może zostać otwarte obok w trakcie gry."""
+        if self._session_stats is None:
+            self._session_stats = SessionStatsWindow(self)
+        self._session_stats.show()
+        self._refresh_session_stats()
+        self._session_stats.raise_()
+        self._session_stats.activateWindow()
+
+    def _refresh_session_stats(self) -> None:
+        if self._session_stats is not None and self._session_stats.isVisible():
+            self._session_stats.update_data(self.session, self.config.game_name(self.paths.game), time.time())
+
     def _report_auto_switch(self, game_id: str) -> None:
         text = tr("Uruchomiono grę {name} – licznik przełączył się na nią.", name=self.config.game_name(game_id))
         if self.templates["death"] is None:
@@ -1066,7 +1086,7 @@ class MainWindow(QMainWindow):
             if operation == self.store.reset:
                 self.session.reset_deaths()
             else:
-                self.session.add_deaths(delta)
+                self.session.add_deaths(delta, time.time())
         except StorageError as exc:
             self._show_error(tr("Nie zapisano sesji: {exc}", exc=exc))
 

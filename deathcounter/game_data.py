@@ -44,6 +44,7 @@ def counter_files(paths: AppPaths) -> list[Path]:
         paths.bosses.with_name(paths.bosses.name + ".uszkodzony"),
         paths.audit,  # nowy licznik zaczyna też nowy rejestr zmian
         paths.session,
+        paths.session_history,
     ]
 
 
@@ -80,4 +81,4 @@ def open_game(base: Path, game: str) -> GameData:
             except TemplateError as exc:
                 warnings.append(tr("Nie można wczytać wzorca {item}: {exc} Wykonaj kalibrację ponownie.", item=tr(TEMPLATE_LABELS[kind]), exc=exc))
     return GameData(paths, store, boss_store, calibration, templates, audit, boss_names, recent, attempts,
-                    PlaySession(paths.session), warnings)
+                    PlaySession(paths.session, paths.session_history), warnings)

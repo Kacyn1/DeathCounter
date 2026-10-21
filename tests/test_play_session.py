@@ -144,3 +144,59 @@ def test_overlay_shows_session_line(tmp_path):
     session.add_deaths(12)
     assert overlay_text(40, None, session.view(end)) == "DEATHS: 40\nSesja: 12 · 01:02:04"
     assert overlay_text(40, None) == "DEATHS: 40"
+
+
+def test_death_times_follow_play_time(tmp_path):
+    session = PlaySession(tmp_path / "session.json")
+    end = play(session, START, 100)
+    session.add_deaths(1, end)
+    end = play(session, end, 50)
+    session.add_deaths(2, end)
+    assert session.death_times == [100, 150, 150]
+    session.add_deaths(-1, end)                      # cofnięcie usuwa ostatnią
+    assert session.death_times == [100, 150] and session.deaths == 2
+    session.stop(end)
+    again = PlaySession(tmp_path / "session.json")  # czasy przetrwają ponowne uruchomienie programu
+    assert again.death_times == [100, 150]
+    again.reset_deaths()
+    assert again.death_times == []
+
+
+def test_old_session_file_without_death_times(tmp_path):
+    path = tmp_path / "session.json"
+    path.write_text('{"started": 1, "last_seen": 100, "seconds": 90, "deaths": 4}', encoding="utf-8")
+    session = PlaySession(path)
+    assert session.deaths == 4 and session.death_times == []
+
+
+def test_finished_session_goes_to_history(tmp_path):
+    session = PlaySession(tmp_path / "session.json")
+    end = play(session, START, 600)
+    session.add_deaths(5)
+    session.tick(False, end + 2)
+    assert session.tick(True, end + GAP_SECONDS + 10)  # nowa sesja – poprzednia trafia do historii
+    assert [(r.started, r.seconds, r.deaths) for r in session.history] == [(START, 600, 5)]
+    assert session.death_times == []
+    reloaded = PlaySession(tmp_path / "session.json")
+    assert [(r.started, r.ended, r.deaths) for r in reloaded.history] == [(START, end, 5)]
+
+
+def test_short_empty_session_is_not_kept(tmp_path):
+    session = PlaySession(tmp_path / "session.json")
+    end = play(session, START, 30)                     # gra włączona na pół minuty, bez śmierci
+    session.tick(False, end + 2)
+    session.tick(True, end + GAP_SECONDS + 10)
+    assert session.history == []
+    end = play(session, end + GAP_SECONDS + 10, 30)  # krótka, ale ze śmiercią – zostaje
+    session.add_deaths(1)
+    session.tick(False, end + 2)
+    session.tick(True, end + GAP_SECONDS + 10)
+    assert len(session.history) == 1
+
+
+def test_broken_history_file(tmp_path):
+    history = tmp_path / "session_history.json"
+    history.write_text('[{"started": 1, "ended": 2, "seconds": 60, "deaths": 3}, {"started": "x"}, 5]', encoding="utf-8")
+    assert [r.deaths for r in PlaySession(tmp_path / "session.json").history] == [3]
+    history.write_text("{", encoding="utf-8")
+    assert PlaySession(tmp_path / "session.json").history == []
