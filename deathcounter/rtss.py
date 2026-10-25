@@ -12,6 +12,7 @@ import unicodedata
 from ctypes import wintypes
 from enum import Enum
 
+from . import windll
 from .i18n import N_
 
 SHARED_MEMORY_NAME = "RTSSSharedMemoryV2"
@@ -43,7 +44,7 @@ def to_ascii(text: str) -> str:
     text = "".join(char for char in text if not unicodedata.combining(char))
     return text.encode("ascii", errors="replace").decode("ascii")
 
-kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+kernel32 = windll.load("kernel32", use_last_error=True)
 kernel32.OpenFileMappingW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
 kernel32.OpenFileMappingW.restype = wintypes.HANDLE
 kernel32.MapViewOfFile.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_size_t]

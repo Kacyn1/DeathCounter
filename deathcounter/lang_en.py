@@ -202,6 +202,7 @@ EN = {
     "Zamknij": "Close",
 
     # capture.py
+    "Przechwytywanie obrazu (DXCam) działa tylko w systemie Windows.": "Screen capture (DXCam) only works on Windows.",
     " (główny)": " (primary)",
     "Monitor {value}: {width}×{height}{primary}": "Monitor {value}: {width}×{height}{primary}",
     "Nie można załadować biblioteki DXCam: {exc}": "Cannot load the DXCam library: {exc}",
@@ -637,6 +638,7 @@ EN = {
     "brak wolnego miejsca na tekst w RTSS": "no free text slot in RTSS",
 
     # rtss_setup.py
+    "RTSS działa tylko w systemie Windows.": "RTSS only works on Windows.",
     "W systemie brak programu winget. Zainstaluj RTSS ręcznie ze strony guru3d.com.":
         "winget is not available on this system. Install RTSS manually from guru3d.com.",
     "Instalacja RTSS trwała zbyt długo i została przerwana.": "The RTSS installation took too long and was cancelled.",
@@ -839,6 +841,7 @@ EN = {
     # winapi.py
     "Nie udało się przenieść do Kosza (kod {code:#x}). Sprawdź, czy pliki nie są otwarte.":
         "Could not move to the Recycle Bin (code {code:#x}). Check that the files are not open.",
+    "Nie udało się przenieść do Kosza: {path}": "Could not move to the Trash: {path}",
 
     # worker.py
     "aktywny": "active",

@@ -6,9 +6,10 @@ import ctypes
 from ctypes import wintypes
 from pathlib import Path
 
+from . import windll
 from .i18n import tr
 
-user32 = ctypes.WinDLL("user32", use_last_error=True)
+user32 = windll.load("user32", use_last_error=True)
 
 GWL_EXSTYLE = -20
 WS_EX_TRANSPARENT = 0x00000020
@@ -87,7 +88,7 @@ class _SHFILEOPSTRUCTW(ctypes.Structure):
 FO_DELETE = 0x0003
 FOF_SILENT, FOF_NOCONFIRMATION, FOF_ALLOWUNDO, FOF_NOERRORUI = 0x0004, 0x0010, 0x0040, 0x0400
 
-shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+shell32 = windll.load("shell32", use_last_error=True)
 shell32.SHFileOperationW.argtypes = [ctypes.POINTER(_SHFILEOPSTRUCTW)]
 shell32.SHFileOperationW.restype = ctypes.c_int
 
@@ -97,6 +98,9 @@ def send_to_recycle_bin(paths) -> None:
     existing = [str(Path(p).resolve()) for p in paths if Path(p).exists()]
     if not existing:
         return
+    if not windll.IS_WINDOWS:
+        _move_to_trash(existing)
+        return
     op = _SHFILEOPSTRUCTW()
     op.wFunc = FO_DELETE
     op.pFrom = "\0".join(existing) + "\0\0"  # lista ścieżek zakończona podwójnym zerem
@@ -104,6 +108,15 @@ def send_to_recycle_bin(paths) -> None:
     code = shell32.SHFileOperationW(ctypes.byref(op))
     if code != 0 or op.fAnyOperationsAborted:
         raise OSError(tr("Nie udało się przenieść do Kosza (kod {code:#x}). Sprawdź, czy pliki nie są otwarte.", code=code))
+
+
+def _move_to_trash(paths: list[str]) -> None:
+    """Kosz poza Windowsem (tryb deweloperski) – przez Qt."""
+    from PySide6.QtCore import QFile
+
+    for path in paths:
+        if not QFile.moveToTrash(path)[0]:
+            raise OSError(tr("Nie udało się przenieść do Kosza: {path}", path=path))
 
 
 WM_SETICON = 0x0080
@@ -119,7 +132,7 @@ def set_big_icon(hwnd: int, hicon: int) -> None:
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 MAX_PROCESSES = 8192
-kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+kernel32 = windll.load("kernel32", use_last_error=True)
 kernel32.K32EnumProcesses.argtypes = [ctypes.POINTER(wintypes.DWORD), wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
 kernel32.K32EnumProcesses.restype = wintypes.BOOL
 kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]

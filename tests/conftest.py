@@ -7,8 +7,8 @@ import pytest
 from deathcounter.config import DetectorSettings
 
 if sys.platform != "win32":
-    # Te moduły już przy imporcie sięgają po Windows API (winreg, ctypes.WinDLL) – poza Windowsem pomijamy.
-    collect_ignore = ["test_rtss.py", "test_rtss_setup.py", "test_steam_dialog.py"]
+    # Test RTSS tworzy prawdziwą pamięć współdzieloną Windows (ctypes.WinDLL) – poza Windowsem pomijamy.
+    collect_ignore = ["test_rtss.py"]
 
 WIDTH, HEIGHT = 1280, 720
 TEXT_ROI = (440, 320, 400, 80)  # obszar napisu na syntetycznym ekranie śmierci

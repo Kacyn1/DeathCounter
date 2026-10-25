@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import getpass
 import time
-import winsound
 from pathlib import Path
 from datetime import datetime
 
@@ -38,7 +37,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from . import game_process, hotkeys, legal, updater, winapi
+from . import game_process, hotkeys, legal, updater, winapi, windll
 from .boss_panel import BossPanel
 from .collapsible import CollapsibleBox
 from .bosses import BossState, BossTracker, format_duration, overlay_text
@@ -1563,15 +1562,15 @@ class MainWindow(QMainWindow):
         else:
             self.toggle_overlay()
         off = action == "minus" or (action == "overlay" and not self.config.overlay.enabled)
-        winsound.MessageBeep(winsound.MB_ICONASTERISK if off else winsound.MB_OK)
+        _beep("off" if off else "ok")
 
     def _on_hotkey_frame(self, frame, error) -> None:
         text = self._hotkey_text("snapshot") or tr("skrótu")
         if frame is None:
-            winsound.MessageBeep(winsound.MB_ICONHAND)
+            _beep("error")
             self.notice_label.setText(tr("Zrzut ze skrótu {text} nieudany: {error}", text=text, error=error))
             return
-        winsound.MessageBeep(winsound.MB_OK)
+        _beep("ok")
         self._hotkey_frame = frame
         if self._calibration is not None:
             self._calibration.set_frame(frame)
@@ -1590,6 +1589,9 @@ class MainWindow(QMainWindow):
     def _register_hotkeys(self) -> None:
         self._unregister_hotkeys()
         failed = []
+        if not windll.IS_WINDOWS:  # globalne skróty są z Windows API – w trybie deweloperskim ich nie ma
+            self._refresh_hotkey_tooltips()
+            return
         for hotkey_id, action in HOTKEY_IDS.items():
             text = getattr(self.config.hotkeys, action)
             if not text:
@@ -2008,6 +2010,16 @@ class MainWindow(QMainWindow):
 
 def _capitalized(text: str) -> str:
     return text[:1].upper() + text[1:]
+
+
+def _beep(kind: str) -> None:
+    """Sygnał dźwiękowy po akcji ze skrótu: „ok”, „off” (wyłączenie / cofnięcie) albo „error”."""
+    if not windll.IS_WINDOWS:
+        QApplication.beep()
+        return
+    import winsound
+
+    winsound.MessageBeep({"ok": winsound.MB_OK, "off": winsound.MB_ICONASTERISK, "error": winsound.MB_ICONHAND}[kind])
 
 
 def _threshold_spin(value: float) -> QDoubleSpinBox:

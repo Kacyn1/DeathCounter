@@ -27,14 +27,13 @@ w formie pisemnej.
 ## Zasady techniczne
 
 - Przed wysłaniem zmian uruchom testy: `.\.venv\Scripts\python.exe -m pytest -q`.
-- Na macOS i Linuksie program nie działa (DXCam, OCR Windows, WinAPI), ale większość testów tak:
-  ```
-  uv venv .venv-mac --python 3.12
-  uv pip install --python .venv-mac PySide6-Essentials opencv-python numpy pytest
-  .venv-mac/bin/python -m pytest -q
-  ```
-  Testy zależne od Windows są wtedy pomijane – pełny zestaw uruchamia GitHub Actions (`.github/workflows/build.yml`)
-  przy każdym pushu i pull requeście.
+- Na macOS działa tryb deweloperski: interfejs programu bez części z Windows (przechwytywanie obrazu, OCR,
+  nakładka nad grą, globalne skróty, RTSS). Kalibrację można sprawdzać na zrzutach wczytanych z pliku.
+  `./uruchom-mac.sh` uruchamia program, a `./uruchom-mac.sh test` – testy (pierwszy raz tworzy `.venv-mac`
+  przez [uv](https://docs.astral.sh/uv/)). Testy zależne od Windows są wtedy pomijane – pełny zestaw uruchamia
+  GitHub Actions (`.github/workflows/build.yml`) przy każdym pushu na `main`/`dev` i pull requeście.
+- Gałęzie: `main` – wersja wydana (z niej powstają tagi i release'y), `dev` – zmiany przed wydaniem.
+  Nowe zmiany: gałąź od `dev` → pull request do `dev`; wydanie: pull request `dev` → `main`, potem tag `v…`.
 - Zachowaj styl istniejącego kodu: komentarze i komunikaty po polsku, logika bez Qt tam, gdzie się da
   (łatwiej ją testować).
 - Każdy tekst widoczny dla użytkownika opakuj w `tr("…")` (zmienne części jako pola: `tr("Śmierci: {n}", n=5)`),

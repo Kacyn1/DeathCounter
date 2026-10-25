@@ -11,11 +11,11 @@ import ctypes
 import os
 import subprocess
 import tempfile
-import winreg
 from ctypes import wintypes
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from . import windll
 from .i18n import tr
 
 TASK_NAME = "DeathCounter - RTSS"
@@ -30,6 +30,10 @@ class RtssSetupError(Exception):
 
 
 def find_rtss() -> Path | None:
+    try:
+        import winreg
+    except ImportError:  # poza Windowsem RTSS nie istnieje
+        return None
     for view in (winreg.KEY_WOW64_32KEY, winreg.KEY_WOW64_64KEY):
         try:
             with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Unwinder\RTSS", 0, winreg.KEY_READ | view) as key:
@@ -158,18 +162,20 @@ class _ShellExecuteInfo(ctypes.Structure):
     ]
 
 
-_shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+_shell32 = windll.load("shell32", use_last_error=True)
 _shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(_ShellExecuteInfo)]
 _shell32.ShellExecuteExW.restype = wintypes.BOOL
-_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_kernel32 = windll.load("kernel32", use_last_error=True)
 _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 _kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
 _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-_ole32 = ctypes.WinDLL("ole32")
+_ole32 = windll.load("ole32")
 
 
 def run_elevated(file: str, parameters: str, wait: bool = True, show: int = 0) -> int | None:
     """Uruchamia program z uprawnieniami administratora (okno UAC). Zwraca kod wyjścia, gdy wait=True."""
+    if not windll.IS_WINDOWS:
+        raise RtssSetupError(tr("RTSS działa tylko w systemie Windows."))
     _ole32.CoInitializeEx(None, 0x2 | 0x4)  # apartment-threaded, bez OLE1 DDE (wymóg ShellExecuteEx)
     info = _ShellExecuteInfo()
     info.cbSize = ctypes.sizeof(info)

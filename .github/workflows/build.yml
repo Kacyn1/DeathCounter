@@ -1,12 +1,12 @@
 # Testy i budowanie DeathCounter.exe na Windowsie.
-# - push na main, pull request albo recznie (Actions -> Build -> Run workflow): testy + exe jako artefakt;
+# - push na main lub dev, pull request albo recznie (Actions -> Build -> Run workflow): testy + exe jako artefakt;
 # - tag v* (np. v1.14.0): dodatkowo szkic release'u z exe i opisem z CHANGELOG.md - do przejrzenia i opublikowania.
 # Klucz podpisu certyfikatow: sekret repozytorium SIGNING_KEY (wartosc KEY z deathcounter/_signing_key.py).
 name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:

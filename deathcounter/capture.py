@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from . import windll
 from .config import CaptureSettings
 from .i18n import tr
 
@@ -33,6 +34,8 @@ class OutputInfo:
 def _dxcam():
     # Import dopiero przy użyciu: dxcam przy imporcie odpytuje karty graficzne,
     # a ewentualny błąd ma trafić do okna programu, a nie zatrzymać start aplikacji.
+    if not windll.IS_WINDOWS:
+        raise CaptureError(tr("Przechwytywanie obrazu (DXCam) działa tylko w systemie Windows."))
     try:
         import dxcam
     except Exception as exc:  # noqa: BLE001 - każdy błąd biblioteki pokazujemy użytkownikowi
