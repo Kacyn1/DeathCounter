@@ -19,6 +19,8 @@ jobs:
     runs-on: windows-latest
     env:
       SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      # Wyjscie Pythona w CI to potok w cp1252 - bez UTF-8 polskie znaki w komunikatach koncza sie bledem.
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
 
