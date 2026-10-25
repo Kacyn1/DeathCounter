@@ -19,3 +19,7 @@ victory.png
 games/
 deathcounter/_signing_key.py
 diagnostyka.log*
+
+# macOS: srodowisko do testow (uv) i pliki Findera
+.venv-mac/
+.DS_Store

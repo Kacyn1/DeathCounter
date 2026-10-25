@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import sys
 from contextlib import contextmanager
 
 import pytest
@@ -124,6 +125,7 @@ def test_relaunch_command_for_exe_and_sources(monkeypatch, tmp_path):
     assert updater.relaunch_command() == ["python.exe", "-m", "deathcounter"]
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="subprocess.DETACHED_PROCESS jest tylko na Windowsie")
 def test_restart_passes_argument(monkeypatch, tmp_path):
     started = []
     monkeypatch.setattr(updater.subprocess, "Popen", lambda command, **kwargs: started.append((command, kwargs["cwd"])))

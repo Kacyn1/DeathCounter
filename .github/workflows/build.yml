@@ -1,0 +1,71 @@
+# Testy i budowanie DeathCounter.exe na Windowsie.
+# - push na main, pull request albo recznie (Actions -> Build -> Run workflow): testy + exe jako artefakt;
+# - tag v* (np. v1.14.0): dodatkowo szkic release'u z exe i opisem z CHANGELOG.md - do przejrzenia i opublikowania.
+# Klucz podpisu certyfikatow: sekret repozytorium SIGNING_KEY (wartosc KEY z deathcounter/_signing_key.py).
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Zgodnosc tagu z wersja programu
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          version=$(python -c "import deathcounter; print(deathcounter.__version__)")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME nie zgadza sie z __version__ = $version"
+            exit 1
+          fi
+
+      - name: Klucz podpisu certyfikatow
+        shell: bash
+        run: |
+          if [ -n "$SIGNING_KEY" ]; then
+            python -c "import os, pathlib; pathlib.Path('deathcounter/_signing_key.py').write_text('KEY = %r\n' % os.environ['SIGNING_KEY'].strip(), encoding='utf-8')"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # Nowy klucz w wydaniu oznaczalby, ze wczesniejsze certyfikaty przestaja byc potwierdzane.
+            echo "::error::Brak sekretu SIGNING_KEY - wydanie nie moze powstac z tymczasowym kluczem"
+            exit 1
+          else
+            echo "::warning::Brak sekretu SIGNING_KEY - exe dostanie tymczasowy klucz (tylko do testow)"
+          fi
+
+      - name: Testy i budowanie
+        shell: powershell
+        run: .\build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeathCounter
+          path: dist/DeathCounter.exe
+
+      - name: Szkic release'u
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # Opis: sekcja "## <wersja>" z CHANGELOG.md (do nastepnego naglowka "## ").
+          awk -v v="## $version" '$0 == v {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/DeathCounter.exe --draft \
+            --title "Death Counter $version" --notes-file notes.md

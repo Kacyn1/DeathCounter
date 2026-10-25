@@ -94,7 +94,7 @@ def test_unsigned_and_foreign_pdfs(qt_app, tmp_path):
 
 
 def test_many_bosses_go_to_appendix(qt_app, tmp_path):
-    from PySide6.QtPdf import QPdfDocument
+    QPdfDocument = pytest.importorskip("PySide6.QtPdf").QPdfDocument  # brak w macowych paczkach PySide6
 
     bosses = [BossRow(f"Boss {i}", i, 60 * i, True) for i in range(30)]
     path = tmp_path / "duzo.pdf"

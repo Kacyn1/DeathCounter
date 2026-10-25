@@ -138,7 +138,7 @@ def test_certificate_with_corrections_shows_them_and_stays_valid(tmp_path):
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtGui import QGuiApplication
-    from PySide6.QtPdf import QPdfDocument
+    QPdfDocument = pytest.importorskip("PySide6.QtPdf").QPdfDocument  # brak w macowych paczkach PySide6
 
     from deathcounter.report import CertificateData, Verdict, verify_pdf, write_certificate
 

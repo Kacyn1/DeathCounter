@@ -1,4 +1,7 @@
+import sys
 from pathlib import Path
+
+import pytest
 
 from deathcounter.config import AppConfig, load_config, save_config
 from deathcounter.game_process import build_matchers, matching_exe, running_games
@@ -30,6 +33,7 @@ def test_steam_game_by_install_folder():
     assert running_games([str(LIBRARY / "Lies of Pinocchio" / "game.exe")], matchers) == set()
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="ścieżki Windows (D:\\...) poza Windowsem łączą się przez /")
 def test_manually_added_game_matched_to_steam_by_name():
     config = AppConfig()
     config.add_game("nioh:  complete edition")  # dodana ręcznie, przed wyszukiwaniem w Steamie
