@@ -201,6 +201,7 @@ class DetectionWorker(QThread):
             self._templates["death"],
             self._detector,
             bar_template=self._templates.get("boss_bar"),
+            bar_main_template=self._templates.get("boss_bar_main"),
             victory_template=self._templates.get("victory"),
             bosses=self._bosses,
             menu_template=self._templates.get("menu"),

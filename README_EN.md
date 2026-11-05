@@ -82,9 +82,10 @@ With **"Read the boss name from the screen"** on (the default), the program read
 
 ### Boss fight calibration
 
-**Calibration… → "Boss fight" tab** (or **Fight calibration…** in the panel) has two sub-tabs:
+**Calibration… → "Boss fight" tab** (or **Fight calibration…** in the panel) has two sub-tabs (three in Sekiro):
 
 - **Boss bar** – an image from a fight. Select **the left end of the bar** (the decorative frame and the start of the bar), without the boss name and without the whole bar.
+- **Main boss bar** (Sekiro only) – an image from a fight with a main boss that "Boss bar" does not detect. In Sekiro, in both bar templates select just the frame and the start of the bar, tightly, without the red dots above it and without the background: the background differs in every arena and the dots disappear during the fight, so such a template stops matching. The program uses both templates at once.
 - **Victory message** – an image with the message shown after defeating a boss. Select just the text.
 
 The victory message is visible only for a few seconds, so it is easiest to take F12 screenshots during the fight and at the moment of victory, and calibrate both templates later from files.

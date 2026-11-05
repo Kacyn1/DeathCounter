@@ -194,6 +194,21 @@ EN = {
     "Kalibracja wzorców": "Template calibration",
     "Napis śmierci": "Death message",
     "Pasek bossa": "Boss bar",
+    "Pasek głównego bossa": "Main boss bar",
+    "pasek głównego bossa": "main boss bar",
+    "paska głównego bossa": "main boss bar",
+    "pasek zdrowia głównego bossa": "main boss health bar",
+    "w trakcie walki z głównym bossem, gdy widać jego pasek zdrowia":
+        "during a fight with a main boss, when its health bar is visible",
+    "Główni bossowie mają osobny wzorzec paska. W obu wzorcach zaznacz ciasno samą ramkę paska, bez czerwonych "
+    "kropek nad nim i bez tła.":
+        "Main bosses have a separate bar template. In both templates select just the bar frame, tightly, without "
+        "the red dots above it and without the background.",
+    "Zaznacz <b>ciasno lewy koniec paska</b>: samą ramkę i początek paska. Bez czerwonych kropek nad paskiem, "
+    "bez nazwy bossa i bez tła – tło jest na każdej arenie inne, a kropek ubywa w trakcie walki.":
+        "Select <b>the left end of the bar tightly</b>: just the frame and the start of the bar. No red dots above "
+        "the bar, no boss name and no background – the background differs in every arena and the dots disappear "
+        "during the fight.",
     "Komunikat zwycięstwa": "Victory message",
     "Pasek bossa rozpoczyna walkę i wznawia timer, a komunikat zwycięstwa kończy ją na stałe. Skalibruj oba, "
     "aby „Śledź walkę z bossem” działało samo.":

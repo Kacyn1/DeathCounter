@@ -128,6 +128,33 @@ def test_boss_bar_still_detected_when_boss_loses_health(boss_session, clock):
     assert results[-1].bar_visible
 
 
+def main_boss_frame(seed):
+    """Pasek głównego bossa: inny wygląd i miejsce niż BAR_ROI, więc wzorzec zwykłego paska go nie znajduje."""
+    frame = gameplay_frame(seed)
+    cv2.rectangle(frame, (100, 80), (700, 110), (240, 240, 240), 4)
+    cv2.line(frame, (100, 80), (280, 110), (240, 240, 240), 4)
+    return frame
+
+
+MAIN_BAR_ROI = (90, 70, 200, 50)
+
+
+def test_main_boss_bar_template_detects_other_bar_and_gives_its_position(boss_session, clock):
+    frames = [main_boss_frame(100 + i) for i in range(30)]
+    _, results = run(boss_session, clock, frames)
+    assert events(results) == []  # sam wzorzec zwykłego paska nie widzi głównego bossa
+
+    boss_session.set_template("boss_bar_main", DeathTemplate.from_frame(main_boss_frame(2), MAIN_BAR_ROI))
+    assert boss_session.template.roi == TEXT_ROI  # nie nadpisuje wzorca napisu śmierci
+    _, results = run(boss_session, clock, frames)
+    assert events(results) == [BarEvent.APPEARED]
+    assert results[-1].bar_rect == MAIN_BAR_ROI
+
+    _, results = run(boss_session, clock, fight(3))  # zwykły pasek działa dalej, bez nowego startu walki
+    assert events(results) == []
+    assert results[-1].bar_rect == BAR_ROI
+
+
 def test_short_glimpse_of_bar_does_not_start_fight(boss_session, clock):
     _, results = run(boss_session, clock, gameplay(2) + fight(0.5) + gameplay(5))
     assert events(results) == []

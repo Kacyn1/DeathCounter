@@ -46,7 +46,7 @@ from .calibration import CalibrationDialog, SavedCalibration
 from .hotkey_dialog import HotkeyDialog
 from .icon import flag, render as render_icon
 from .capture import CaptureError, grab_single_frame, list_outputs
-from .config import DEFAULT_GAME, AppConfig, save_calibration, save_config
+from .config import DEFAULT_GAME, MAIN_BOSS_BAR_GAMES, AppConfig, save_calibration, save_config
 from .game_data import GameData, counter_files, open_game
 from . import __version__
 from .detector import CaptureHealth, SampleResult
@@ -1000,8 +1000,10 @@ class MainWindow(QMainWindow):
     def _refresh_boss_hint(self) -> None:
         # Bez wzorca zwycięstwa nie da się odróżnić wygranej od opuszczenia areny.
         self.bosses.abandon_enabled = self.templates["victory"] is not None
-        missing = [label for kind, label in (("boss_bar", tr("pasek bossa")), ("victory", tr("komunikat zwycięstwa")))
-                   if self.templates[kind] is None]
+        kinds = [("boss_bar", tr("pasek bossa")), ("victory", tr("komunikat zwycięstwa"))]
+        if self.paths.game in MAIN_BOSS_BAR_GAMES:
+            kinds.insert(1, ("boss_bar_main", tr("pasek głównego bossa")))
+        missing = [label for kind, label in kinds if self.templates[kind] is None]
         if missing:
             hint = tr("Brak wzorca: {join}. Kliknij „Kalibracja walki…”, aby walka startowała sama.", join=', '.join(missing))
         elif self.worker is None:
@@ -1501,12 +1503,14 @@ class MainWindow(QMainWindow):
             templates=self.templates,
             saved={k: self._saved_calibration(k) for k in self.templates},
             thresholds={"death": self.config.detector.threshold, "victory": self.config.detector.threshold,
-                        "boss_bar": self.config.bosses.bar_threshold, "menu": self.config.detector.threshold,
+                        "boss_bar": self.config.bosses.bar_threshold,
+                        "boss_bar_main": self.config.bosses.bar_threshold, "menu": self.config.detector.threshold,
                         "hud": self.config.bosses.bar_threshold},
             margin=self.config.detector.search_margin,
             hotkey_text=self._hotkey_text("snapshot"),
             initial_frame=hotkey_frame,
             initial_kind=kind,
+            main_boss_bar=self.paths.game in MAIN_BOSS_BAR_GAMES,
         )
         self._calibration = dialog
         try:
@@ -1548,8 +1552,10 @@ class MainWindow(QMainWindow):
         return None
 
     def _refresh_template_label(self) -> None:
-        names = (("death", tr("śmierć")), ("boss_bar", tr("pasek bossa")), ("victory", tr("zwycięstwo")),
-                 ("menu", tr("menu")), ("hud", tr("pasek zdrowia")))
+        names = [("death", tr("śmierć")), ("boss_bar", tr("pasek bossa")), ("victory", tr("zwycięstwo")),
+                 ("menu", tr("menu")), ("hud", tr("pasek zdrowia"))]
+        if self.paths.game in MAIN_BOSS_BAR_GAMES:
+            names.insert(2, ("boss_bar_main", tr("pasek głównego bossa")))
         parts = [tr("{label}: {value}", label=label, value='✓' if self.templates[kind] is not None else tr('brak')) for kind, label in names]
         self.template_label.setText(", ".join(parts))
 

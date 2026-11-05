@@ -159,9 +159,10 @@ Nazwa jest szukana w pasie nad paskiem (w Sekiro – pod paskiem, bo tam gra ją
 
 ### Kalibracja walki z bossem
 
-**Kalibracja… → zakładka „Walka z bossem”** (albo przycisk „Kalibracja walki…” w panelu) ma dwie podzakładki. Obraz pobiera się tak samo jak dla napisu śmierci: **Ctrl+Alt+F9** w grze, przechwycenie z opóźnieniem albo zrzut z pliku (np. F12 w Steam).
+**Kalibracja… → zakładka „Walka z bossem”** (albo przycisk „Kalibracja walki…” w panelu) ma dwie podzakładki (w Sekiro trzy). Obraz pobiera się tak samo jak dla napisu śmierci: **Ctrl+Alt+F9** w grze, przechwycenie z opóźnieniem albo zrzut z pliku (np. F12 w Steam).
 
 - **Pasek bossa** – obraz z walki. Zaznacz **lewy koniec paska** (ozdobną ramkę i początek paska), bez nazwy bossa i bez całego paska, bo wypełnienie maleje, gdy boss traci zdrowie. Walka zaczyna się, gdy pasek jest widoczny przez ok. 1 s, a pasek uznaje się za zniknięty po 3 s nieobecności (`config.json`, sekcja `bosses`).
+- **Pasek głównego bossa** (tylko Sekiro) – obraz z walki z głównym bossem, którego „Pasek bossa” nie wykrywa. W Sekiro w obu wzorcach paska zaznacz ciasno samą ramkę i początek paska, bez czerwonych kropek nad nim i bez tła. Tło jest na każdej arenie inne, a kropek ubywa w trakcie walki, więc taki wzorzec przestaje pasować. Program używa obu wzorców naraz, a ten zapisuje jako `boss_bar_main.png`.
 - **Komunikat zwycięstwa** – obraz z komunikatem po pokonaniu bossa. Zaznacz sam napis.
 
 Komunikat zwycięstwa widać tylko kilka sekund, dlatego najwygodniej zrobić zrzut F12 w trakcie walki i w chwili zwycięstwa, a skalibrować oba wzorce później z plików. Wzorce zapisują się jako `boss_bar.png` i `victory.png`.

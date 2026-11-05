@@ -156,6 +156,14 @@ KINDS = {
            "(każdy boss ma inną) ani całego paska – jego wypełnienie maleje, gdy boss traci zdrowie."),
         N_("Na obrazie z walki wynik powinien przekroczyć próg, a na zrzucie bez bossa być wyraźnie niższy."),
     ),
+    "boss_bar_main": TemplateKind(
+        "boss_bar_main",
+        N_("pasek zdrowia głównego bossa"),
+        N_("w trakcie walki z głównym bossem, gdy widać jego pasek zdrowia"),
+        N_("Zaznacz <b>ciasno lewy koniec paska</b>: samą ramkę i początek paska. Bez czerwonych kropek nad paskiem, "
+           "bez nazwy bossa i bez tła – tło jest na każdej arenie inne, a kropek ubywa w trakcie walki."),
+        N_("Na obrazie z walki wynik powinien przekroczyć próg, a na zrzucie bez bossa być wyraźnie niższy."),
+    ),
     "victory": TemplateKind(
         "victory",
         N_("komunikat zwycięstwa"),
@@ -427,8 +435,8 @@ class CalibrationPage(QWidget):
 
 
 class CalibrationDialog(QDialog):
-    """Zakładki „Napis śmierci”, „Walka z bossem” (pasek bossa, komunikat zwycięstwa) i „Menu i rozgrywka”
-    (menu główne, pasek zdrowia postaci).
+    """Zakładki „Napis śmierci”, „Walka z bossem” (pasek bossa, komunikat zwycięstwa, a przy `main_boss_bar`
+    także pasek głównego bossa) i „Menu i rozgrywka” (menu główne, pasek zdrowia postaci).
     Każdy wzorzec zapisuje się od razu przyciskiem „Zapisz wzorzec”; okno zostaje otwarte."""
 
     def __init__(
@@ -443,6 +451,7 @@ class CalibrationDialog(QDialog):
         hotkey_text: str | None,
         initial_frame: np.ndarray | None = None,
         initial_kind: str = "death",
+        main_boss_bar: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Kalibracja wzorców"))
@@ -453,11 +462,14 @@ class CalibrationDialog(QDialog):
                 kind, frame_provider, saver, templates.get(key), saved.get(key), thresholds[key], margin, hotkey_text
             )
             for key, kind in KINDS.items()
+            if key != "boss_bar_main" or main_boss_bar
         }
         self.tabs = QTabWidget()
         self.tabs.addTab(self.pages["death"], tr("Napis śmierci"))
         self.boss_tabs = QTabWidget()
         self.boss_tabs.addTab(self.pages["boss_bar"], tr("Pasek bossa"))
+        if main_boss_bar:
+            self.boss_tabs.addTab(self.pages["boss_bar_main"], tr("Pasek głównego bossa"))
         self.boss_tabs.addTab(self.pages["victory"], tr("Komunikat zwycięstwa"))
         boss_page = QWidget()
         boss_layout = QVBoxLayout(boss_page)
@@ -465,6 +477,10 @@ class CalibrationDialog(QDialog):
             tr("Pasek bossa rozpoczyna walkę i wznawia timer, a komunikat zwycięstwa kończy ją na stałe. "
             "Skalibruj oba, aby „Śledź walkę z bossem” działało samo.")
         )
+        if main_boss_bar:
+            boss_hint.setText(boss_hint.text() + " " + tr("Główni bossowie mają osobny wzorzec paska. W obu "
+                                                          "wzorcach zaznacz ciasno samą ramkę paska, bez czerwonych "
+                                                          "kropek nad nim i bez tła."))
         boss_hint.setWordWrap(True)
         boss_hint.setStyleSheet("color:#9aa0a6;")
         boss_layout.addWidget(boss_hint)

@@ -1,5 +1,13 @@
 # Historia zmian
 
+## 1.13.3
+
+Poprawa dokładności wykrywania bossów w Sekiro.
+
+- Sekiro: nowa podzakładka kalibracji „Pasek głównego bossa” (Kalibracja… → Walka z bossem). Główni bossowie nie byli wykrywani wzorcem paska skalibrowanym na minibossie, więc walka się nie zaczynała, a nazwa nie była odczytywana. Teraz program sprawdza oba wzorce naraz. Po aktualizacji trzeba raz skalibrować nowy wzorzec na walce z głównym bossem.
+- Instrukcja kalibracji w Sekiro mówi teraz wprost, żeby zaznaczyć ciasno samą ramkę paska, bez czerwonych kropek nad nim i bez tła. Wzorzec z tłem albo kropkami może nie pasować na innej arenie.
+- Pozostałe gry nie mają tej zakładki i działają jak wcześniej.
+
 ## 1.13.2
 
 - Sekiro: program odczytuje nazwę bossa. W tej grze nazwa jest pod paskiem zdrowia, a program szukał jej tylko nad paskiem, więc boss zostawał jako „Boss 1”. Pozostałe gry działają jak wcześniej.

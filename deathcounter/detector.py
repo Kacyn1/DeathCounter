@@ -243,9 +243,11 @@ class DetectionSession:
         bosses: BossSettings | None = None,
         menu_template: DeathTemplate | None = None,
         hud_template: DeathTemplate | None = None,
+        bar_main_template: DeathTemplate | None = None,
     ) -> None:
         self.template = template
         self.bar_template = bar_template
+        self.bar_main_template = bar_main_template  # drugi wygląd paska bossa (główni bossowie w Sekiro)
         self.victory_template = victory_template
         self.menu_template = menu_template
         self.hud_template = hud_template
@@ -273,6 +275,9 @@ class DetectionSession:
     def set_template(self, kind: str, template: DeathTemplate) -> None:
         if kind == "boss_bar":
             self.bar_template = template
+            self.bar_detector.interrupt()
+        elif kind == "boss_bar_main":
+            self.bar_main_template = template
             self.bar_detector.interrupt()
         elif kind == "victory":
             self.victory_template = template
@@ -317,8 +322,10 @@ class DetectionSession:
             result.score = self.template.match(frame, margin)
             result.death = self.detector.update(result.score)
             result.armed = self.detector.armed
-            if self.bar_template is not None:
-                result.bar_score, result.bar_rect = self.bar_template.locate(frame, margin)
+            # Oba wzorce paska to ten sam pasek bossa: liczy się lepsze dopasowanie.
+            bars = [t.locate(frame, margin) for t in (self.bar_template, self.bar_main_template) if t is not None]
+            if bars:
+                result.bar_score, result.bar_rect = max(bars, key=lambda bar: bar[0])
                 result.bar_event = self.bar_detector.update(result.bar_score)
             if self.victory_template is not None:
                 result.victory_score = self.victory_template.match(frame, margin)

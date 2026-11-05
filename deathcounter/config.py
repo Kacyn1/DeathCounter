@@ -31,11 +31,14 @@ GAMES_DIR = "games"
 GAME_NAME_MAX = 60
 _GAME_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
-# Wzorce: napis śmierci, ramka paska zdrowia bossa, komunikat zwycięstwa, menu główne, pasek zdrowia postaci –
-# (pole w Calibration, pole w AppPaths).
+MAIN_BOSS_BAR_GAMES = frozenset({"sekiro"})  # gry z osobnym wzorcem paska głównego bossa
+
+# Wzorce: napis śmierci, ramka paska zdrowia bossa, ramka paska głównego bossa (tylko MAIN_BOSS_BAR_GAMES),
+# komunikat zwycięstwa, menu główne, pasek zdrowia postaci – (pole w Calibration, pole w AppPaths).
 TEMPLATE_FIELDS = {
     "death": ("template", "template"),
     "boss_bar": ("boss_bar_template", "boss_bar_template"),
+    "boss_bar_main": ("boss_bar_main_template", "boss_bar_main_template"),
     "victory": ("victory_template", "victory_template"),
     "menu": ("menu_template", "menu_template"),
     "hud": ("hud_template", "hud_template"),
@@ -286,6 +289,7 @@ class Calibration:
     victory_template: TemplateInfo | None = None   # komunikat zwycięstwa
     menu_template: TemplateInfo | None = None      # menu główne gry (czas w menu nie jest czasem gry)
     hud_template: TemplateInfo | None = None       # pasek zdrowia postaci (początek rozgrywki po wyjściu z menu)
+    boss_bar_main_template: TemplateInfo | None = None  # ramka paska głównego bossa (Sekiro)
 
     def info(self, kind: str) -> TemplateInfo | None:
         return getattr(self, TEMPLATE_FIELDS[kind][0])
@@ -324,6 +328,7 @@ class AppPaths:
     session_history: Path
     menu_template: Path
     hud_template: Path
+    boss_bar_main_template: Path
 
     @classmethod
     def for_game(cls, base: Path, game: str) -> "AppPaths":
@@ -348,6 +353,7 @@ class AppPaths:
             game_dir / "session_history.json",
             game_dir / "menu.png",
             game_dir / "hud.png",
+            game_dir / "boss_bar_main.png",
         )
 
     def template_path(self, kind: str) -> Path:

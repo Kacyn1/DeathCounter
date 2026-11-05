@@ -90,6 +90,16 @@ def test_each_game_has_own_folder(tmp_path):
     assert er.source_path("boss_bar") == tmp_path / "games" / "eldenring" / "boss_bar_source.jpg"
 
 
+def test_main_boss_bar_template_saved_per_game(tmp_path):
+    paths = AppPaths.for_game(tmp_path, "sekiro")
+    assert paths.template_path("boss_bar_main") == tmp_path / "games" / "sekiro" / "boss_bar_main.png"
+    assert paths.source_path("boss_bar_main") == tmp_path / "games" / "sekiro" / "boss_bar_main_source.jpg"
+    calibration = Calibration()
+    calibration.set_info("boss_bar_main", TemplateInfo([10, 20, 100, 30], [1920, 1080]))
+    save_calibration(paths.calibration, calibration)
+    assert load_calibration(paths.calibration)[0] == calibration
+
+
 def test_calibration_roundtrip(tmp_path):
     path = tmp_path / "games" / "ds3" / "calibration.json"
     calibration = Calibration()
