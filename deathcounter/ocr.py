@@ -1,7 +1,7 @@
 """Odczyt nazwy bossa z ekranu: wbudowany OCR Windows (Windows.Media.Ocr), pakiet polski albo angielski.
 
-Nazwa jest w grach Souls tuż nad paskiem zdrowia bossa, więc czytamy pas obrazu nad miejscem,
-w którym wykrywanie znalazło wzorzec paska. Napis jest najjaśniejszym elementem pasa: zostawiamy
+Nazwa jest w grach Souls tuż nad paskiem zdrowia bossa, a w Sekiro tuż pod nim, więc czytamy pas
+obrazu nad albo pod miejscem, w którym wykrywanie znalazło wzorzec paska. Napis jest najjaśniejszym elementem pasa: zostawiamy
 same jasne piksele (czarny tekst na białym tle), bo tekstura tła myli OCR. Kilka progów jasności
 i kilka klatek głosuje nad wynikiem.
 """
@@ -26,6 +26,8 @@ BAND_ABOVE = 0.055     # górna krawędź pasa nad paskiem (ułamek wysokości e
 BAND_GAP = 0.006       # odstęp od paska – jego górna ramka myli OCR
 BAND_LEFT = 0.35       # nazwa stoi nad lewym końcem paska, a wzorzec bywa wycięty z jego środka
 BAND_RIGHT = 0.25      # (ułamki szerokości ekranu po obu stronach znalezionego wzorca)
+BAND_BELOW_RIGHT = 0.40  # nazwa pod paskiem (Sekiro) zaczyna się przy jego lewym końcu i bywa dłuższa niż pasek
+NAME_BELOW_BAR = frozenset({"sekiro"})  # gry z nazwą bossa pod paskiem zamiast nad nim
 SCALES = (2, 3)
 BRIGHTNESS_LEVELS = (0.6, 0.72, 0.84)  # progi względem najjaśniejszych pikseli pasa
 MIN_PEAK = 90          # pas bez jasnych pikseli nie zawiera napisu
@@ -44,21 +46,26 @@ class OcrUnavailable(RuntimeError):
     """Brak OCR Windows albo polskiego pakietu rozpoznawania tekstu."""
 
 
-def name_band(frame_size: tuple[int, int], bar: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
-    """Obszar (x0, y0, x1, y1) nad znalezionym paskiem bossa, w którym gra wypisuje nazwę."""
+def name_band(frame_size: tuple[int, int], bar: tuple[int, int, int, int],
+              below: bool = False) -> tuple[int, int, int, int]:
+    """Obszar (x0, y0, x1, y1) nad znalezionym paskiem bossa (`below` – pod nim), w którym gra wypisuje nazwę."""
     width, height = frame_size
-    x, y, w, _ = bar
+    x, y, w, h = bar
     x0 = max(0, x - round(width * BAND_LEFT))
-    x1 = min(width, x + w + round(width * BAND_RIGHT))
-    y0 = max(0, y - round(height * BAND_ABOVE))
-    y1 = max(y0, y - round(height * BAND_GAP))
+    x1 = min(width, x + w + round(width * (BAND_BELOW_RIGHT if below else BAND_RIGHT)))
+    if below:
+        y0 = min(height, y + h + round(height * BAND_GAP))
+        y1 = min(height, y + h + round(height * BAND_ABOVE))
+    else:
+        y0 = max(0, y - round(height * BAND_ABOVE))
+        y1 = max(y0, y - round(height * BAND_GAP))
     return x0, y0, x1, y1
 
 
-def crop_band(frame: np.ndarray, bar: tuple[int, int, int, int]) -> np.ndarray | None:
+def crop_band(frame: np.ndarray, bar: tuple[int, int, int, int], below: bool = False) -> np.ndarray | None:
     """Szary wycinek pasa z nazwą (kopia – klatka może zostać nadpisana) albo None, gdy jest za mały."""
     height, width = frame.shape[:2]
-    x0, y0, x1, y1 = name_band((width, height), bar)
+    x0, y0, x1, y1 = name_band((width, height), bar, below)
     if x1 - x0 < 16 or y1 - y0 < 8:
         return None
     return to_gray(frame[y0:y1, x0:x1]).copy()

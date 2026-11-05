@@ -59,6 +59,7 @@ from .report import Adjustments, CertificateData, Verdict, rows_from_records, ve
 from .signing import load_key
 from .steam_dialog import SteamScanDialog
 from .steam_library import find_steam, installed_games
+from .ocr import NAME_BELOW_BAR
 from .play_session import GAP_SECONDS, LOADING, MENU, PLAYING, GamePhase
 from .rtss import RtssOsd, RtssState
 from .storage import StorageError
@@ -1265,7 +1266,8 @@ class MainWindow(QMainWindow):
         if self.templates["death"] is None:
             self._set_status(DetectorStatus.NO_TEMPLATE, tr("Najpierw wykonaj kalibrację (przycisk „Kalibracja…”)."))
             return
-        worker = DetectionWorker(self.templates, self.config.detector, self.config.capture, self.config.bosses)
+        worker = DetectionWorker(self.templates, self.config.detector, self.config.capture, self.config.bosses,
+                                 name_below=self.paths.game in NAME_BELOW_BAR)
         self._phase.restart(time.time())  # nie wiadomo, co jest na ekranie – okaże się z próbek
         worker.death_detected.connect(self._on_death_detected)
         worker.boss_event.connect(self._on_boss_signal)

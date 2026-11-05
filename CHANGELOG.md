@@ -1,5 +1,9 @@
 # Historia zmian
 
+## 1.13.2
+
+- Sekiro: program odczytuje nazwę bossa. W tej grze nazwa jest pod paskiem zdrowia, a program szukał jej tylko nad paskiem, więc boss zostawał jako „Boss 1”. Pozostałe gry działają jak wcześniej.
+
 ## 1.13.1
 
 - Poprawiono linię sesji w nakładce RTSS: zamiast „Sesja: 12 ? 01:40:12” jest „Sesja: 12 | 01:40:12”. Czcionka RTSS ma tylko znaki ASCII, a kropka „·” nie była zamieniana na odpowiednik. Okno nakładki pokazywało ją poprawnie.

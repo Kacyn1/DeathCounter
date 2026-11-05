@@ -155,7 +155,7 @@ Gdy opcja **„Odczytuj nazwę bossa z ekranu”** jest włączona (domyślnie t
 
 Dodatkowo nic nie może budzić wątpliwości: śmierć tuż przed albo tuż po zwycięstwie czy utrata obrazu blokują zapis. Gdy nazwa jest niepewna, panel prosi o jej sprawdzenie i kliknięcie **Zapisz wynik**. Taka nazwa jest potem znana, więc następna walka z tym bossem zapisze się już sama.
 
-Nazwa jest szukana w pasie nad paskiem, od miejsca znalezionego wzorca na ok. 1/3 szerokości ekranu w lewo. Dlatego działa bez względu na to, który fragment paska zaznaczysz w kalibracji. Odczyty trafiają do `diagnostyka.log`.
+Nazwa jest szukana w pasie nad paskiem (w Sekiro – pod paskiem, bo tam gra ją wypisuje), od miejsca znalezionego wzorca na ok. 1/3 szerokości ekranu w lewo. Dlatego działa bez względu na to, który fragment paska zaznaczysz w kalibracji. Odczyty trafiają do `diagnostyka.log`.
 
 ### Kalibracja walki z bossem
 

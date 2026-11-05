@@ -141,8 +141,10 @@ class DetectionWorker(QThread):
         bosses: BossSettings,
         source_factory: Callable[[CaptureSettings], object] = DxcamSource,
         parent=None,
+        name_below: bool = False,
     ) -> None:
         super().__init__(parent)
+        self._name_below = name_below  # gra wypisuje nazwę bossa pod paskiem (Sekiro), a nie nad nim
         self._templates = dict(templates)
         self._detector = copy.deepcopy(detector)
         self._capture = copy.deepcopy(capture)
@@ -302,7 +304,7 @@ class DetectionWorker(QThread):
         """Po pojawieniu się paska zbiera kilka wycinków z nazwą i oddaje je wątkowi OCR."""
         if self._name_bands is None or frame is None or result.bar_rect is None or now < self._name_next:
             return
-        band = ocr.crop_band(frame, result.bar_rect)
+        band = ocr.crop_band(frame, result.bar_rect, self._name_below)
         if band is None:
             return
         self._name_bands.append(band)
