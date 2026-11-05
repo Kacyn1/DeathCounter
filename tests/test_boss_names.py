@@ -84,6 +84,18 @@ def test_name_band_above_bar_clipped_to_frame():
     assert ocr.crop_band(np.zeros((100, 100, 3), np.uint8), (10, 2, 20, 5)) is None
 
 
+def test_name_band_below_bar_for_sekiro():
+    x0, y0, x1, y1 = ocr.name_band((1920, 1080), (200, 100, 60, 20), below=True)
+    assert (y0, y1) == (100 + 20 + 6, 100 + 20 + 59)
+    assert x0 == 0 and x1 == 200 + 60 + 768
+    assert "sekiro" in ocr.NAME_BELOW_BAR
+
+
+def test_name_band_below_bar_clipped_to_frame():
+    assert ocr.name_band((100, 100), (10, 95, 20, 5), below=True)[1::2] == (100, 100)
+    assert ocr.crop_band(np.zeros((100, 100, 3), np.uint8), (10, 95, 20, 5), below=True) is None
+
+
 def test_template_locate_returns_bar_position():
     template = DeathTemplate.from_frame(boss_frame(1), BAR_ROI)
     score, rect = template.locate(boss_frame(7))
@@ -99,6 +111,10 @@ def test_windows_ocr_reads_rendered_name():
     frame = np.full((720, 1280, 3), 25, np.uint8)
     cv2.putText(frame, "Demon z Azylu", (330, 630), cv2.FONT_HERSHEY_DUPLEX, 1.0, (225, 225, 225), 2, cv2.LINE_AA)
     assert reader.read_name([ocr.crop_band(frame, (320, 645, 400, 20))]).name == "Demon z Azylu"
+    # Sekiro: nazwa pod paskiem i dłuższa od wzorca z lewego końca paska.
+    frame = np.full((720, 1280, 3), 25, np.uint8)
+    cv2.putText(frame, "Demon z Azylu", (150, 150), cv2.FONT_HERSHEY_DUPLEX, 1.0, (225, 225, 225), 2, cv2.LINE_AA)
+    assert reader.read_name([ocr.crop_band(frame, (150, 100, 40, 20), below=True)]).name == "Demon z Azylu"
 
 
 # ------------------------------------------------------------------ znane nazwy

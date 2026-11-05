@@ -73,7 +73,7 @@ With **"Track boss fights"** checked the program runs the fight by itself:
 
 ### Boss name reading
 
-With **"Read the boss name from the screen"** on (the default), the program reads the name above the bar shortly after it appears. It uses the text recognition (OCR) built into Windows, with the English or Polish language pack – whichever is installed. It works offline and sends nothing anywhere.
+With **"Read the boss name from the screen"** on (the default), the program reads the name above the bar (below it in Sekiro) shortly after it appears. It uses the text recognition (OCR) built into Windows, with the English or Polish language pack – whichever is installed. It works offline and sends nothing anywhere.
 
 - **Built-in name lists.** For Dark Souls I–III, Sekiro and Elden Ring (including DLC) the program has the boss names taken from the game files, in English–Polish pairs. A reading gets the most similar name from the selected game's list, in the program's language.
 - **Boss name similarity** ("Detection" section, 0.60 by default) sets how much a reading may differ from a known name. Lower values correct more OCR errors, but a boss that is not on the list more easily gets someone else's name.
